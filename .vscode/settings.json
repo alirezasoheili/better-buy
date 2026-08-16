@@ -1,0 +1,17 @@
+{
+    "betterDevtools.mappings": [
+        {
+            "origin": "http://127.0.0.1:4173",
+            "remoteRoot": "/DesktopModules/NB_Store/",
+            "localRoot": "${workspaceFolder}/fixtures/site/DesktopModules/NB_Store",
+            "include": [
+                "**/*.css",
+                "**/*.js"
+            ],
+            "exclude": [
+                "**/*.min.css",
+                "**/*.min.js"
+            ]
+        }
+    ]
+}

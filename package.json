@@ -1,0 +1,26 @@
+{
+  "name": "better-buy",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "dev": "concurrently -n api,web -c yellow,cyan \"pnpm --filter @better-buy/worker dev\" \"pnpm --filter @better-buy/web dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @better-buy/web test:e2e",
+    "cf:dev": "pnpm --filter @better-buy/worker dev",
+    "cf:deploy": "pnpm --filter @better-buy/worker deploy"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.120.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "sharp"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": [
+    "src/collector.ts",
+    "src/collector.test.ts",
+    "src/okala.ts",
+    "src/okala.test.ts",
+    "src/digikala.ts",
+    "src/retry.ts",
+    "src/retry.test.ts",
+    "src/test-login.ts",
+    "src/test-login.test.ts",
+    "src/env.d.ts"
+  ]
+}
