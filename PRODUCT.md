@@ -8,11 +8,11 @@ web
 
 ## Users
 
-A single local user in Iran who wants to quickly compare unusually deep SnappMarket grocery discounts across several saved delivery locations.
+A single local user in Iran who wants to quickly compare unusually deep grocery discounts from supported stores across several saved delivery locations.
 
 ## Product Purpose
 
-Better Buy manually scans SnappMarket's market-party API, keeps products discounted by at least 40%, and makes changes between scans visible. Success means the user can choose a location, run a scan, and identify worthwhile available deals without searching stores one by one.
+Better Buy manually scans supported store APIs, keeps products discounted by at least 40%, and makes changes between scans visible. Success means the user can choose a location, run a scan, and identify worthwhile available deals without searching stores one by one.
 
 ## Positioning
 
@@ -20,7 +20,7 @@ The product turns a location-specific promotional feed into a durable, comparabl
 
 ## Operating Context
 
-The application runs on one Windows computer through localhost. It is used occasionally before grocery shopping. The user maintains named latitude/longitude locations, supplies a replaceable SnappMarket bearer token, and starts every scan manually.
+The application runs on one Windows computer through localhost. It is used occasionally before grocery shopping. The user maintains named latitude/longitude locations, supplies replaceable store credentials, and starts every scan manually.
 
 ## Capabilities and Constraints
 

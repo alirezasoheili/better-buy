@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import JetSettings from "./JetSettings";
 import OkalaSettings from "./OkalaSettings";
 import { authClient } from "./auth-client";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type {
   DealRecord,
+  DealGroupRecord,
   LocationRecord,
+  LocationSearchResult,
   ProviderSettingsStatus,
   ScanRecord,
   SettingsStatus,
@@ -32,6 +34,22 @@ const faDate = new Intl.DateTimeFormat("fa-IR", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+type DealSource = "snappmarket" | "digikalajet" | "okala";
+type ActiveSource = Exclude<DealSource, "digikalajet">;
+type ConnectionState = {
+  source: DealSource;
+  label: string;
+  status: "ready" | "missing" | "expired" | "unavailable" | "disabled";
+  canScan: boolean;
+  message: string;
+};
+
+const sourceLabel = (source: DealSource) =>
+  source === "digikalajet"
+    ? "دیجی‌کالا جت"
+    : source === "okala"
+      ? "اکالا"
+      : "اسنپ‌مارکت";
 const displayToman = (
   amount: number,
   source: "snappmarket" | "digikalajet" | "okala",
@@ -55,6 +73,19 @@ const api = async <T,>(url: string, init?: RequestInit): Promise<T> => {
     throw new Error(body.message ?? body.error ?? "درخواست ناموفق بود");
   return body.data as T;
 };
+
+const loadDealLedger = async (scanId: string) => {
+  const [rawDeals, groupedDeals] = await Promise.all([
+    api<DealRecord[]>(`/api/scans/${scanId}/deals`),
+    api<DealGroupRecord[]>(`/api/scans/${scanId}/deal-groups`),
+  ]);
+  return { rawDeals, groupedDeals };
+};
+
+const activeGroupStock = (group: DealGroupRecord) =>
+  group.vendors
+    .filter((vendor) => vendor.state !== "no_longer_present")
+    .reduce((total, vendor) => total + vendor.stock, 0);
 
 function Icon({
   name,
@@ -159,7 +190,8 @@ function Dashboard() {
     [settings, setSettings] = useState<SettingsStatus | null>(null),
     [scans, setScans] = useState<ScanRecord[]>([]),
     [scan, setScan] = useState<ScanRecord | null>(null),
-    [deals, setDeals] = useState<DealRecord[]>([]);
+    [deals, setDeals] = useState<DealRecord[]>([]),
+    [dealGroups, setDealGroups] = useState<DealGroupRecord[]>([]);
   const [busy, setBusy] = useState(true),
     [message, setMessage] = useState(""),
     [view, setView] = useState<"deals" | "history" | "settings">("deals"),
@@ -169,61 +201,172 @@ function Dashboard() {
     [minPrice, setMinPrice] = useState(0),
     [sort, setSort] = useState("discount"),
     [threshold, setThreshold] = useState(40),
-    [source, setSource] = useState<"snappmarket" | "digikalajet" | "okala">(
-      "snappmarket",
-    ),
+    [source, setSource] = useState<DealSource>("snappmarket"),
     [mode, setMode] = useState<"partial" | "full">("partial"),
-    [jetConfigured, setJetConfigured] = useState(false),
     [okalaSettings, setOkalaSettings] = useState<ProviderSettingsStatus | null>(
       null,
     );
   const [locationForm, setLocationForm] = useState(false),
     [needsLocation, setNeedsLocation] = useState(false),
-    [editing, setEditing] = useState<LocationRecord | null>(null);
+    [editing, setEditing] = useState<LocationRecord | null>(null),
+    [selectedRunId, setSelectedRunId] = useState<string | null>(null),
+    [providerErrors, setProviderErrors] = useState<
+      Partial<Record<ActiveSource, string>>
+    >({});
+  const dealsRequestRef = useRef(0);
+  const initialContextHydratedRef = useRef(false);
   const load = useCallback(async () => {
-    try {
-      const [ls, ss, jet, okala, runs] = await Promise.all([
-        api<LocationRecord[]>("/api/locations"),
-        api<SettingsStatus>("/api/settings/snappmarket"),
-        api<{ tokenConfigured: boolean }>("/api/settings/digikalajet"),
-        api<ProviderSettingsStatus>("/api/settings/okala"),
-        api<ScanRecord[]>("/api/scans"),
-      ]);
+    const results = await Promise.allSettled([
+      api<LocationRecord[]>("/api/locations"),
+      api<SettingsStatus>("/api/settings/snappmarket"),
+      api<ProviderSettingsStatus>("/api/settings/okala"),
+      api<ScanRecord[]>("/api/scans"),
+    ]);
+    const [locationsResult, settingsResult, okalaResult, scansResult] = results;
+    const errors: Partial<Record<ActiveSource, string>> = {};
+    const errorText = (result: PromiseRejectedResult) =>
+      result.reason instanceof Error
+        ? result.reason.message
+        : "وضعیت اتصال در دسترس نیست";
+
+    if (locationsResult.status === "fulfilled") {
+      const ls = locationsResult.value;
       setLocations(ls);
       setNeedsLocation(ls.length === 0);
       if (ls.length === 0) {
         setEditing(null);
         setLocationForm(true);
       }
-      setSettings(ss);
-      setJetConfigured(jet.tokenConfigured);
-      setOkalaSettings(okala);
-      setScans(runs);
       setSelected(
         (v) => v || ls.find((l) => l.isDefault)?.id || ls[0]?.id || "",
       );
-      const latest = runs.find((r) => r.status === "succeeded");
-      if (latest && !scan) {
-        setScan(latest);
-        setDeals(await api<DealRecord[]>(`/api/scans/${latest.id}/deals`));
-      }
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "خطا در بارگذاری");
-    } finally {
-      setBusy(false);
+    } else {
+      setMessage(errorText(locationsResult));
     }
-  }, [scan]);
+    if (settingsResult.status === "fulfilled") {
+      setSettings(settingsResult.value);
+    } else {
+      errors.snappmarket = errorText(settingsResult);
+    }
+    if (okalaResult.status === "fulfilled") {
+      setOkalaSettings(okalaResult.value);
+    } else {
+      errors.okala = errorText(okalaResult);
+    }
+    if (scansResult.status === "fulfilled") {
+      setScans(scansResult.value);
+    } else {
+      setMessage(errorText(scansResult));
+    }
+    setProviderErrors(errors);
+    setBusy(false);
+  }, []);
   useEffect(() => {
     void load();
   }, []);
   useEffect(() => {
-    if (scan?.status !== "queued" && scan?.status !== "running") return;
+    if (busy || !selected) return;
+    const currentScanIsContextual =
+      scan &&
+      !selectedRunId &&
+      scan.locationId === selected &&
+      scan.source === source &&
+      scan.threshold === threshold &&
+      (scan.status === "queued" ||
+        scan.status === "running" ||
+        scan.status === "failed");
+    if (currentScanIsContextual) return;
+
+    const hydrateInitialContext =
+      !initialContextHydratedRef.current && !selectedRunId;
+    initialContextHydratedRef.current = true;
+    const requestId = ++dealsRequestRef.current;
+    const matchingRuns = scans
+      .filter(
+        (run) =>
+          run.locationId === selected &&
+          run.source === source &&
+          run.status === "succeeded",
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const requestedRun = selectedRunId
+      ? scans.find(
+          (run) =>
+            run.id === selectedRunId &&
+            run.locationId === selected &&
+            run.source === source &&
+            run.threshold === threshold &&
+            run.status === "succeeded",
+        )
+      : null;
+    const latest =
+      requestedRun ??
+      (hydrateInitialContext
+        ? matchingRuns[0]
+        : matchingRuns.find((run) => run.threshold === threshold));
+
+    setScan(latest ?? null);
+    if (hydrateInitialContext && latest) {
+      setThreshold(latest.threshold);
+      setMode(latest.mode);
+    }
+    setDeals([]);
+    setDealGroups([]);
+    if (!latest) return;
+    void loadDealLedger(latest.id)
+      .then(({ rawDeals, groupedDeals }) => {
+        if (
+          dealsRequestRef.current === requestId &&
+          selected === latest.locationId &&
+          source === latest.source &&
+          threshold === latest.threshold
+        ) {
+          setDeals(rawDeals);
+          setDealGroups(groupedDeals);
+        }
+      })
+      .catch((error) => {
+        if (dealsRequestRef.current === requestId)
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "بارگذاری تخفیف‌ها ناموفق بود",
+          );
+      });
+  }, [
+    busy,
+    scans,
+    selected,
+    selectedRunId,
+    source,
+    threshold,
+    scan?.id,
+    scan?.status,
+  ]);
+  useEffect(() => {
+    if (!scan || (scan.status !== "queued" && scan.status !== "running"))
+      return;
+    const pollingId = scan.id;
+    const pollingLocationId = scan.locationId;
+    const pollingSource = scan.source;
+    const pollingThreshold = scan.threshold;
     const timer = setInterval(async () => {
       try {
-        const current = await api<ScanRecord>(`/api/scans/${scan.id}`);
+        const current = await api<ScanRecord>(`/api/scans/${pollingId}`);
+        if (current.id !== pollingId) return;
         setScan(current);
         if (current.status === "succeeded") {
-          setDeals(await api<DealRecord[]>(`/api/scans/${current.id}/deals`));
+          const requestId = ++dealsRequestRef.current;
+          const { rawDeals, groupedDeals } = await loadDealLedger(current.id);
+          if (
+            dealsRequestRef.current === requestId &&
+            selected === pollingLocationId &&
+            source === pollingSource &&
+            threshold === pollingThreshold
+          ) {
+            setDeals(rawDeals);
+            setDealGroups(groupedDeals);
+          }
           setMessage("اسکن کامل شد؛ قفسه تازه است.");
           void load();
         } else if (current.status === "failed") {
@@ -239,18 +382,19 @@ function Dashboard() {
       }
     }, 1200);
     return () => clearInterval(timer);
-  }, [scan?.id, scan?.status]);
+  }, [load, scan?.id, scan?.status, selected, source, threshold]);
   const runScan = async (overrides?: {
     locationId?: string;
     threshold?: number;
-    source?: "snappmarket" | "digikalajet" | "okala";
+    source?: DealSource;
     mode?: "partial" | "full";
   }) => {
     const locationId = overrides?.locationId ?? selected;
     const thr = overrides?.threshold ?? threshold;
     const src = overrides?.source ?? source;
     const md = overrides?.mode ?? mode;
-    if (!locationId) return;
+    if (!locationId || src === "digikalajet") return;
+    setSelectedRunId(null);
     setMessage("");
     try {
       const started = await api<{ id: string; status: string }>("/api/scans", {
@@ -285,6 +429,13 @@ function Dashboard() {
     }
   };
   const retryScan = (run: ScanRecord) => {
+    if (run.source === "digikalajet") {
+      setMessage(
+        "اسکن‌های دیجی‌کالا جت فعلاً فقط برای مشاهده هستند و قابل تکرار نیستند.",
+      );
+      return;
+    }
+    setSelectedRunId(null);
     setSelected(run.locationId);
     setThreshold(run.threshold);
     setSource(run.source);
@@ -296,49 +447,150 @@ function Dashboard() {
       mode: run.mode,
     });
   };
-  const openRun = async (run: ScanRecord) => {
+  const openRun = (run: ScanRecord) => {
+    setSelectedRunId(run.id);
+    setSelected(run.locationId);
     setScan(run);
-    setDeals(await api<DealRecord[]>(`/api/scans/${run.id}/deals`));
+    setThreshold(run.threshold);
+    setSource(run.source);
+    setMode(run.mode);
     setView("deals");
+  };
+  const connection = useMemo<ConnectionState>(() => {
+    if (source === "digikalajet")
+      return {
+        source,
+        label: sourceLabel(source),
+        status: "disabled",
+        canScan: false,
+        message: "دیجی‌کالا جت فعلاً غیرفعال است؛ این نتیجه فقط خواندنی است.",
+      };
+    const value = source === "snappmarket" ? settings : okalaSettings;
+    const providerError = providerErrors[source];
+    if (providerError)
+      return {
+        source,
+        label: sourceLabel(source),
+        status: "unavailable",
+        canScan: false,
+        message: `${sourceLabel(source)}: ${providerError}`,
+      };
+    if (!value)
+      return {
+        source,
+        label: sourceLabel(source),
+        status: "unavailable",
+        canScan: false,
+        message: `وضعیت اتصال ${sourceLabel(source)} در دسترس نیست؛ تنظیمات را بررسی کنید.`,
+      };
+    if (!value.tokenConfigured)
+      return {
+        source,
+        label: sourceLabel(source),
+        status: "missing",
+        canScan: false,
+        message: `ابتدا توکن ${sourceLabel(source)} را در تنظیمات اتصال وارد کنید.`,
+      };
+    if (value.tokenExpired)
+      return {
+        source,
+        label: sourceLabel(source),
+        status: "expired",
+        canScan: false,
+        message: `توکن ${sourceLabel(source)} منقضی شده است؛ برای اسکن دوباره آن را تعویض کنید.`,
+      };
+    return {
+      source,
+      label: sourceLabel(source),
+      status: "ready",
+      canScan: true,
+      message: `${sourceLabel(source)} آماده اسکن مکان انتخابی است.`,
+    };
+  }, [okalaSettings, providerErrors, settings, source]);
+  const openConnectionSettings = () => {
+    if (source === "digikalajet") {
+      setSource("snappmarket");
+      setSelectedRunId(null);
+    }
+    setView("settings");
+  };
+  const handleScanAction = () => {
+    if (scanning) return;
+    if (source === "digikalajet") {
+      setMessage(connection.message);
+      return;
+    }
+    if (!connection.canScan) {
+      setView("settings");
+      return;
+    }
+    void runScan();
   };
   const vendors = useMemo(
     () =>
-      [...new Set(deals.map((d) => d.vendorTitle))].sort((a, b) =>
-        a.localeCompare(b, "fa"),
-      ),
-    [deals],
+      [
+        ...new Set(
+          dealGroups.flatMap((group) =>
+            group.vendors.map((groupVendor) => groupVendor.vendorTitle),
+          ),
+        ),
+      ].sort((a, b) => a.localeCompare(b, "fa")),
+    [dealGroups],
   );
+  useEffect(() => {
+    if (vendor !== "all" && !vendors.includes(vendor)) setVendor("all");
+  }, [vendor, vendors]);
   const visible = useMemo(
     () =>
-      deals
+      dealGroups
         .filter(
-          (d) =>
-            (stateFilter === "all" || d.state === stateFilter) &&
-            (vendor === "all" || d.vendorTitle === vendor) &&
-            displayToman(d.finalPriceRials, scan?.source ?? "snappmarket") >=
+          (group) =>
+            (stateFilter === "all" || group.state === stateFilter) &&
+            (vendor === "all" ||
+              group.vendors.some(
+                (groupVendor) => groupVendor.vendorTitle === vendor,
+              )) &&
+            displayToman(
+              group.finalPriceRials,
+              scan?.source ?? "snappmarket",
+            ) >=
               minPrice &&
-            `${d.title} ${d.vendorTitle} ${d.categoryTitle ?? ""}`.includes(
-              query,
-            ),
+            `${group.title} ${group.categoryTitle ?? ""} ${group.vendors
+              .map((groupVendor) => groupVendor.vendorTitle)
+              .join(" ")}`.includes(query),
         )
         .sort((a, b) =>
           sort === "price"
             ? a.finalPriceRials - b.finalPriceRials
             : sort === "stock"
-              ? b.stock - a.stock
+              ? activeGroupStock(b) - activeGroupStock(a)
               : b.discountRatio - a.discountRatio,
         ),
-    [deals, stateFilter, vendor, minPrice, query, sort, scan?.source],
+    [
+      dealGroups,
+      stateFilter,
+      vendor,
+      minPrice,
+      query,
+      sort,
+      scan?.source,
+    ],
   );
   const counts = {
-    all: deals.filter((d) => d.state !== "no_longer_present").length,
-    new: deals.filter((d) => d.state === "new").length,
-    still: deals.filter((d) => d.state === "still_available").length,
-    gone: deals.filter((d) => d.state === "no_longer_present").length,
+    all: dealGroups.filter((group) => group.state !== "no_longer_present")
+      .length,
+    new: dealGroups.filter((group) => group.state === "new").length,
+    still: dealGroups.filter((group) => group.state === "still_available")
+      .length,
+    gone: dealGroups.filter((group) => group.state === "no_longer_present")
+      .length,
   };
   const scanning = scan?.status === "queued" || scan?.status === "running";
   return (
-    <main className="app-shell">
+    <main
+      className={`app-shell ${connection.canScan && !scanning && view === "deals" ? "scan-ready" : ""}`}
+      aria-hidden={locationForm || undefined}
+    >
       <aside className="location-rail" aria-label="مکان‌های ذخیره‌شده">
         <div className="brand">
           <span className="brand-mark">ب</span>
@@ -347,10 +599,14 @@ function Dashboard() {
             <small>رادار تخفیف محلی</small>
           </div>
         </div>
+        <ThemeToggle />
         <select
           className="mobile-location-select"
           value={selected}
-          onChange={(e) => setSelected(e.target.value)}
+          onChange={(e) => {
+            setSelectedRunId(null);
+            setSelected(e.target.value);
+          }}
           aria-label="انتخاب مکان"
         >
           {locations.map((l) => (
@@ -377,7 +633,10 @@ function Dashboard() {
             <div className="location-row" key={l.id}>
               <button
                 className={`location ${selected === l.id ? "active" : ""}`}
-                onClick={() => setSelected(l.id)}
+                onClick={() => {
+                  setSelectedRunId(null);
+                  setSelected(l.id);
+                }}
               >
                 <Icon name="pin" />
                 <span>
@@ -441,19 +700,27 @@ function Dashboard() {
         </nav>
         <div className="rail-foot">
           <span
-            className={`status-dot ${settings?.tokenConfigured && !settings.tokenExpired ? "ok" : "warn"}`}
+            className={`status-dot ${connection.status === "ready" ? "ok" : "warn"}`}
           />
-          {settings?.tokenConfigured
-            ? settings.tokenExpired
+          {connection.status === "ready"
+            ? "اتصال آماده است"
+            : connection.status === "expired"
               ? "توکن منقضی شده"
-              : "اتصال آماده است"
-            : "توکن ثبت نشده"}
+              : connection.status === "disabled"
+                ? "جت موقتاً غیرفعال است"
+                : "اتصال نیاز به بررسی دارد"}
         </div>
       </aside>
       <section className="workspace">
         <header className="scan-strip">
           <div className="scan-context">
-            <span>در حال بررسی</span>
+            <span>
+              {scanning
+                ? "اسکن در جریان است"
+                : connection.status === "ready"
+                  ? "آماده اسکن"
+                  : "نیازمند راه‌اندازی"}
+            </span>
             <strong>
               {locations.find((l) => l.id === selected)?.name ??
                 "یک مکان را انتخاب کنید"}
@@ -474,42 +741,37 @@ function Dashboard() {
                 ? scan.vendorCount || scan.productCount
                   ? `${faNumber.format(scan.vendorCount)} فروشگاه · ${faNumber.format(scan.productCount)} کالا خوانده شد`
                   : "قفسه‌های اطراف در حال خواندن‌اند…"
-                : source === "okala"
-                  ? okalaSettings?.tokenExpired
-                    ? "توکن اکالا نیاز به تعویض دارد"
-                    : okalaSettings?.tokenConfigured
-                      ? "اکالا آماده اسکن مکان انتخابی است"
-                      : "ابتدا توکن اکالا را در تنظیمات وارد کنید"
-                  : settings?.tokenExpired
-                    ? "توکن اسنپ‌مارکت نیاز به تعویض دارد"
-                    : settings?.tokenConfigured
-                      ? "آماده برای یک اسکن تازه"
-                      : "ابتدا توکن را در تنظیمات وارد کنید"}
+                : connection.message}
             </p>
           </div>
           <div className="scan-actions">
-            <label className="threshold-control">
-              <span>منبع</span>
-              <select
-                value={source}
-                disabled={scanning}
-                onChange={(e) => {
-                  const next = e.target.value as
-                    "snappmarket" | "digikalajet" | "okala";
-                  setSource(next);
-                  if (
-                    (next === "digikalajet" || next === "okala") &&
-                    threshold < 30
-                  )
-                    setThreshold(30);
-                }}
-              >
-                <option value="snappmarket">اسنپ‌مارکت</option>
-                <option value="digikalajet">دیجی‌کالا جت</option>
-                <option value="okala">اکالا</option>
-              </select>
-            </label>
-            {source === "digikalajet" && (
+            {source === "digikalajet" ? (
+              <div className="provider-history-state" role="status">
+                <span>نتیجه تاریخی</span>
+                <strong>دیجی‌کالا جت · فقط مشاهده</strong>
+                <button type="button" onClick={openConnectionSettings}>
+                  بازگشت به اسکن فعال
+                </button>
+              </div>
+            ) : (
+              <label className="threshold-control">
+                <span>فروشگاه</span>
+                <select
+                  value={source}
+                  disabled={scanning}
+                  onChange={(e) => {
+                    const next = e.target.value as ActiveSource;
+                    setSelectedRunId(null);
+                    setSource(next);
+                    if (next === "okala" && threshold < 30) setThreshold(30);
+                  }}
+                >
+                  <option value="snappmarket">اسنپ‌مارکت</option>
+                  <option value="okala">اکالا</option>
+                </select>
+              </label>
+            )}
+            {source !== "digikalajet" && (
               <label className="threshold-control">
                 <span>دامنه اسکن</span>
                 <select
@@ -528,8 +790,11 @@ function Dashboard() {
               <span>حداقل تخفیف</span>
               <select
                 value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value))}
-                disabled={scanning}
+                onChange={(e) => {
+                  setSelectedRunId(null);
+                  setThreshold(Number(e.target.value));
+                }}
+                disabled={scanning || source === "digikalajet"}
                 aria-label="حداقل درصد تخفیف"
               >
                 {(source === "digikalajet" || source === "okala"
@@ -544,25 +809,17 @@ function Dashboard() {
             </label>
             <button
               className="scan-button"
-              disabled={
-                scanning ||
-                (source === "snappmarket"
-                  ? !settings?.tokenConfigured || settings.tokenExpired
-                  : source === "digikalajet"
-                    ? !jetConfigured
-                    : !okalaSettings?.tokenConfigured ||
-                      okalaSettings.tokenExpired)
-              }
-              onClick={() => void runScan()}
+              disabled={scanning || source === "digikalajet"}
+              onClick={handleScanAction}
             >
-              <Icon name="scan" />
+              <Icon name={connection.canScan ? "scan" : "settings"} />
               {scanning
                 ? "در حال اسکن"
                 : source === "digikalajet"
-                  ? "اسکن جت"
-                  : source === "okala"
-                    ? "اسکن اکالا"
-                    : "اسکن تخفیف‌ها"}
+                  ? "جت موقتاً غیرفعال"
+                  : connection.canScan
+                    ? `اسکن ${source === "okala" ? "اکالا" : "تخفیف‌ها"}`
+                    : "تنظیم اتصال"}
             </button>
           </div>
         </header>
@@ -581,24 +838,27 @@ function Dashboard() {
                 value={settings}
                 onSaved={(v) => {
                   setSettings(v);
+                  setProviderErrors((errors) => ({
+                    ...errors,
+                    snappmarket: undefined,
+                  }));
                   setMessage("توکن با موفقیت و به‌صورت رمزگذاری‌شده ذخیره شد");
                 }}
               />
-            ) : source === "digikalajet" ? (
-              <JetSettings
-                onSaved={() => {
-                  setJetConfigured(true);
-                  setMessage("توکن دیجی‌کالا جت ذخیره شد");
-                }}
-              />
-            ) : (
+            ) : source === "okala" ? (
               <OkalaSettings
                 value={okalaSettings}
                 onSaved={(v) => {
                   setOkalaSettings(v);
+                  setProviderErrors((errors) => ({
+                    ...errors,
+                    okala: undefined,
+                  }));
                   setMessage("توکن اکالا ذخیره شد");
                 }}
               />
+            ) : (
+              <ProviderDisabledNotice onActivate={openConnectionSettings} />
             )}
           </>
         ) : view === "history" ? (
@@ -609,13 +869,15 @@ function Dashboard() {
               <button
                 onClick={() => setStateFilter("all")}
                 className={stateFilter === "all" ? "active" : ""}
+                aria-pressed={stateFilter === "all"}
               >
-                <span>روی قفسه</span>
+                <span>محصول روی قفسه</span>
                 <strong>{faNumber.format(counts.all)}</strong>
               </button>
               <button
                 onClick={() => setStateFilter("new")}
                 className={stateFilter === "new" ? "active" : ""}
+                aria-pressed={stateFilter === "new"}
               >
                 <span>تازه پیدا شده</span>
                 <strong>{faNumber.format(counts.new)}</strong>
@@ -623,6 +885,7 @@ function Dashboard() {
               <button
                 onClick={() => setStateFilter("still_available")}
                 className={stateFilter === "still_available" ? "active" : ""}
+                aria-pressed={stateFilter === "still_available"}
               >
                 <span>هنوز موجود</span>
                 <strong>{faNumber.format(counts.still)}</strong>
@@ -630,6 +893,7 @@ function Dashboard() {
               <button
                 onClick={() => setStateFilter("no_longer_present")}
                 className={stateFilter === "no_longer_present" ? "active" : ""}
+                aria-pressed={stateFilter === "no_longer_present"}
               >
                 <span>ناپدید شده</span>
                 <strong>{faNumber.format(counts.gone)}</strong>
@@ -645,7 +909,7 @@ function Dashboard() {
                   </h1>
                   <p>
                     {scan?.status === "succeeded"
-                      ? `${faNumber.format(scan.vendorCount)} فروشگاه و ${faNumber.format(scan.productCount)} کالا بررسی شد.`
+                      ? `${faNumber.format(scan.vendorCount)} فروشگاه و ${faNumber.format(scan.productCount)} کالا بررسی شد · ${faNumber.format(dealGroups.length)} محصول منحصربه‌فرد از ${faNumber.format(deals.length)} پیشنهاد فروشگاهی.`
                       : "نتیجه آخرین اسکن موفق اینجا می‌نشیند."}
                   </p>
                 </div>
@@ -653,6 +917,7 @@ function Dashboard() {
                   <label className="search">
                     <Icon name="search" />
                     <input
+                      aria-label="جست‌وجوی کالا یا فروشگاه"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder="جست‌وجوی کالا یا فروشگاه"
@@ -697,20 +962,25 @@ function Dashboard() {
                 </div>
               ) : visible.length ? (
                 <div className="deal-list">
-                  {visible.map((d) => (
+                  {visible.map((group) => (
                     <DealRow
-                      key={`${d.key}-${d.state}`}
-                      deal={d}
+                      key={`${group.key}-${group.state}`}
+                      group={group}
                       source={scan?.source ?? "snappmarket"}
                     />
                   ))}
                 </div>
               ) : (
                 <EmptyState
-                  configured={!!settings?.tokenConfigured}
-                  hasDeals={deals.length > 0}
-                  onSettings={() => setView("settings")}
-                  onScan={() => void runScan()}
+                  connection={connection}
+                  hasDeals={dealGroups.length > 0}
+                  onAction={handleScanAction}
+                  onClearFilters={() => {
+                    setQuery("");
+                    setStateFilter("all");
+                    setVendor("all");
+                    setMinPrice(0);
+                  }}
                 />
               )}
             </section>
@@ -733,56 +1003,32 @@ function Dashboard() {
       )}
       <button
         className="mobile-scan"
-        disabled={scanning}
-        onClick={
-          (
-            source === "okala"
-              ? okalaSettings?.tokenConfigured && !okalaSettings.tokenExpired
-              : source === "digikalajet"
-                ? jetConfigured
-                : settings?.tokenConfigured && !settings.tokenExpired
-          )
-            ? () => void runScan()
-            : () => setView("settings")
-        }
+        disabled={scanning || source === "digikalajet"}
+        onClick={handleScanAction}
       >
-        <Icon
-          name={
-            (
-              source === "okala"
-                ? okalaSettings?.tokenConfigured && !okalaSettings.tokenExpired
-                : source === "digikalajet"
-                  ? jetConfigured
-                  : settings?.tokenConfigured && !settings.tokenExpired
-            )
-              ? "scan"
-              : "settings"
-          }
-        />
+        <Icon name={connection.canScan ? "scan" : "settings"} />
         {scanning
           ? "در حال اسکن"
-          : (
-                source === "okala"
-                  ? okalaSettings?.tokenConfigured &&
-                    !okalaSettings.tokenExpired
-                  : source === "digikalajet"
-                    ? jetConfigured
-                    : settings?.tokenConfigured && !settings.tokenExpired
-              )
-            ? `اسکن ${source === "okala" ? "اکالا" : source === "digikalajet" ? "جت" : "تخفیف‌ها"}`
-            : "تنظیم اتصال"}
+          : source === "digikalajet"
+            ? "جت موقتاً غیرفعال"
+            : connection.canScan
+              ? `اسکن ${source === "okala" ? "اکالا" : "تخفیف‌ها"}`
+              : "تنظیم اتصال"}
       </button>
     </main>
   );
 }
 
 function DealRow({
-  deal: d,
+  group: d,
   source,
 }: {
-  deal: DealRecord;
-  source: "snappmarket" | "digikalajet" | "okala";
+  group: DealGroupRecord;
+  source: DealSource;
 }) {
+  const activeVendors = d.vendors.filter(
+    (groupVendor) => groupVendor.state !== "no_longer_present",
+  );
   return (
     <article className={`deal-row ${d.state}`}>
       <div className="discount-tab">
@@ -809,8 +1055,32 @@ function DealRow({
         </div>
         <h2>{d.title}</h2>
         <p>
-          {d.vendorTitle} · موجودی {faNumber.format(d.stock)}
+          {faNumber.format(activeVendors.length)} فروشگاه · موجودی{" "}
+          {faNumber.format(activeGroupStock(d))}
         </p>
+        <div className="vendor-chips" aria-label="فروشندگان این کالا">
+          {d.vendors.map((groupVendor) => {
+            const isGone = groupVendor.state === "no_longer_present";
+            return (
+              <span
+                className={`vendor-chip ${groupVendor.state}`}
+                key={groupVendor.vendorId}
+                title={
+                  isGone
+                    ? `${groupVendor.vendorTitle} · ناپدیدشده`
+                    : `${groupVendor.vendorTitle} · موجودی ${faNumber.format(groupVendor.stock)}`
+                }
+              >
+                <strong>{groupVendor.vendorTitle}</strong>
+                <small>
+                  {isGone
+                    ? "ناپدیدشده"
+                    : `موجودی ${faNumber.format(groupVendor.stock)}`}
+                </small>
+              </span>
+            );
+          })}
+        </div>
       </div>
       <div className="price-label">
         <del>{money(d.priceRials, source)}</del>
@@ -825,15 +1095,15 @@ function DealRow({
 }
 
 function EmptyState({
-  configured,
+  connection,
   hasDeals,
-  onSettings,
-  onScan,
+  onAction,
+  onClearFilters,
 }: {
-  configured: boolean;
+  connection: ConnectionState;
   hasDeals: boolean;
-  onSettings: () => void;
-  onScan: () => void;
+  onAction: () => void;
+  onClearFilters: () => void;
 }) {
   return (
     <div className="empty">
@@ -842,16 +1112,36 @@ function EmptyState({
       <p>
         {hasDeals
           ? "فیلترها را سبک‌تر کنید تا کالاها دوباره دیده شوند."
-          : configured
+          : connection.canScan
             ? "یک اسکن دستی اجرا کنید تا تخفیف‌های عمیق اطراف این مکان پیدا شوند."
-            : "برای شروع، توکن تازه اسنپ‌مارکت را در تنظیمات اتصال وارد کنید."}
+            : connection.message}
       </p>
-      {!hasDeals && (
-        <button onClick={configured ? onScan : onSettings}>
-          {configured ? "اولین اسکن" : "تنظیم اتصال"}
+      {hasDeals ? (
+        <button onClick={onClearFilters}>پاک‌کردن فیلترها</button>
+      ) : (
+        <button onClick={onAction}>
+          {connection.canScan
+            ? "اولین اسکن"
+            : connection.status === "disabled"
+              ? "بازگشت به اسکن فعال"
+              : "تنظیم اتصال"}
         </button>
       )}
     </div>
+  );
+}
+
+function ProviderDisabledNotice({ onActivate }: { onActivate: () => void }) {
+  return (
+    <section className="provider-disabled" role="status">
+      <span className="empty-mark">جت</span>
+      <h1>دیجی‌کالا جت موقتاً غیرفعال است</h1>
+      <p>
+        تنظیم اتصال و اسکن تازه برای این منبع فعلاً در دسترس نیست. نتایج قبلی
+        همچنان از تاریخچه قابل مشاهده‌اند.
+      </p>
+      <button onClick={onActivate}>بازگشت به تنظیمات اسکن فعال</button>
+    </section>
   );
 }
 
@@ -1097,15 +1387,22 @@ function HistoryPanel({
                 </span>
                 <small>
                   {s.status === "failed"
-                    ? s.errorMessage
-                    : `${faNumber.format(s.vendorCount)} فروشگاه`}
+                    ? s.source === "digikalajet"
+                      ? `${s.errorMessage ?? "اسکن ناموفق"} · تکرار موقتاً غیرفعال است`
+                      : s.errorMessage
+                    : `${faNumber.format(s.vendorCount)} فروشگاه · ${sourceLabel(s.source)}`}
                 </small>
               </button>
-              {s.status === "failed" && (
-                <button className="run-retry" onClick={() => onRetry(s)}>
-                  تلاش دوباره
-                </button>
-              )}
+              {s.status === "failed" &&
+                (s.source === "digikalajet" ? (
+                  <span className="run-retry disabled" role="status">
+                    تکرار غیرفعال
+                  </span>
+                ) : (
+                  <button className="run-retry" onClick={() => onRetry(s)}>
+                    تلاش دوباره
+                  </button>
+                ))}
             </div>
           ))}
         </div>
@@ -1135,6 +1432,72 @@ function LocationEditor({
   const [longitude, setLongitude] = useState(location?.longitude ?? 51.4);
   const [isDefault, setDefault] = useState(location?.isDefault ?? false),
     [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<LocationSearchResult[]>([]);
+  const [searchState, setSearchState] = useState<
+    "idle" | "loading" | "results" | "empty" | "error"
+  >("idle");
+  const [searchError, setSearchError] = useState("");
+  const searchRequestRef = useRef(0);
+  const dialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !required) {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable.item(0);
+      const last = focusable.item(focusable.length - 1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    dialogRef.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [onClose, required]);
+  const searchAddress = async () => {
+    const query = searchQuery.trim();
+    const requestId = ++searchRequestRef.current;
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchState("error");
+      setSearchError("برای جست‌وجو حداقل دو نویسه وارد کنید.");
+      return;
+    }
+    setSearchState("loading");
+    setSearchError("");
+    setSearchResults([]);
+    try {
+      const results = await api<LocationSearchResult[]>(
+        `/api/locations/search?q=${encodeURIComponent(query)}`,
+      );
+      if (requestId !== searchRequestRef.current) return;
+      setSearchResults(results);
+      setSearchState(results.length ? "results" : "empty");
+    } catch (e) {
+      if (requestId !== searchRequestRef.current) return;
+      setSearchState("error");
+      setSearchError(e instanceof Error ? e.message : "جست‌وجو انجام نشد.");
+    }
+  };
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -1149,6 +1512,12 @@ function LocationEditor({
   };
   const remove = async () => {
     if (!location) return;
+    if (
+      !window.confirm(
+        "Deleting this location will also permanently delete all of its scan history and deals. Continue?",
+      )
+    )
+      return;
     try {
       await api(`/api/locations/${location.id}`, { method: "DELETE" });
       onSaved();
@@ -1166,13 +1535,15 @@ function LocationEditor({
       className="sheet-backdrop"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <section
-        className="location-sheet map-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="location-title"
+        <section
+          ref={dialogRef}
+          className="location-sheet map-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="location-title"
+          tabIndex={-1}
       >
-        <button className="sheet-close" onClick={onClose}>
+        <button className="sheet-close" onClick={onClose} aria-label="بستن پنجره مکان">
           ×
         </button>
         <span>قفسه محلی</span>
@@ -1190,6 +1561,66 @@ function LocationEditor({
               placeholder="مثلاً خانه یا محل کار"
             />
           </label>
+          <div className="location-search" role="search">
+            <label htmlFor="location-address-search">جست‌وجوی نشانی در تهران</label>
+            <div className="location-search-control">
+              <input
+                id="location-address-search"
+                value={searchQuery}
+                onChange={(e) => {
+                  searchRequestRef.current += 1;
+                  setSearchQuery(e.target.value);
+                  setSearchResults([]);
+                  setSearchState("idle");
+                  setSearchError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void searchAddress();
+                  }
+                }}
+                placeholder="مثلاً میدان ونک"
+                inputMode="search"
+              />
+              <button
+                type="button"
+                onClick={() => void searchAddress()}
+                disabled={searchState === "loading"}
+              >
+                {searchState === "loading" ? "در حال جست‌وجو…" : "جست‌وجو"}
+              </button>
+            </div>
+            {searchState === "error" && (
+              <p className="location-search-status is-error" role="alert">
+                {searchError}
+              </p>
+            )}
+            {searchState === "empty" && (
+              <p className="location-search-status" role="status">
+                نتیجه‌ای در محدوده تهران پیدا نشد؛ مختصات را دستی وارد کنید.
+              </p>
+            )}
+            {searchState === "results" && (
+              <div className="location-search-results" aria-label="نتایج جست‌وجوی نشانی">
+                {searchResults.map((result) => (
+                  <button
+                    type="button"
+                    key={`${result.latitude}:${result.longitude}:${result.displayName}`}
+                    onClick={() => {
+                      setLatitude(result.latitude);
+                      setLongitude(result.longitude);
+                      setSearchQuery(result.displayName);
+                      setSearchResults([]);
+                      setSearchState("idle");
+                    }}
+                  >
+                    {result.displayName}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <LocationMap
             latitude={latitude}
             longitude={longitude}
@@ -1237,7 +1668,7 @@ function LocationEditor({
             <button>ذخیره مکان</button>
             {location && (
               <button type="button" className="danger" onClick={remove}>
-                حذف مکان
+                حذف مکان و تاریخچه
               </button>
             )}
           </div>
