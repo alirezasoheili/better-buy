@@ -13,6 +13,18 @@ pnpm dev
 
 سپس [http://127.0.0.1:3000](http://127.0.0.1:3000) را باز کنید، با گوگل وارد شوید و از «تنظیمات اتصال» توکن فروشگاه موردنظر را ثبت کنید. API روی `127.0.0.1:8787` با `wrangler dev` اجرا می‌شود و داده‌ها در D1 محلی نگهداری می‌شوند.
 
+## Local PostgreSQL
+
+The repository includes a PostgreSQL 16 Compose service for local development and database work that is separate from the current D1-backed Worker runtime.
+
+```bash
+docker compose up -d postgres
+docker compose ps
+docker compose down
+```
+
+The database is available at `127.0.0.1:5432` with the local defaults `better_buy` / `better_buy` / `better_buy_local` for database, user, and password. Set `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, or `POSTGRES_PASSWORD` in the root `.env` file to override them. Data persists in the `better_buy_postgres_data` named volume; remove it explicitly with `docker compose down -v` when a clean database is required.
+
 برای اولین اجرا، migration های D1 را محلی اعمال کنید:
 
 ```bash
