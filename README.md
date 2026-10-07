@@ -42,3 +42,14 @@ pnpm test
 pnpm build
 pnpm test:e2e
 ```
+
+## Formatting and Git hooks
+
+`pnpm install` installs the Husky hooks through the `prepare` script. Before each
+commit, lint-staged formats staged files with Prettier and includes those formatting
+changes in the commit, then runs `pnpm typecheck` and `pnpm test`. Unsupported file
+types and generated output are skipped; a failed check stops the commit.
+
+Use `pnpm format` to format the repository or `pnpm format:check` to check formatting
+without changing files. Formatting rules are in `.prettierrc.json`, with generated
+files excluded by `.prettierignore`.
