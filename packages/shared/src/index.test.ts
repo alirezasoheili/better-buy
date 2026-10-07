@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   TEHRAN_BOUNDARY,
+  compareDeals,
+  displayToman,
   groupDeals,
   isWithinTehranBoundary,
 } from "./index";
@@ -34,14 +36,14 @@ describe("Tehran location policy", () => {
     expect(
       isWithinTehranBoundary(
         TEHRAN_BOUNDARY.minLatitude,
-        TEHRAN_BOUNDARY.minLongitude,
-      ),
+        TEHRAN_BOUNDARY.minLongitude
+      )
     ).toBe(true);
     expect(
       isWithinTehranBoundary(
         TEHRAN_BOUNDARY.maxLatitude,
-        TEHRAN_BOUNDARY.maxLongitude,
-      ),
+        TEHRAN_BOUNDARY.maxLongitude
+      )
     ).toBe(true);
   });
 
@@ -76,8 +78,9 @@ describe("versioned deal grouping", () => {
     ]);
     expect(
       Object.fromEntries(
-        groups[0]?.vendors.map((vendor) => [vendor.vendorId, vendor.stock]) ?? [],
-      ),
+        groups[0]?.vendors.map((vendor) => [vendor.vendorId, vendor.stock]) ??
+          []
+      )
     ).toEqual({ "vendor-1": 1, "vendor-2": 9 });
     expect(groups[0]?.vendors[0]).toMatchObject({
       priceRials: 100_000,
@@ -90,10 +93,26 @@ describe("versioned deal grouping", () => {
   it("splits groups when identity, meaningful image, category, or any price fact differs", () => {
     const groups = groupDeals("snappmarket", [
       deal(),
-      deal({ key: "vendor-2:product-2", productVariationId: "product-2", vendorId: "vendor-2" }),
-      deal({ key: "vendor-3:product-1", vendorId: "vendor-3", image: "https://cdn.example.test/other.jpg" }),
-      deal({ key: "vendor-4:product-1", vendorId: "vendor-4", discountRials: 15_000 }),
-      deal({ key: "vendor-5:product-1", vendorId: "vendor-5", categoryTitle: "نوشیدنی" }),
+      deal({
+        key: "vendor-2:product-2",
+        productVariationId: "product-2",
+        vendorId: "vendor-2",
+      }),
+      deal({
+        key: "vendor-3:product-1",
+        vendorId: "vendor-3",
+        image: "https://cdn.example.test/other.jpg",
+      }),
+      deal({
+        key: "vendor-4:product-1",
+        vendorId: "vendor-4",
+        discountRials: 15_000,
+      }),
+      deal({
+        key: "vendor-5:product-1",
+        vendorId: "vendor-5",
+        categoryTitle: "نوشیدنی",
+      }),
     ]);
 
     expect(groups).toHaveLength(5);
@@ -114,8 +133,9 @@ describe("versioned deal grouping", () => {
     expect(groups[0]?.state).toBe("still_available");
     expect(
       Object.fromEntries(
-        groups[0]?.vendors.map((vendor) => [vendor.vendorId, vendor.state]) ?? [],
-      ),
+        groups[0]?.vendors.map((vendor) => [vendor.vendorId, vendor.state]) ??
+          []
+      )
     ).toEqual({
       "vendor-1": "still_available",
       "vendor-2": "no_longer_present",
@@ -125,7 +145,11 @@ describe("versioned deal grouping", () => {
   it("marks a group new only when all current vendor offers are new", () => {
     const groups = groupDeals("snappmarket", [
       deal({ key: "vendor-1:product-1", state: "new" }),
-      deal({ key: "vendor-2:product-1", vendorId: "vendor-2", state: "still_available" }),
+      deal({
+        key: "vendor-2:product-1",
+        vendorId: "vendor-2",
+        state: "still_available",
+      }),
     ]);
 
     expect(groups[0]?.state).toBe("still_available");
@@ -134,11 +158,48 @@ describe("versioned deal grouping", () => {
   it("does not duplicate a vendor chip when raw offers repeat", () => {
     const groups = groupDeals("snappmarket", [
       deal({ key: "vendor-1:product-1" }),
-      deal({ key: "vendor-1:product-1-copy", vendorTitle: "فروشگاه یک", stock: 2 }),
+      deal({
+        key: "vendor-1:product-1-copy",
+        vendorTitle: "فروشگاه یک",
+        stock: 2,
+      }),
     ]);
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.vendors).toHaveLength(1);
     expect(groups[0]?.vendors[0]?.offerKey).toBe("vendor-1:product-1");
+  });
+});
+
+describe("price and temporal identity conventions", () => {
+  it("preserves Snapp tomans and converts Okala/Jet rials for display only", () => {
+    expect(displayToman(100000, "snappmarket")).toBe(100000);
+    expect(displayToman(100000, "okala")).toBe(10000);
+    expect(displayToman(100000, "digikalajet")).toBe(10000);
+  });
+  it("uses vendor/product identity across price changes while retaining disappeared offers", () => {
+    const previous = [
+      deal(),
+      deal({ key: "vendor-2:product-1", vendorId: "vendor-2" }),
+    ];
+    const current = [
+      deal({ finalPriceRials: 70000 }),
+      deal({
+        key: "vendor-3:product-2",
+        vendorId: "vendor-3",
+        productVariationId: "product-2",
+      }),
+    ];
+    expect(
+      compareDeals(current, previous, "scan-2").map((item) => [
+        item.key,
+        item.state,
+        item.scanId,
+      ])
+    ).toEqual([
+      ["vendor-1:product-1", "still_available", "scan-2"],
+      ["vendor-3:product-2", "new", "scan-2"],
+      ["vendor-2:product-1", "no_longer_present", "scan-2"],
+    ]);
   });
 });

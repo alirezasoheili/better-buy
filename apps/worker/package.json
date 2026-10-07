@@ -15,7 +15,8 @@
     "@better-buy/shared": "workspace:*",
     "better-auth": "^1.6.26",
     "hono": "^4.9.2",
-    "zod": "^4.0.14"
+    "zod": "^4.0.14",
+    "effect": "4.0.1"
   },
   "devDependencies": {
     "@better-auth/utils": "^0.4.2",

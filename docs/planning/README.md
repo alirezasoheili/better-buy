@@ -9,7 +9,7 @@ Better Buy should remain a Persian RTL, manual grocery-deal scanner. The near-te
 The execution order is driven by correctness first:
 
 1. The displayed results must always match the selected location, provider, threshold, and scan time.
-2. Missing or expired credentials must produce a useful connection action, not a disabled dead end.
+2. SnappMarket scans use automatic guest access after location selection. Missing or expired Okala credentials must produce a useful connection action.
 3. Repeated offers for the same product should become one readable product row without losing vendor-level history.
 4. Location creation must be understandable and enforce the Tehran-only rule at the API boundary.
 5. Tests, security, observability, migrations, and rollback must become release gates.
@@ -60,8 +60,8 @@ Owners:
 Required work:
 
 - Load the latest successful scan for the selected location and provider, or show a clear no-scan state.
-- Use one derived credential state for desktop, mobile, the scan strip, and empty states.
-- When credentials are missing or expired, keep the primary action enabled and open the correct connection settings.
+- Use one derived provider-access state for desktop, mobile, the scan strip, and empty states. SnappMarket has automatic access without customer credentials.
+- When Okala credentials are missing or expired, keep the primary action enabled and open its connection settings.
 - Hide Jet from provider selection, settings, new scans, and retry; preserve read-only historical display.
 - Enforce Tehran membership in shared validation and again authoritatively in create, update, and scan-start routes.
 - Fix the phantom default-location behavior and multi-tenant scan/location joins.
@@ -168,12 +168,12 @@ Still required before a production claim: migration rehearsal/backup, runtime-ba
 - Agents do not silently broaden scope. New findings go to [BUGS.md](./BUGS.md) or [FEATURES.md](./FEATURES.md) with priority and evidence.
 - The integration agent merges only after checking cross-workstream behavior, especially provider/location/scan context.
 
-## Current verified baseline
+## Historical verified baseline (2026-08-23)
 
 - `pnpm test`: passes; 8 shared tests and 24 Worker tests; web has no test files and uses `passWithNoTests`.
 - `pnpm typecheck`: passes for shared, web, and Worker production/test configs.
 - `pnpm build`: passes for the shared package and Next web build.
 - Impeccable detector: no findings for the dashboard, map, and stylesheet targets.
-- Playwright is configured but no E2E test files exist.
+- The current dashboard specs now cover automatic Snapp access and Okala setup on desktop and mobile; see the validation note in the root README.
 - `/healthz` is now an unauthenticated liveness route; `/api/health` remains authenticated.
 - Cloudflare observability is enabled, but structured product events, alerts, backups, and staging smoke tests remain open.

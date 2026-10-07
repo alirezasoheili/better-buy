@@ -1,122 +1,82 @@
+import { compareDeals } from "@better-buy/shared";
 import type {
   DealRecord,
   LocationRecord,
-  ProviderSettingsStatus,
   ScanRecord,
-  SettingsStatus,
 } from "@better-buy/shared";
 
-type ProviderRow = {
-  encrypted_token: string | null;
-  encrypted_refresh_token: string | null;
-  token_expires_at: string | null;
-  app_version: string | null;
-  app_id: string | null;
-};
-
+import { Credentials } from "./infrastructure/credentials";
+import { ScanValidationError } from "./domain/failures";
 const now = () => new Date().toISOString();
-const text = (v: unknown) => (v == null ? null : String(v));
-const decodeJwt = (token: string): Record<string, unknown> => {
-  try {
-    const part = token.split(".")[1];
-    if (!part) return {};
-    const raw = part.replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(
-      atob(raw.padEnd(raw.length + ((4 - (raw.length % 4)) % 4), "=")),
-    );
-  } catch {
-    return {};
-  }
-};
-export const tokenExpiry = (token: string) => {
-  const payload = decodeJwt(token);
-  return typeof payload.exp === "number"
-    ? new Date(payload.exp * 1000).toISOString()
-    : null;
-};
 
-async function keyMaterial(secret: string) {
-  const bytes = secret.match(/.{1,2}/g)?.map((x) => parseInt(x, 16));
-  const raw =
-    bytes && bytes.length === 32 && bytes.every(Number.isFinite)
-      ? new Uint8Array(bytes)
-      : new TextEncoder().encode(secret.padEnd(32, "0").slice(0, 32));
-  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, [
-    "encrypt",
-    "decrypt",
-  ]);
-}
-export async function encrypt(value: string, secret: string, aad: string) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await keyMaterial(secret);
-  const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(aad) },
-      key,
-      new TextEncoder().encode(value),
-    ),
-  );
-  const out = new Uint8Array(iv.length + ciphertext.length);
-  out.set(iv);
-  out.set(ciphertext, iv.length);
-  return btoa(String.fromCharCode(...out));
-}
-export async function decrypt(value: string, secret: string, aad: string) {
-  const bytes = Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
-  const key = await keyMaterial(secret);
-  const clear = await crypto.subtle.decrypt(
-    {
-      name: "AES-GCM",
-      iv: bytes.slice(0, 12),
-      additionalData: new TextEncoder().encode(aad),
-    },
-    key,
-    bytes.slice(12),
-  );
-  return new TextDecoder().decode(clear);
-}
+type LocationRow = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  is_default: number;
+  created_at: string;
+  updated_at: string;
+};
+type ScanRow = {
+  id: string;
+  location_id: string;
+  location_name: string;
+  threshold: number;
+  source: ScanRecord["source"];
+  mode: ScanRecord["mode"];
+  status: ScanRecord["status"];
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  vendor_count: number;
+  product_count: number;
+  deal_count: number;
+  error_code: string | null;
+  error_message: string | null;
+};
+type DealRow = {
+  deal_key: string;
+  product_variation_id: string;
+  vendor_id: string;
+  title: string;
+  image: string | null;
+  vendor_title: string;
+  vendor_code: string | null;
+  category_title: string | null;
+  price_rials: number;
+  discount_rials: number;
+  final_price_rials: number;
+  discount_ratio: number;
+  stock: number;
+};
 
 export class Store {
   constructor(
     private db: D1Database,
     private userId: string,
-    private boxKey: string,
-  ) {}
-  async ensureDefaultLocation() {
-    const existing = await this.db
-      .prepare("SELECT id FROM locations WHERE user_id=? LIMIT 1")
-      .bind(this.userId)
-      .first();
-    if (!existing) {
-      const id = crypto.randomUUID(),
-        at = now();
-      await this.db
-        .prepare(
-          "INSERT INTO locations(id,user_id,name,latitude,longitude,is_default,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
-        )
-        .bind(id, this.userId, "تهران — خانه", 35.7285, 51.309056, 1, at, at)
-        .run();
-    }
+    boxKey: string
+  ) {
+    this.providerAccess = new Credentials(db, userId, boxKey);
   }
+  readonly providerAccess: Credentials;
   async locations(): Promise<LocationRecord[]> {
     const { results } = await this.db
       .prepare(
-        "SELECT * FROM locations WHERE user_id=? ORDER BY is_default DESC, created_at",
+        "SELECT * FROM locations WHERE user_id=? ORDER BY is_default DESC, created_at"
       )
       .bind(this.userId)
-      .all<any>();
+      .all<LocationRow>();
     return results.map(this.mapLocation);
   }
   async location(id: string) {
     const r = await this.db
-      .prepare(
-        "SELECT * FROM locations WHERE user_id=? AND id=?",
-      )
+      .prepare("SELECT * FROM locations WHERE user_id=? AND id=?")
       .bind(this.userId, id)
-      .first<any>();
+      .first<LocationRow>();
     return r ? this.mapLocation(r) : null;
   }
-  private mapLocation(r: any): LocationRecord {
+  private mapLocation(r: LocationRow): LocationRecord {
     return {
       id: r.id,
       name: r.name,
@@ -140,12 +100,12 @@ export class Store {
       stmts.push(
         this.db
           .prepare("UPDATE locations SET is_default=0 WHERE user_id=?")
-          .bind(this.userId),
+          .bind(this.userId)
       );
     stmts.push(
       this.db
         .prepare(
-          "INSERT INTO locations(id,user_id,name,latitude,longitude,is_default,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO locations(id,user_id,name,latitude,longitude,is_default,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)"
         )
         .bind(
           id,
@@ -155,8 +115,8 @@ export class Store {
           v.longitude,
           v.isDefault ? 1 : 0,
           at,
-          at,
-        ),
+          at
+        )
     );
     await this.db.batch(stmts);
     return this.location(id);
@@ -170,12 +130,12 @@ export class Store {
       stmts.push(
         this.db
           .prepare("UPDATE locations SET is_default=0 WHERE user_id=?")
-          .bind(this.userId),
+          .bind(this.userId)
       );
     stmts.push(
       this.db
         .prepare(
-          "UPDATE locations SET name=?,latitude=?,longitude=?,is_default=?,updated_at=? WHERE user_id=? AND id=?",
+          "UPDATE locations SET name=?,latitude=?,longitude=?,is_default=?,updated_at=? WHERE user_id=? AND id=?"
         )
         .bind(
           String(merged.name),
@@ -184,8 +144,8 @@ export class Store {
           merged.isDefault ? 1 : 0,
           now(),
           this.userId,
-          id,
-        ),
+          id
+        )
     );
     await this.db.batch(stmts);
     return this.location(id);
@@ -200,11 +160,11 @@ export class Store {
     const count = await this.db
       .prepare("SELECT COUNT(*) AS c FROM locations WHERE user_id=?")
       .bind(this.userId)
-      .first<any>();
+      .first<{ c: number }>();
     if (Number(count?.c) <= 1) return "last";
     const active = await this.db
       .prepare(
-        "SELECT 1 FROM scans WHERE user_id=? AND location_id=? AND status IN ('queued','running') LIMIT 1",
+        "SELECT 1 FROM scans WHERE user_id=? AND location_id=? AND status IN ('queued','running') LIMIT 1"
       )
       .bind(this.userId, id)
       .first();
@@ -216,7 +176,7 @@ export class Store {
     const result = await this.db.batch([
       this.db
         .prepare(
-          "DELETE FROM deals WHERE scan_id IN (SELECT id FROM scans WHERE user_id=? AND location_id=?)",
+          "DELETE FROM deals WHERE scan_id IN (SELECT id FROM scans WHERE user_id=? AND location_id=?)"
         )
         .bind(this.userId, id),
       this.db
@@ -228,106 +188,22 @@ export class Store {
     ]);
     return result[2]?.meta.changes ? "deleted" : "missing";
   }
-  async provider(provider: string): Promise<ProviderRow | null> {
-    return this.db
-      .prepare(
-        "SELECT encrypted_token,encrypted_refresh_token,token_expires_at,app_version,app_id FROM provider_settings WHERE user_id=? AND provider=?",
-      )
-      .bind(this.userId, provider)
-      .first<ProviderRow>();
+  provider(provider: string) {
+    return this.providerAccess.provider(provider);
   }
-  async snappStatus(): Promise<SettingsStatus> {
-    const r = await this.provider("snappmarket");
-    const expired =
-      !!r?.token_expires_at && Date.parse(r.token_expires_at) <= Date.now();
-    return {
-      tokenConfigured: !!r?.encrypted_token,
-      tokenExpired: expired,
-      tokenExpiresAt: r?.token_expires_at ?? null,
-      appVersion: r?.app_version ?? "1.397.50",
-    };
+  okalaStatus() {
+    return this.providerAccess.okalaStatus();
   }
-  async digikalaStatus() {
-    const r = await this.provider("digikalajet");
-    return { tokenConfigured: !!r?.encrypted_token, appId: r?.app_id ?? null };
+  saveProvider(...args: Parameters<Credentials["saveProvider"]>) {
+    return this.providerAccess.saveProvider(...args);
   }
-  async okalaStatus(): Promise<ProviderSettingsStatus> {
-    const r = await this.provider("okala");
-    const expired =
-      !!r?.token_expires_at && Date.parse(r.token_expires_at) <= Date.now();
-    return {
-      tokenConfigured: !!r?.encrypted_token,
-      tokenExpired: expired,
-      tokenExpiresAt: r?.token_expires_at ?? null,
-    };
-  }
-  async saveProvider(
-    provider: string,
-    token: string,
-    fields: {
-      appVersion?: string;
-      appId?: string;
-      refreshToken?: string;
-      expiresAt?: string | null;
-    } = {},
-  ) {
-    const old = await this.provider(provider);
-    const encryptedToken = await encrypt(
-      token,
-      this.boxKey,
-      `${this.userId}:${provider}`,
-    );
-    const refresh = fields.refreshToken
-      ? await encrypt(
-          fields.refreshToken,
-          this.boxKey,
-          `${this.userId}:${provider}:refresh`,
-        )
-      : (old?.encrypted_refresh_token ?? null);
-    await this.db
-      .prepare(
-        "INSERT INTO provider_settings(user_id,provider,encrypted_token,encrypted_refresh_token,token_expires_at,app_version,app_id,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,provider) DO UPDATE SET encrypted_token=excluded.encrypted_token,encrypted_refresh_token=excluded.encrypted_refresh_token,token_expires_at=excluded.token_expires_at,app_version=excluded.app_version,app_id=excluded.app_id,updated_at=excluded.updated_at",
-      )
-      .bind(
-        this.userId,
-        provider,
-        encryptedToken,
-        refresh,
-        fields.expiresAt ?? tokenExpiry(token),
-        fields.appVersion ?? old?.app_version ?? "1.397.50",
-        fields.appId ?? old?.app_id ?? "",
-        now(),
-      )
-      .run();
-  }
-  async credentials(provider: string) {
-    const r = await this.provider(provider);
-    if (!r?.encrypted_token) return null;
-    const token = await decrypt(
-      r.encrypted_token,
-      this.boxKey,
-      `${this.userId}:${provider}`,
-    );
-    const payload = decodeJwt(token);
-    return {
-      token,
-      udid: typeof payload.udid === "string" ? payload.udid : "",
-      refreshToken: r.encrypted_refresh_token
-        ? await decrypt(
-            r.encrypted_refresh_token,
-            this.boxKey,
-            `${this.userId}:${provider}:refresh`,
-          )
-        : null,
-      expiresAt: r.token_expires_at,
-      appVersion: r.app_version ?? "1.397.50",
-      appId: r.app_id ?? "",
-    };
+  credentials(provider: string) {
+    return this.providerAccess.credentials(provider);
   }
   async activeScan() {
     return this.db
       .prepare(
-        "SELECT id FROM scans WHERE user_id=? AND status IN ('queued','running') LIMIT 1",
+        "SELECT id FROM scans WHERE user_id=? AND status IN ('queued','running') LIMIT 1"
       )
       .bind(this.userId)
       .first<{ id: string }>();
@@ -338,12 +214,12 @@ export class Store {
     await this.db.batch([
       this.db
         .prepare(
-          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='queued' AND created_at < ?",
+          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='queued' AND created_at < ?"
         )
         .bind(now(), this.userId, queuedCutoff),
       this.db
         .prepare(
-          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='running' AND created_at < ?",
+          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='running' AND created_at < ?"
         )
         .bind(now(), this.userId, runningCutoff),
     ]);
@@ -351,13 +227,13 @@ export class Store {
   async createScan(
     locationId: string,
     threshold: number,
-    source: string,
-    mode: string,
+    source: ScanRecord["source"],
+    mode: ScanRecord["mode"]
   ) {
     const id = crypto.randomUUID();
-    await this.db
+    const result = await this.db
       .prepare(
-        "INSERT INTO scans(id,user_id,location_id,threshold,source,mode,status,created_at) VALUES(?,?,?,?,?,?,?,?)",
+        "INSERT INTO scans(id,user_id,location_id,threshold,source,mode,status,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM locations WHERE id=? AND user_id=?)"
       )
       .bind(
         id,
@@ -368,20 +244,28 @@ export class Store {
         mode,
         "queued",
         now(),
+        locationId,
+        this.userId
       )
       .run();
+    if (!result.meta.changes)
+      throw new ScanValidationError(
+        "LOCATION_NOT_FOUND",
+        "موقعیت تحویل پیدا نشد.",
+        404
+      );
     return id;
   }
   async scan(id: string) {
     const r = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? AND s.id=?",
+        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? AND s.id=?"
       )
       .bind(this.userId, id)
-      .first<any>();
+      .first<ScanRow>();
     return r ? this.mapScan(r) : null;
   }
-  private mapScan(r: any): ScanRecord {
+  private mapScan(r: ScanRow): ScanRecord {
     return {
       id: r.id,
       locationId: r.location_id,
@@ -403,16 +287,16 @@ export class Store {
   async scans() {
     const { results } = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 100",
+        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 100"
       )
       .bind(this.userId)
-      .all<any>();
+      .all<ScanRow>();
     return results.map(this.mapScan);
   }
   async markRunning(id: string) {
     await this.db
       .prepare(
-        "UPDATE scans SET status='running',started_at=? WHERE user_id=? AND id=?",
+        "UPDATE scans SET status='running',started_at=? WHERE user_id=? AND id=? AND status='queued'"
       )
       .bind(now(), this.userId, id)
       .run();
@@ -420,7 +304,7 @@ export class Store {
   async progress(id: string, c: { vendorCount: number; productCount: number }) {
     await this.db
       .prepare(
-        "UPDATE scans SET vendor_count=?,product_count=? WHERE user_id=? AND id=?",
+        "UPDATE scans SET vendor_count=?,product_count=? WHERE user_id=? AND id=? AND status='running'"
       )
       .bind(c.vendorCount, c.productCount, this.userId, id)
       .run();
@@ -428,7 +312,7 @@ export class Store {
   async fail(id: string, code: string, message: string) {
     await this.db
       .prepare(
-        "UPDATE scans SET status='failed',finished_at=?,error_code=?,error_message=? WHERE user_id=? AND id=?",
+        "UPDATE scans SET status='failed',finished_at=?,error_code=?,error_message=? WHERE user_id=? AND id=? AND status IN ('queued','running')"
       )
       .bind(now(), code, message, this.userId, id)
       .run();
@@ -436,12 +320,12 @@ export class Store {
   async succeed(
     id: string,
     c: { vendorCount: number; productCount: number },
-    deals: Omit<DealRecord, "scanId" | "state">[],
+    deals: Omit<DealRecord, "scanId" | "state">[]
   ) {
     const stmts = deals.map((d) =>
       this.db
         .prepare(
-          "INSERT INTO deals(id,scan_id,deal_key,product_variation_id,vendor_id,title,image,vendor_title,vendor_code,category_title,price_rials,discount_rials,final_price_rials,discount_ratio,stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO deals(id,scan_id,deal_key,product_variation_id,vendor_id,title,image,vendor_title,vendor_code,category_title,price_rials,discount_rials,final_price_rials,discount_ratio,stock) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM scans WHERE id=? AND user_id=? AND status IN ('queued','running'))"
         )
         .bind(
           crypto.randomUUID(),
@@ -459,12 +343,14 @@ export class Store {
           d.finalPriceRials,
           d.discountRatio,
           d.stock,
-        ),
+          id,
+          this.userId
+        )
     );
     stmts.push(
       this.db
         .prepare(
-          "UPDATE scans SET status='succeeded',finished_at=?,vendor_count=?,product_count=?,deal_count=? WHERE user_id=? AND id=?",
+          "UPDATE scans SET status='succeeded',finished_at=?,vendor_count=?,product_count=?,deal_count=? WHERE user_id=? AND id=? AND status IN ('queued','running')"
         )
         .bind(
           now(),
@@ -472,8 +358,8 @@ export class Store {
           c.productCount,
           deals.length,
           this.userId,
-          id,
-        ),
+          id
+        )
     );
     await this.db.batch(stmts);
   }
@@ -482,20 +368,20 @@ export class Store {
     if (!scan) return [];
     const { results } = await this.db
       .prepare(
-        "SELECT * FROM deals WHERE scan_id=? ORDER BY discount_ratio DESC, final_price_rials",
+        "SELECT * FROM deals WHERE scan_id=? ORDER BY discount_ratio DESC, final_price_rials"
       )
       .bind(id)
-      .all<any>();
+      .all<DealRow>();
     const previous = await this.db
       .prepare(
-        "SELECT s.id FROM scans s WHERE s.user_id=? AND s.location_id=? AND s.threshold=? AND s.source=? AND s.status='succeeded' AND s.created_at < ? ORDER BY s.created_at DESC LIMIT 1",
+        "SELECT s.id FROM scans s WHERE s.user_id=? AND s.location_id=? AND s.threshold=? AND s.source=? AND s.status='succeeded' AND s.created_at < ? ORDER BY s.created_at DESC LIMIT 1"
       )
       .bind(
         this.userId,
         scan.locationId,
         scan.threshold,
         scan.source,
-        scan.createdAt,
+        scan.createdAt
       )
       .first<{ id: string }>();
     const priorRows = previous
@@ -503,15 +389,13 @@ export class Store {
           await this.db
             .prepare("SELECT * FROM deals WHERE scan_id=?")
             .bind(previous.id)
-            .all<any>()
+            .all<DealRow>()
         ).results
       : [];
-    const priorKeys = new Set(priorRows.map((r) => r.deal_key));
-    const currentKeys = new Set(results.map((r) => r.deal_key));
-    const mapDeal = (r: any, state: DealRecord["state"], scanId: string) => ({
-      ...r,
+    const mapDeal = (r: DealRow) => ({
+      title: r.title,
+      image: r.image,
       key: r.deal_key,
-      scanId,
       productVariationId: r.product_variation_id,
       vendorId: r.vendor_id,
       vendorTitle: r.vendor_title,
@@ -522,15 +406,7 @@ export class Store {
       finalPriceRials: r.final_price_rials,
       discountRatio: r.discount_ratio,
       stock: r.stock,
-      state,
     });
-    return [
-      ...results.map((r) =>
-        mapDeal(r, priorKeys.has(r.deal_key) ? "still_available" : "new", id),
-      ),
-      ...priorRows
-        .filter((r) => !currentKeys.has(r.deal_key))
-        .map((r) => mapDeal(r, "no_longer_present", id)),
-    ];
+    return compareDeals(results.map(mapDeal), priorRows.map(mapDeal), id);
   }
 }

@@ -25,7 +25,8 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-leaflet": "^5.0.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "@tanstack/react-query": "5.104.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",

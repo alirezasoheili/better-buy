@@ -28,11 +28,13 @@ Acceptance criteria:
 - A crafted `POST /api/scans` request for Jet receives a stable provider-unavailable error.
 - Restoring Jet requires changing one capability definition plus its tests, not scattered conditionals.
 
-## F-002 — Credential-aware scan action
+## F-002 — Provider access and scan action
 
 Priority: P0. Phase: 1.
 
-Create one derived state for each visible provider:
+SnappMarket uses automatic public-PWA guest access, with no customer phone, OTP, token, renewal action, or provider-settings prerequisite. A valid delivery location permits starting a scan; upstream connectivity is checked during collection. Failed guest acquisition or incomplete feed collection records a failed scan and preserves successful history.
+
+Credential states and customer renewal actions below apply to Okala. Create one derived state for each visible provider:
 
 - `loading`: status is unresolved; action is temporarily unavailable with an explanation.
 - `ready`: action starts a scan.
@@ -48,7 +50,7 @@ Acceptance criteria:
 - Missing, expired, and rejected states route to the correct provider settings.
 - A location problem is distinguished from a credential problem.
 - Empty states and scan-strip messaging use the active provider, not SnappMarket unconditionally.
-- `AUTH_REJECTED` never receives transient retry treatment and produces a renewal CTA.
+- Okala `AUTH_REJECTED` never receives transient retry treatment and produces a renewal CTA. Snapp uses `GUEST_AUTH_REJECTED` after one automatic 401 renewal, with no customer reconnect CTA.
 
 ## F-003 — Context-correct results
 

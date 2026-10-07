@@ -1,39 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   MapContainer,
   Marker,
   Rectangle,
   TileLayer,
-  useMap,
   useMapEvents,
 } from "react-leaflet";
-import {
-  divIcon,
-  Marker as LeafletMarker,
-  type LatLngLiteral,
-} from "leaflet";
-import {
-  isWithinTehranBoundary,
-  TEHRAN_BOUNDARY,
-} from "@better-buy/shared";
+import { divIcon, Marker as LeafletMarker, type LatLngLiteral } from "leaflet";
+import { isWithinTehranBoundary, TEHRAN_BOUNDARY } from "@better-buy/shared";
 
 const TEHRAN_CENTER: LatLngLiteral = { lat: 35.7, lng: 51.4 };
 const TEHRAN_BOUNDS: [[number, number], [number, number]] = [
   [TEHRAN_BOUNDARY.minLatitude, TEHRAN_BOUNDARY.minLongitude],
   [TEHRAN_BOUNDARY.maxLatitude, TEHRAN_BOUNDARY.maxLongitude],
 ];
-
-function Recenter({ center }: { center: LatLngLiteral }) {
-  const map = useMap();
-
-  useEffect(() => {
-    map.setView(center);
-  }, [center, map]);
-
-  return null;
-}
 
 function PickPoint({
   onPick,
@@ -73,7 +55,7 @@ function SelectionPin({
         iconAnchor: [17, 39],
         html: '<span class="location-pin-core" aria-hidden="true"></span>',
       }),
-    [],
+    []
   );
 
   const handleDragEnd = useCallback(
@@ -89,7 +71,7 @@ function SelectionPin({
         onOutsidePick();
       }
     },
-    [onOutsidePick, onPick, point],
+    [onOutsidePick, onPick, point]
   );
 
   return (
@@ -117,20 +99,14 @@ export default function LocationMap({
   const suppliedPoint = { lat: latitude, lng: longitude };
   const hasValidPoint = isWithinTehranBoundary(latitude, longitude);
   const center = hasValidPoint ? suppliedPoint : TEHRAN_CENTER;
-  const [mapNotice, setMapNotice] = useState<"outside" | "tiles" | null>(
-    hasValidPoint ? null : "outside",
-  );
-
-  useEffect(() => {
-    setMapNotice(hasValidPoint ? null : "outside");
-  }, [hasValidPoint]);
+  const [mapNotice, setMapNotice] = useState<"outside" | "tiles" | null>(null);
 
   const handlePick = useCallback(
     (point: LatLngLiteral) => {
       setMapNotice(null);
       onChange(point);
     },
-    [onChange],
+    [onChange]
   );
   const handleOutsidePick = useCallback(() => {
     setMapNotice("outside");
@@ -139,8 +115,16 @@ export default function LocationMap({
     setMapNotice("tiles");
   }, []);
 
+  const recenter = useCallback(
+    (map: import("leaflet").Map | null) => {
+      map?.setView(
+        hasValidPoint ? { lat: latitude, lng: longitude } : TEHRAN_CENTER
+      );
+    },
+    [latitude, longitude, hasValidPoint]
+  );
   const status =
-    mapNotice === "outside"
+    !hasValidPoint || mapNotice === "outside"
       ? "این محدوده خارج از شهر تهران است؛ یک نقطه داخل کادر انتخاب کنید."
       : mapNotice === "tiles"
         ? "نمایش نقشه موقتاً در دسترس نیست؛ می‌توانید مختصات را از فیلدهای پایین وارد کنید."
@@ -153,6 +137,7 @@ export default function LocationMap({
       aria-label="نقشه انتخاب موقعیت در تهران"
     >
       <MapContainer
+        ref={recenter}
         center={center}
         zoom={14}
         minZoom={11}
@@ -177,7 +162,6 @@ export default function LocationMap({
             fillOpacity: 0.035,
           }}
         />
-        <Recenter center={center} />
         <PickPoint onPick={handlePick} onOutsidePick={handleOutsidePick} />
         <SelectionPin
           point={center}
@@ -186,7 +170,7 @@ export default function LocationMap({
         />
       </MapContainer>
       <p
-        className={`location-map-status${mapNotice ? " is-warning" : ""}`}
+        className={`location-map-status${!hasValidPoint || mapNotice ? " is-warning" : ""}`}
         role="status"
         aria-live="polite"
       >

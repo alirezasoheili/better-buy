@@ -1,5 +1,0 @@
-"use client";
-import { useState } from "react";
-const apiBase=process.env.NEXT_PUBLIC_API_BASE??"";
-async function save(token:string,appId:string){const r=await fetch(`${apiBase}/api/settings/digikalajet`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({token,appId})});if(!r.ok)throw new Error("ذخیره نشد")}
-export default function JetSettings({onSaved}:{onSaved:()=>void}){const[token,setToken]=useState(""),[appId,setAppId]=useState(""),[error,setError]=useState("");return <section className="settings-page jet-settings"><header><span>اتصال امن</span><h1>تنظیمات دیجی‌کالا جت</h1><p>برای اسکن‌های ۳۰٪ به بالا، توکن و App ID تازه را وارد کنید.</p></header><form onSubmit={async e=>{e.preventDefault();try{await save(token,appId);setToken("");onSaved()}catch(e){setError(e instanceof Error?e.message:"ذخیره نشد")}}}><label>توکن<textarea required value={token} onChange={e=>setToken(e.target.value)} autoComplete="off"/></label><label>App ID<input required value={appId} onChange={e=>setAppId(e.target.value)}/></label>{error&&<p className="form-error">{error}</p>}<button>ذخیره امن اتصال جت</button></form></section>}

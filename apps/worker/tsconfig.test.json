@@ -4,20 +4,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": [
-    "src/index.ts",
-    "src/index.test.ts",
-    "src/collector.ts",
-    "src/collector.test.ts",
-    "src/okala.ts",
-    "src/okala.test.ts",
-    "src/digikala.ts",
-    "src/retry.ts",
-    "src/retry.test.ts",
-    "src/store.ts",
-    "src/store.test.ts",
-    "src/test-login.ts",
-    "src/test-login.test.ts",
-    "src/env.d.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

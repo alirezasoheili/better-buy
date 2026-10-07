@@ -26,6 +26,8 @@ Target: Cloudflare Worker + D1 + static Next.js assets. This checklist is a rele
 
 ## Authentication, credentials, and abuse protection
 
+SnappMarket uses ephemeral Worker-owned guest access; credential encryption, customer renewal, and OTP requirements below apply to Okala. Google/Better Auth and tenant isolation still apply to both providers.
+
 - [ ] Require a strong encoded `BOX_KEY`; reject weak/default configuration.
 - [ ] Add encryption version/key identifier and a credential rotation runbook.
 - [ ] Handle corrupt/old ciphertext as reconnect-required without leaking crypto details.
@@ -47,7 +49,7 @@ Target: Cloudflare Worker + D1 + static Next.js assets. This checklist is a rele
 
 ## Testing and CI
 
-Current baseline: typecheck passes; 13 Worker unit tests pass; web/shared have zero test files; no Playwright specs exist; production build succeeds with CSS warnings.
+Historical audit baseline: 13 Worker tests and no Playwright specs. The current suite includes shared-domain tests, Worker tests, an in-memory SQLite scan/migration regression suite, and desktop/mobile dashboard specs. SQLite tests use a D1 interface adapter and mocked sessions/upstream; actual Worker/D1 runtime and Google OAuth verification remain separate release gates.
 
 Required CI stages:
 
@@ -57,7 +59,7 @@ Required CI stages:
 4. Worker unit tests: collectors, retries, credential states, error mapping.
 5. Worker/D1 runtime integration tests: auth isolation, location CRUD, scan conflict, scan/deal history, migrations.
 6. Web component tests: provider state machine, context switching, grouped filtering, map/search states, dialogs.
-7. Playwright desktop/mobile: login fixture, location, token renewal route, scan lifecycle, grouping, history, accessibility-critical keyboard flows.
+7. Playwright desktop/mobile: login fixture, location, automatic Snapp scanning, Okala token renewal route, scan lifecycle, grouping, history, accessibility-critical keyboard flows.
 8. Production build with warnings treated as tracked failures.
 9. Staging deployment, migration dry run, authenticated smoke tests, and unauthenticated liveness check.
 
@@ -98,7 +100,7 @@ Failure injection must cover upstream timeout, 401/403, 429, malformed JSON, int
 The release is ready only when:
 
 - Primary results are always context-correct.
-- Missing/expired/rejected credentials are recoverable from the primary action.
+- Snapp starts with a valid location and automatic guest access; missing/expired/rejected Okala credentials are recoverable from the primary action.
 - Outside-Tehran locations cannot enter or use the system.
 - Grouping does not destroy vendor history or merge distinct products in the approved corpus.
 - CI and staging gates pass, monitoring is live, secrets are verified, D1 can be restored, and rollback has been rehearsed.

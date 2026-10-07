@@ -5,7 +5,8 @@ Mode: operate. Preserve the established “live grocery shelf” visual language
 ## Experience principles
 
 - Truth before polish: location, provider, threshold, scan time, and results must stay attached.
-- Recovery is an action: expired/missing/rejected credentials lead directly to the relevant settings.
+- SnappMarket requires only a valid location; first use guides location selection and scan start. Guest-access failures are scan errors without a customer-login action.
+- Okala recovery is an action: expired/missing/rejected customer credentials lead directly to its settings.
 - One product, one decision row: vendor differences are supporting choices shown as chips.
 - Addresses before coordinates: raw latitude/longitude is an advanced fallback.
 - Every visual state has semantic feedback for keyboard and screen-reader users.
@@ -24,14 +25,17 @@ The idle label should not say “در حال بررسی” when no scan is runni
 
 ### Primary action behavior
 
-| State | Label | Action | Disabled? |
-|---|---|---|---|
-| Ready | `اسکن تخفیف‌ها` / provider-specific label | Start scan | No |
-| Missing token | `تنظیم اتصال` | Open active-provider settings | No |
-| Expired token | `تمدید اتصال` | Open active-provider settings | No |
-| Rejected token | `اتصال دوباره` | Open active-provider settings | No |
-| No valid location | `افزودن مکان` | Open location flow | No |
-| Scanning | `در حال اسکن` | None | Yes |
+| State                  | Label                                     | Action                                                                   | Disabled? |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------------------------------ | --------- |
+| Automatic Snapp access | `اسکن تخفیف‌ها`                           | Start scan with a valid location; connectivity checked during collection | No        |
+| Ready                  | `اسکن تخفیف‌ها` / provider-specific label | Start scan                                                               | No        |
+| Missing token          | `تنظیم اتصال`                             | Open active-provider settings                                            | No        |
+| Expired token          | `تمدید اتصال`                             | Open active-provider settings                                            | No        |
+| Rejected token         | `اتصال دوباره`                            | Open active-provider settings                                            | No        |
+| No valid location      | `افزودن مکان`                             | Open location flow                                                       | No        |
+| Scanning               | `در حال اسکن`                             | None                                                                     | Yes       |
+
+Missing/expired/rejected token states apply to Okala. Snapp settings explain automatic access and contain no credential-entry fields. Ready to start means configuration permits a scan; it does not verify upstream connectivity.
 
 Desktop and mobile render the same semantic state. Mobile may use sticky placement, but not different business logic.
 
