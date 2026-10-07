@@ -23,7 +23,7 @@ export type Counts = { vendorCount: number; productCount: number };
 export type Collection = Counts & {
   deals: Omit<DealRecord, "scanId" | "state">[];
 };
-export type Access = { token: string } | null;
+export type Access = null;
 export type ScanJob = ScanInput & {
   id: string;
   location: LocationRecord;

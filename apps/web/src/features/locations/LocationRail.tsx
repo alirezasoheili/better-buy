@@ -1,6 +1,7 @@
 import type { LocationRecord } from "@better-buy/shared";
 import type { ConnectionState } from "../dashboard/types";
 import { Icon } from "../dashboard/Icon";
+import { sourceLabel } from "../dashboard/format";
 import { ThemeToggle } from "@/components/theme-toggle";
 export function LocationRail({
   locations,
@@ -120,20 +121,14 @@ export function LocationRail({
           onClick={() => onNavigate("settings")}
         >
           <Icon name="settings" />
-          تنظیمات اتصال
+          تنظیمات فروشگاه
         </button>
       </nav>
       <div className="rail-foot">
         <span className={`status-dot ${connection.canScan ? "ok" : "warn"}`} />
         {connection.status === "automatic"
-          ? "بدون نیاز به ورود اسنپ‌مارکت"
-          : connection.status === "ready"
-            ? "اتصال آماده است"
-            : connection.status === "expired"
-              ? "توکن منقضی شده"
-              : connection.status === "disabled"
-                ? "جت موقتاً غیرفعال است"
-                : "اتصال نیاز به بررسی دارد"}
+          ? `بدون نیاز به ورود ${sourceLabel(connection.source)}`
+          : "جت موقتاً غیرفعال است"}
       </div>
     </aside>
   );

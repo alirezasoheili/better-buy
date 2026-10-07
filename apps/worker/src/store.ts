@@ -191,9 +191,6 @@ export class Store {
   provider(provider: string) {
     return this.providerAccess.provider(provider);
   }
-  okalaStatus() {
-    return this.providerAccess.okalaStatus();
-  }
   saveProvider(...args: Parameters<Credentials["saveProvider"]>) {
     return this.providerAccess.saveProvider(...args);
   }

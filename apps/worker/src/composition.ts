@@ -6,23 +6,13 @@ import {
   ScanPersistence,
   type ScanInput,
 } from "./application/scans";
-import {
-  CredentialError,
-  PersistenceError,
-  ScanValidationError,
-} from "./domain/failures";
+import { PersistenceError, ScanValidationError } from "./domain/failures";
 import { collectDeals } from "./providers/snapp/collector";
 import { collectOkala } from "./providers/okala/collector";
-import { refreshOkalaAccessToken } from "./providers/okala/access";
 import { Store } from "./store";
 
 // One call per authenticated request. Nothing tenant-bound lives in a shared layer.
-export function scanServices(
-  db: D1Database,
-  userId: string,
-  boxKey: string,
-  okalaSecret: string
-) {
+export function scanServices(db: D1Database, userId: string, boxKey: string) {
   const store = new Store(db, userId, boxKey);
   const persisted = <A>(operation: string, run: () => Promise<A>) =>
     Effect.tryPromise({
@@ -71,60 +61,7 @@ export function scanServices(
         Effect.uninterruptible
       ),
   });
-  const access = ProviderAccess.of({
-    establish: (source) =>
-      Effect.gen(function* () {
-        if (source === "snappmarket") return null;
-        let credentials = yield* Effect.tryPromise({
-          try: () => store.credentials(source),
-          catch: (error) =>
-            error instanceof CredentialError
-              ? error
-              : new PersistenceError("credentials"),
-        });
-        if (!credentials)
-          return yield* Effect.fail(
-            new ScanValidationError(
-              "TOKEN_REQUIRED",
-              "ابتدا اتصال اکالا را تنظیم کنید."
-            )
-          );
-        if (
-          credentials.expiresAt &&
-          Date.parse(credentials.expiresAt) <= Date.now() &&
-          credentials.refreshToken
-        ) {
-          const refreshed = yield* refreshOkalaAccessToken(
-            okalaSecret,
-            credentials.refreshToken
-          ).pipe(
-            Effect.mapError((error) =>
-              error.code === "AUTH_REJECTED"
-                ? new ScanValidationError(
-                    "AUTH_EXPIRED",
-                    "احراز هویت این فروشگاه منقضی شده است."
-                  )
-                : error
-            )
-          );
-          yield* persisted("save credentials", () =>
-            store.saveProvider("okala", refreshed.token, refreshed)
-          );
-          credentials = { ...credentials, ...refreshed };
-        }
-        if (
-          credentials.expiresAt &&
-          Date.parse(credentials.expiresAt) <= Date.now()
-        )
-          return yield* Effect.fail(
-            new ScanValidationError(
-              "AUTH_EXPIRED",
-              "احراز هویت این فروشگاه منقضی شده است."
-            )
-          );
-        return { token: credentials.token };
-      }),
-  });
+  const access = ProviderAccess.of({ establish: () => Effect.succeed(null) });
   const collection = ProviderCollection.of({
     collect: (job, onProgress) => {
       const input = {
@@ -134,8 +71,7 @@ export function scanServices(
         onProgress,
       };
       if (job.source === "snappmarket") return collectDeals(input);
-      if (job.source === "okala" && job.access)
-        return collectOkala({ ...input, token: job.access.token });
+      if (job.source === "okala") return collectOkala(input);
       return Effect.fail(
         new ScanValidationError(
           "PROVIDER_UNAVAILABLE",

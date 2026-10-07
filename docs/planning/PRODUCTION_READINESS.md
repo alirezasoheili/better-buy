@@ -26,13 +26,13 @@ Target: Cloudflare Worker + D1 + static Next.js assets. This checklist is a rele
 
 ## Authentication, credentials, and abuse protection
 
-SnappMarket uses ephemeral Worker-owned guest access; credential encryption, customer renewal, and OTP requirements below apply to Okala. Google/Better Auth and tenant isolation still apply to both providers.
+SnappMarket uses ephemeral Worker-owned guest access; Okala uses credential-free public endpoints. Google/Better Auth and tenant isolation still apply to both. Shared encryption and BOX_KEY remain only for retained legacy provider data; active scans never decrypt Okala settings.
 
-- [ ] Require a strong encoded `BOX_KEY`; reject weak/default configuration.
+- [ ] Review legacy encryption key strength before reactivating a provider that needs persisted credentials.
 - [ ] Add encryption version/key identifier and a credential rotation runbook.
-- [ ] Handle corrupt/old ciphertext as reconnect-required without leaking crypto details.
+- [x] Ignore legacy Okala ciphertext in scans, including corrupt/expired rows.
 - [ ] Keep tokens, refresh tokens, OTPs, raw upstream responses, addresses, and coordinates out of logs/errors.
-- [ ] Add per-user/IP cooldowns to custom OTP endpoints.
+- [x] Remove custom Okala OTP/login/token-submission routes; authenticated callers receive 404.
 - [ ] Add per-user scan quota/concurrency controls and clear `Retry-After`/Persian UX where appropriate.
 - [ ] Verify OAuth trusted origins, cookie settings, CORS origins, and production `DEV_MODE=false` during deployment.
 - [ ] Assert the dev-only test-login endpoint is unreachable in staging/production smoke tests.
@@ -40,7 +40,7 @@ SnappMarket uses ephemeral Worker-owned guest access; credential encryption, cus
 
 ## API contracts and error handling
 
-- [x] Use stable machine codes and safe Persian messages for provider unavailable, outside Tehran, scan conflict, interrupted scan, and geocoder failure. Token rejection/upstream rate-limit mapping remains open.
+- [x] Use stable machine codes and safe Persian messages for provider unavailable, outside Tehran, scan conflict, interrupted scan, and geocoder failure. Public Okala access rejection maps to UPSTREAM_FORBIDDEN; upstream rate limits remain distinct.
 - [ ] Add a top-level structured error boundary that logs sanitized context and returns a request ID.
 - [ ] Do not couple dashboard availability to non-active provider endpoints.
 - [ ] Add pagination/server-side filtering before grouped scans exceed measured memory/latency budgets.
@@ -56,14 +56,14 @@ Required CI stages:
 1. Formatting/lint, including no-floating-promises.
 2. Typecheck and generated Wrangler binding drift check.
 3. Shared-domain unit tests: Tehran boundary, Persian normalization, grouping/state derivation.
-4. Worker unit tests: collectors, retries, credential states, error mapping.
+4. Worker unit tests: collectors, retries, credential-free access, error mapping.
 5. Worker/D1 runtime integration tests: auth isolation, location CRUD, scan conflict, scan/deal history, migrations.
 6. Web component tests: provider state machine, context switching, grouped filtering, map/search states, dialogs.
-7. Playwright desktop/mobile: login fixture, location, automatic Snapp scanning, Okala token renewal route, scan lifecycle, grouping, history, accessibility-critical keyboard flows.
+7. Playwright desktop/mobile: login fixture, location, automatic Snapp scanning, public Okala scanning without setup, scan lifecycle, grouping, history, accessibility-critical keyboard flows.
 8. Production build with warnings treated as tracked failures.
 9. Staging deployment, migration dry run, authenticated smoke tests, and unauthenticated liveness check.
 
-Failure injection must cover upstream timeout, 401/403, 429, malformed JSON, interrupted scan, D1 failure, expired credential, geocoder failure, tile failure, and rapid context switching.
+Failure injection must cover upstream timeout, 401/403, 429, malformed JSON, interrupted scan, D1 failure, ignored legacy expired/corrupt Okala credentials, geocoder failure, tile failure, and rapid context switching.
 
 ## Observability and alerts
 
@@ -91,7 +91,7 @@ Failure injection must cover upstream timeout, 401/403, 429, malformed JSON, int
 - [ ] Require secret presence checks before deployment.
 - [ ] Back up D1 before schema changes and record migration version.
 - [ ] Use a staged provider rollout/capability flag for user-visible providers.
-- [ ] Smoke-test auth, one valid Tehran location, connection renewal, a scan, history, and static asset fallback after deploy.
+- [ ] Smoke-test auth, one valid Tehran location, credential-free provider access, a scan, history, and static asset fallback after deploy.
 - [ ] Define rollback for Worker code, static assets, provider availability, and migrations.
 - [ ] Keep historical data readable across one prior API/UI version during migrations.
 
@@ -100,7 +100,7 @@ Failure injection must cover upstream timeout, 401/403, 429, malformed JSON, int
 The release is ready only when:
 
 - Primary results are always context-correct.
-- Snapp starts with a valid location and automatic guest access; missing/expired/rejected Okala credentials are recoverable from the primary action.
+- Both Snapp and Okala start with a valid location and ordinary scan constraints, without customer credentials. Connectivity failure preserves successful history and offers retry.
 - Outside-Tehran locations cannot enter or use the system.
 - Grouping does not destroy vendor history or merge distinct products in the approved corpus.
 - CI and staging gates pass, monitoring is live, secrets are verified, D1 can be restored, and rollback has been rehearsed.

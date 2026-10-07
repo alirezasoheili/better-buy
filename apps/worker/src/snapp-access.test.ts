@@ -82,7 +82,6 @@ function database() {
     DB: db,
     BOX_KEY: "box-key",
     BETTER_AUTH_SECRET: "auth-secret",
-    OKALA_CLIENT_SECRET: "okala-secret",
     APP_ORIGIN: "http://localhost",
     ASSETS: {} as Fetcher,
   };
@@ -110,6 +109,50 @@ async function start(
   );
   await Promise.all(tasks);
   return response;
+}
+
+function mockOkala(failLastCampaign = false) {
+  const product = {
+    id: 1,
+    name: "کالا",
+    discountPercent: 40,
+    quantity: 2,
+    hasQuantity: true,
+    price: 100000,
+    okPrice: 60000,
+    storeId: 10,
+    storeName: "فروشگاه",
+  };
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    const u = new URL(String(url));
+    if (u.pathname.endsWith("/nearby"))
+      return Response.json({
+        success: true,
+        data: {
+          stores: [
+            { storeId: 10, isActive: true, isServes: true, isExist: true },
+          ],
+        },
+      });
+    if (u.pathname.endsWith("/multi-store")) {
+      if (failLastCampaign && u.searchParams.get("carouselId") === "8")
+        return new Response(null, { status: 403 });
+      return Response.json({
+        success: true,
+        carousel: { id: 7 },
+        entities: [{ storeId: 10, storeName: "فروشگاه", products: [product] }],
+      });
+    }
+    if (u.pathname === "/api/carousel/v4/offers")
+      return Response.json({
+        success: true,
+        carousels: [
+          { id: 7, isMulti: true },
+          ...(failLastCampaign ? [{ id: 8, isMulti: true }] : []),
+        ],
+      });
+    throw new Error("Unexpected public Okala path: " + u.pathname);
+  });
 }
 
 const feed = () =>
@@ -275,82 +318,97 @@ describe("Snapp access through authenticated scan API", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("still requires Okala customer credentials", async () => {
-    const { env } = database();
-    const fetcher = vi.spyOn(globalThis, "fetch");
+  it("starts Okala with no settings and never reads credentials", async () => {
+    const { env, reads } = database();
+    mockOkala();
     const response = await start(env, "okala");
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: "TOKEN_REQUIRED" });
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as { data: { id: string } };
+    expect(
+      await new Store(env.DB, "user-1", env.BOX_KEY).scan(body.data.id)
+    ).toMatchObject({ status: "succeeded", dealCount: 1 });
+    expect(reads.some((sql) => /provider_settings/.test(sql))).toBe(false);
   });
 
-  it("preserves Okala expired-credential refresh and encrypted settings", async () => {
-    const { env } = database();
+  it("ignores expired legacy Okala credentials without refreshing or changing them", async () => {
+    const { env, sqlite, reads } = database();
     const store = new Store(env.DB, "user-1", env.BOX_KEY);
     await store.saveProvider("okala", "expired-access-token", {
       refreshToken: "refresh-fixture",
       expiresAt: "2000-01-01",
     });
-    const fetcher = vi
-      .spyOn(globalThis, "fetch")
-      .mockImplementation(async (url) => {
-        if (String(url).endsWith("/accounts/tokens"))
-          return Response.json({
-            access_token: "renewed-okala-token",
-            refresh_token: "renewed-refresh",
-            expires_in: 3600,
-          });
-        return new Response(null, { status: 403 }); // collection fails independently of renewal
-      });
+    const before = sqlite.prepare("SELECT * FROM provider_settings").all();
+    reads.length = 0;
+    const fetcher = mockOkala();
     expect((await start(env, "okala")).status).toBe(202);
-    expect(await store.credentials("okala")).toMatchObject({
-      token: "renewed-okala-token",
-      refreshToken: "renewed-refresh",
-    });
-    expect(
-      fetcher.mock.calls.every(
-        ([url]) => new URL(String(url)).hostname === "apigateway.okala.com"
-      )
-    ).toBe(true);
-  });
-
-  it("enforces Better Buy sign-in before scanning or reading provider settings", async () => {
-    const { env, sqlite } = database();
-    auth.signedIn = false;
-    const fetcher = vi.spyOn(globalThis, "fetch");
-    expect((await start(env)).status).toBe(401);
-    expect(
-      (
-        await api.fetch(
-          new Request("http://localhost/api/settings/okala"),
-          env,
-          {} as ExecutionContext
-        )
-      ).status
-    ).toBe(401);
-    expect(sqlite.prepare("SELECT COUNT(*) AS c FROM scans").get()?.c).toBe(0);
-    expect(fetcher).not.toHaveBeenCalled();
-  });
-
-  it("cannot scan another tenant's location", async () => {
-    const { env, sqlite } = database();
-    sqlite.prepare("UPDATE locations SET user_id='user-2'").run();
-    expect((await start(env)).status).toBe(404);
-    expect(sqlite.prepare("SELECT COUNT(*) AS c FROM scans").get()?.c).toBe(0);
-  });
-
-  it("preserves active scan exclusivity for credential-free Snapp", async () => {
-    const { env } = database();
-    await new Store(env.DB, "user-1", env.BOX_KEY).createScan(
-      locationId,
-      40,
-      "snappmarket",
-      "partial"
+    expect(sqlite.prepare("SELECT status FROM scans").get()?.status).toBe(
+      "succeeded"
     );
-    const response = await start(env);
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: "SCAN_IN_PROGRESS" });
+    expect(sqlite.prepare("SELECT * FROM provider_settings").all()).toEqual(
+      before
+    );
+    expect(reads.some((sql) => /provider_settings/.test(sql))).toBe(false);
+    expect(
+      fetcher.mock.calls.map(([url]) => new URL(String(url)).pathname)
+    ).toEqual([
+      "/api/opex/v4/stores/nearby",
+      "/api/carousel/v4/offers",
+      "/api/carousel/v4/offers/multi-store",
+    ]);
   });
+
+  it.each(["snappmarket", "okala"])(
+    "enforces Better Buy sign-in before %s scans or reading provider settings",
+    async (source) => {
+      const { env, sqlite } = database();
+      auth.signedIn = false;
+      const fetcher = vi.spyOn(globalThis, "fetch");
+      expect((await start(env, source)).status).toBe(401);
+      expect(
+        (
+          await api.fetch(
+            new Request("http://localhost/api/settings/okala"),
+            env,
+            {} as ExecutionContext
+          )
+        ).status
+      ).toBe(401);
+      expect(sqlite.prepare("SELECT COUNT(*) AS c FROM scans").get()?.c).toBe(
+        0
+      );
+      expect(fetcher).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["snappmarket", "okala"])(
+    "cannot scan another tenant's location with %s",
+    async (source) => {
+      const { env, sqlite } = database();
+      sqlite.prepare("UPDATE locations SET user_id='user-2'").run();
+      expect((await start(env, source)).status).toBe(404);
+      expect(sqlite.prepare("SELECT COUNT(*) AS c FROM scans").get()?.c).toBe(
+        0
+      );
+    }
+  );
+
+  it.each(["snappmarket", "okala"])(
+    "preserves active scan exclusivity for credential-free %s",
+    async (source) => {
+      const { env } = database();
+      await new Store(env.DB, "user-1", env.BOX_KEY).createScan(
+        locationId,
+        40,
+        "snappmarket",
+        "partial"
+      );
+      const response = await start(env, source);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: "SCAN_IN_PROGRESS",
+      });
+    }
+  );
 });
 
 describe("scan state integrity through real SQLite", () => {
@@ -366,18 +424,23 @@ describe("scan state integrity through real SQLite", () => {
     ).rejects.toMatchObject({ code: "LOCATION_NOT_FOUND" });
     expect(sqlite.prepare("SELECT COUNT(*) AS c FROM scans").get()?.c).toBe(0);
   });
-  it("maps corrupt Okala ciphertext to a safe reconnect failure without upstream access", async () => {
-    const { env, sqlite } = database();
+  it("ignores corrupt legacy Okala ciphertext with no credential reads", async () => {
+    const { env, sqlite, reads } = database();
     sqlite
       .prepare(
         "INSERT INTO provider_settings(user_id,provider,encrypted_token,updated_at) VALUES(?,?,?,?)"
       )
       .run("user-1", "okala", "bad-ciphertext", "2000-01-01");
-    const fetcher = vi.spyOn(globalThis, "fetch");
-    const response = await start(env, "okala");
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: "AUTH_EXPIRED" });
-    expect(fetcher).not.toHaveBeenCalled();
+    mockOkala();
+    expect((await start(env, "okala")).status).toBe(202);
+    expect(sqlite.prepare("SELECT status FROM scans").get()?.status).toBe(
+      "succeeded"
+    );
+    expect(reads.some((sql) => /provider_settings/.test(sql))).toBe(false);
+    expect(
+      sqlite.prepare("SELECT encrypted_token FROM provider_settings").get()
+        ?.encrypted_token
+    ).toBe("bad-ciphertext");
   });
   it("rolls back all results when persistence fails and preserves the earlier successful snapshot", async () => {
     const { env, sqlite } = database();
@@ -503,24 +566,28 @@ describe("scan state integrity through real SQLite", () => {
       errorCode: "INTERRUPTED",
     });
   });
-  it("does not repeat a failed Okala refresh or mutate its stored credentials", async () => {
-    const { env } = database();
+  it("records public Okala rejection as a failed scan without mutating credentials", async () => {
+    const { env, sqlite } = database();
     const store = new Store(env.DB, "user-1", env.BOX_KEY);
     await store.saveProvider("okala", "old-token", {
       refreshToken: "refresh-fixture",
       expiresAt: "2000-01-01",
     });
+    const before = sqlite.prepare("SELECT * FROM provider_settings").all();
     const fetcher = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(null, { status: 401 }));
     const response = await start(env, "okala");
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: "AUTH_EXPIRED" });
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(await store.credentials("okala")).toMatchObject({
-      token: "old-token",
-      refreshToken: "refresh-fixture",
+    expect(response.status).toBe(202);
+    const body = (await response.json()) as { data: { id: string } };
+    expect(await store.scan(body.data.id)).toMatchObject({
+      status: "failed",
+      errorCode: "UPSTREAM_FORBIDDEN",
     });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(sqlite.prepare("SELECT * FROM provider_settings").all()).toEqual(
+      before
+    );
   });
 });
 
@@ -626,5 +693,75 @@ describe("forward migration for obsolete Snapp credentials", () => {
         sqlite.prepare('SELECT * FROM "' + table + '"').all()
       )
     ).toEqual(before);
+  });
+});
+
+describe("anonymous Okala API regressions", () => {
+  it.each([
+    ["PUT", "/api/settings/okala"],
+    ["POST", "/api/settings/okala/otp"],
+    ["POST", "/api/settings/okala/login"],
+    ["POST", "/api/settings/okala/refresh"],
+  ])("removes %s %s for authenticated callers", async (method, path) => {
+    const { env, sqlite } = database();
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    const response = await api.fetch(
+      new Request("http://localhost" + path, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token: "legacy-token",
+          mobile: "09120000000",
+          otp: "12345",
+        }),
+      }),
+      env,
+      {} as ExecutionContext
+    );
+    expect(response.status).toBe(404);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(
+      sqlite.prepare("SELECT COUNT(*) AS c FROM provider_settings").get()?.c
+    ).toBe(0);
+  });
+  it("returns capability information without credential semantics or settings reads", async () => {
+    const { env, reads } = database();
+    const response = await api.fetch(
+      new Request("http://localhost/api/settings/okala"),
+      env,
+      {} as ExecutionContext
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: {
+        requiresCustomerCredentials: false,
+        access: "public",
+        coverage: "campaign-feed",
+      },
+    });
+    expect(reads.some((sql) => /provider_settings/.test(sql))).toBe(false);
+  });
+  it("a failed later campaign leaves the last successful Okala snapshot intact and adds no partial deals", async () => {
+    const { env, sqlite } = database();
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    mockOkala();
+    const first = await start(env, "okala");
+    const previous = ((await first.json()) as { data: { id: string } }).data.id;
+    const before = await store.deals(previous);
+    expect(before).toHaveLength(1);
+    vi.restoreAllMocks();
+    mockOkala(true);
+    const second = await start(env, "okala");
+    const id = ((await second.json()) as { data: { id: string } }).data.id;
+    expect(await store.scan(id)).toMatchObject({
+      status: "failed",
+      errorCode: "UPSTREAM_FORBIDDEN",
+      dealCount: 0,
+    });
+    expect(await store.scan(previous)).toMatchObject({ status: "succeeded" });
+    expect(await store.deals(previous)).toEqual(before);
+    expect(
+      sqlite.prepare("SELECT * FROM deals WHERE scan_id=?").all(id)
+    ).toEqual([]);
   });
 });

@@ -12,7 +12,6 @@ import { api } from "./index";
 const env = {
   BOX_KEY: "box-key",
   BETTER_AUTH_SECRET: "auth-secret",
-  OKALA_CLIENT_SECRET: "okala-secret",
   APP_ORIGIN: "http://localhost",
   ASSETS: {} as Fetcher,
   DB: {
@@ -42,7 +41,7 @@ describe("Worker API provider policy", () => {
     const response = await api.fetch(
       new Request("http://localhost/healthz"),
       env,
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(200);
@@ -53,7 +52,7 @@ describe("Worker API provider policy", () => {
     const response = await api.fetch(
       new Request("http://localhost/api/locations/search?q=x"),
       env,
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(400);
@@ -66,7 +65,7 @@ describe("Worker API provider policy", () => {
     const response = await api.fetch(
       new Request("http://localhost/api/locations/search?q=میدان%20ونک"),
       env,
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(503);
@@ -90,14 +89,14 @@ describe("Worker API provider policy", () => {
             display_name: "مشهد",
           },
         ]),
-        { status: 200, headers: { "content-type": "application/json" } },
-      ),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
     );
     try {
       const response = await api.fetch(
         new Request("http://localhost/api/locations/search?q=میدان%20ونک"),
         { ...env, GEOCODER_BASE_URL: "https://geocoder.example.test/search" },
-        {} as ExecutionContext,
+        {} as ExecutionContext
       );
 
       expect(response.status).toBe(200);
@@ -132,7 +131,7 @@ describe("Worker API provider policy", () => {
         }),
       }),
       env,
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(409);
@@ -153,7 +152,7 @@ describe("Worker API provider policy", () => {
         }),
       }),
       env,
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(422);
@@ -170,10 +169,10 @@ describe("Worker API provider policy", () => {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ latitude: 36 }),
-        },
+        }
       ),
       env,
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(422);
@@ -217,7 +216,7 @@ describe("Worker API provider policy", () => {
           }),
         },
       } as typeof env,
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(422);
@@ -265,10 +264,10 @@ describe("Worker API provider policy", () => {
       rawDeal,
       {
         ...rawDeal,
-      deal_key: "vendor-2:product-1",
-      vendor_id: "vendor-2",
-      vendor_title: "فروشگاه دو",
-      stock: 8,
+        deal_key: "vendor-2:product-1",
+        vendor_id: "vendor-2",
+        vendor_title: "فروشگاه دو",
+        stock: 8,
       },
     ];
     const groupedDb = {
@@ -290,12 +289,14 @@ describe("Worker API provider policy", () => {
     const response = await api.fetch(
       new Request("http://localhost/api/scans/scan-group/deal-groups"),
       { ...env, DB: groupedDb },
-      {} as ExecutionContext,
+      {} as ExecutionContext
     );
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      data: Array<{ vendors: Array<{ vendorTitle: string; finalPriceRials: number }> }>;
+      data: Array<{
+        vendors: Array<{ vendorTitle: string; finalPriceRials: number }>;
+      }>;
       meta: { groupedProductCount: number; offerCount: number };
     };
     expect(body.meta).toEqual({
@@ -305,9 +306,11 @@ describe("Worker API provider policy", () => {
     });
     expect(body.data).toHaveLength(1);
     expect(body.data[0]?.vendors).toHaveLength(2);
-    expect(body.data[0]?.vendors).toContainEqual(expect.objectContaining({
-      vendorTitle: "فروشگاه یک",
-      finalPriceRials: 80_000,
-    }));
+    expect(body.data[0]?.vendors).toContainEqual(
+      expect.objectContaining({
+        vendorTitle: "فروشگاه یک",
+        finalPriceRials: 80_000,
+      })
+    );
   });
 });

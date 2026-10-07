@@ -8,6 +8,7 @@ type DashboardFixture = {
 
 async function mockDashboard(page: Page, fixture: DashboardFixture = {}) {
   const snappRequests: string[] = [];
+  const okalaRequests: string[] = [];
   const scanRequests: unknown[] = [];
   await page.route("**/api/auth/get-session", async (route) => {
     await route.fulfill({
@@ -44,16 +45,9 @@ async function mockDashboard(page: Page, fixture: DashboardFixture = {}) {
     snappRequests.push(route.request().method() + " " + route.request().url());
     await route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
   });
-  await page.route("**/api/settings/okala", async (route) => {
-    await route.fulfill({
-      json: {
-        data: {
-          tokenConfigured: false,
-          tokenExpired: false,
-          tokenExpiresAt: null,
-        },
-      },
-    });
+  await page.route("**/api/settings/okala**", async (route) => {
+    okalaRequests.push(route.request().method() + " " + route.request().url());
+    await route.fulfill({ status: 503, json: { error: "UNAVAILABLE" } });
   });
   await page.route("**/api/scans", async (route) => {
     if (route.request().method() === "POST") {
@@ -71,7 +65,9 @@ async function mockDashboard(page: Page, fixture: DashboardFixture = {}) {
         data: {
           id: "scan-1",
           locationId: "location-1",
-          source: "snappmarket",
+          source:
+            (scanRequests.at(-1) as { source?: string } | undefined)?.source ??
+            "snappmarket",
           threshold: 40,
           status: "running",
           vendorCount: 0,
@@ -86,10 +82,10 @@ async function mockDashboard(page: Page, fixture: DashboardFixture = {}) {
   await page.route("**/api/scans/*/deal-groups", async (route) => {
     await route.fulfill({ json: { data: fixture.dealGroups ?? [] } });
   });
-  return { snappRequests, scanRequests };
+  return { snappRequests, okalaRequests, scanRequests };
 }
 
-test("guides a first-time user to location and automatic Snapp scanning", async ({
+test("guides a first-time user to location and credential-free Snapp or Okala scanning", async ({
   page,
 }) => {
   const requests = await mockDashboard(page, { locations: [] });
@@ -103,13 +99,15 @@ test("guides a first-time user to location and automatic Snapp scanning", async 
   ).toBeVisible();
   await expect(
     page.getByText(
-      "پس از انتخاب موقعیت، اسکن اسنپ‌مارکت را شروع کنید؛ نیازی به ورود یا وارد کردن توکن نیست."
+      "پس از انتخاب موقعیت، اسکن اسنپ‌مارکت یا اکالا را شروع کنید؛ نیازی به ورود به فروشگاه یا وارد کردن توکن نیست."
     )
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "اتصال اسنپ‌مارکت" })
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "اتصال اکالا" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "اتصال اکالا" })).toHaveCount(
+    0
+  );
   expect(requests.snappRequests).toEqual([]);
 });
 
@@ -146,7 +144,7 @@ test("Snapp settings explain automatic access without any credential-entry field
   const requests = await mockDashboard(page);
   await page.goto("/");
   await page
-    .getByRole("button", { name: "تنظیمات اتصال", exact: true })
+    .getByRole("button", { name: "تنظیمات فروشگاه", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "تنظیمات اسنپ‌مارکت" })
@@ -165,7 +163,7 @@ test("Snapp settings explain automatic access without any credential-entry field
   expect(requests.snappRequests).toEqual([]);
 });
 
-test("Okala still sends a user without credentials to its connection flow", async ({
+test("a fresh signed-in user starts Okala without settings or customer setup", async ({
   page,
 }) => {
   const requests = await mockDashboard(page);
@@ -173,20 +171,55 @@ test("Okala still sends a user without credentials to its connection flow", asyn
   await page
     .getByRole("combobox", { name: "فروشگاه", exact: true })
     .selectOption("okala");
-  const setupButton =
+  const scanButton =
     page.viewportSize()!.width <= 720
       ? page.locator(".mobile-scan")
       : page.locator(".scan-button");
-  await expect(setupButton).toContainText("تنظیم اتصال");
-  await setupButton.click();
+  await expect(scanButton).toContainText("اسکن اکالا");
+  await expect(scanButton).toBeEnabled();
+  await expect(page.locator(".rail-foot")).toContainText(
+    "بدون نیاز به ورود اکالا"
+  );
+  await scanButton.click();
+  await expect(page.getByText("اسکن در جریان است")).toBeVisible();
+  expect(requests.scanRequests).toEqual([
+    {
+      locationId: "location-1",
+      threshold: 40,
+      source: "okala",
+      mode: "partial",
+    },
+  ]);
+  expect(requests.okalaRequests).toEqual([]);
+});
+test("Okala settings explain public access and campaign coverage without login fields", async ({
+  page,
+}) => {
+  const requests = await mockDashboard(page);
+  await page.goto("/");
+  await page
+    .getByRole("combobox", { name: "فروشگاه", exact: true })
+    .selectOption("okala");
+  await page
+    .getByRole("button", { name: "تنظیمات فروشگاه", exact: true })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "ورود به اکالا" })
+    page.getByRole("heading", { name: "تنظیمات اکالا" })
   ).toBeVisible();
   await expect(
-    page.getByRole("textbox", { name: "شماره موبایل" })
+    page.getByText("برای اسکن اکالا نیازی به ورود یا وارد کردن توکن نیست.", {
+      exact: true,
+    })
   ).toBeVisible();
-  expect(requests.scanRequests).toEqual([]);
-  expect(requests.snappRequests).toEqual([]);
+  await expect(
+    page.locator(
+      ".settings-page input, .settings-page textarea, .settings-page form"
+    )
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(/این فهرست شامل تمام کالاهای اکالا نیست/)
+  ).toBeVisible();
+  expect(requests.okalaRequests).toEqual([]);
 });
 
 test("a failed automatic Snapp scan keeps successful results and offers another scan", async ({
@@ -679,4 +712,98 @@ test("selects a remaining location after deleting the selected location", async 
       ? page.locator(".mobile-scan")
       : page.locator(".scan-button");
   await expect(scanButton).toBeEnabled();
+});
+
+test("a failed automatic Okala scan keeps successful results and offers another scan", async ({
+  page,
+}) => {
+  const requests = await mockDashboard(page, {
+    scans: [
+      {
+        id: "previous",
+        locationId: "location-1",
+        locationName: "خانه",
+        threshold: 40,
+        source: "okala",
+        mode: "partial",
+        status: "succeeded",
+        createdAt: "2026-08-23T10:00:00.000Z",
+        finishedAt: "2026-08-23T10:01:00.000Z",
+        vendorCount: 1,
+        productCount: 1,
+        dealCount: 1,
+      },
+    ],
+    dealGroups: [
+      {
+        key: "group-1",
+        groupKeyVersion: 1,
+        scanId: "previous",
+        title: "پیشنهاد اسکن قبلی",
+        image: null,
+        categoryTitle: "خوراکی",
+        priceRials: 100000,
+        discountRials: 50000,
+        finalPriceRials: 50000,
+        discountRatio: 50,
+        state: "new",
+        vendors: [
+          {
+            offerKey: "10:1",
+            productVariationId: "1",
+            vendorId: "10",
+            vendorTitle: "فروشگاه",
+            vendorCode: null,
+            priceRials: 100000,
+            discountRials: 50000,
+            finalPriceRials: 50000,
+            discountRatio: 50,
+            stock: 2,
+            state: "new",
+          },
+        ],
+      },
+    ],
+  });
+  await page.route("**/api/scans/scan-1", async (route) => {
+    await route.fulfill({
+      json: {
+        data: {
+          id: "scan-1",
+          locationId: "location-1",
+          source: "okala",
+          threshold: 40,
+          status: "failed",
+          errorCode: "UPSTREAM_FORBIDDEN",
+          errorMessage:
+            "دسترسی خودکار اکالا برقرار نشد؛ بعداً دوباره اسکن کنید",
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  await page
+    .getByRole("combobox", { name: "فروشگاه", exact: true })
+    .selectOption("okala");
+  await expect(
+    page.getByRole("heading", { name: "پیشنهاد اسکن قبلی" })
+  ).toBeVisible();
+  const scanButton =
+    page.viewportSize()!.width <= 720
+      ? page.locator(".mobile-scan")
+      : page.locator(".scan-button");
+  await scanButton.click();
+  await expect(
+    page.getByText("دسترسی خودکار اکالا برقرار نشد؛ بعداً دوباره اسکن کنید")
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "پیشنهاد اسکن قبلی" })
+  ).toBeVisible();
+  await expect(scanButton).toBeEnabled();
+  await expect(scanButton).toContainText("اسکن اکالا");
+  await page.getByRole("button", { name: "بستن", exact: true }).click();
+  await expect(
+    page.getByText("دسترسی خودکار اکالا برقرار نشد؛ بعداً دوباره اسکن کنید")
+  ).toHaveCount(0);
+  expect(requests.snappRequests).toEqual([]);
 });

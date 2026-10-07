@@ -20,7 +20,7 @@ The product turns a location-specific promotional feed into a durable, comparabl
 
 ## Operating Context
 
-The application uses a Cloudflare Worker (Hono, D1, Better Auth) and a static Next.js frontend, with the same Worker code used locally. Each Google-signed-in user owns private delivery locations and scan history and starts scans manually. A valid Tehran location is enough to start a SnappMarket scan: the Worker obtains public PWA guest access automatically. Okala requires customer credentials; Digikala Jet is disabled for new activity and keeps read-only history.
+The application uses a Cloudflare Worker (Hono, D1, Better Auth) and a static Next.js frontend, with the same Worker code used locally. Each Google-signed-in user owns private delivery locations and scan history and starts scans manually. A valid Tehran location is enough to start a SnappMarket scan: the Worker obtains public PWA guest access automatically. Okala uses public nearby-store and multi-store campaign feeds without customer credentials; Digikala Jet is disabled for new activity and keeps read-only history.
 
 ## Capabilities and Constraints
 
@@ -39,7 +39,8 @@ The supplied market-party response establishes vendor-grouped products with disc
 - Make the best deal legible at a glance.
 - Treat location and scan time as essential context.
 - Preserve successful history even when upstream collection fails.
-- Keep Okala credentials encrypted and private to their owner; keep Snapp guest access ephemeral in the Worker, out of browser responses and logs.
+- Okala scans ignore legacy credential rows and use no customer or guest tokens. Keep Snapp guest access ephemeral in the Worker, out of browser responses and logs.
+- Promotional feed absence does not establish that a product is out of stock across Okala.
 - Prefer explicit operational states over silent failure.
 
 ## Accessibility & Inclusion

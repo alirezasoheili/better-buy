@@ -131,7 +131,11 @@ export function ScanControls({
                 }
               >
                 <option value="partial">سریع · پیشنهادهای پرفروش</option>
-                <option value="full">کامل · همه پیشنهادها</option>
+                <option value="full">
+                  {source === "okala"
+                    ? "کامل · همه پیشنهادهای این فهرست"
+                    : "کامل · همه پیشنهادها"}
+                </option>
               </select>
             </label>
             <label className="threshold-control">

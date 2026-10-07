@@ -1,7 +1,15 @@
 import { z } from "zod";
 import type { DealRecord } from "@better-buy/shared";
+const identifier = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const pagination = {
+  pageIndex: z.number().int().nonnegative().optional(),
+  pageSize: z.number().int().nonnegative().optional(),
+  totalCount: z.number().int().nonnegative().optional(),
+  totalPages: z.number().int().nonnegative().optional(),
+  hasNextPage: z.boolean().optional(),
+};
 const store = z.object({
-  storeId: z.number(),
+  storeId: identifier,
   isActive: z.boolean(),
   isServes: z.boolean(),
   isExist: z.boolean(),
@@ -9,6 +17,16 @@ const store = z.object({
 export const nearbyResponse = z.object({
   success: z.boolean(),
   data: z.object({ stores: z.array(store) }),
+});
+export const campaignsResponse = z.object({
+  success: z.boolean(),
+  carousels: z.array(
+    z.discriminatedUnion("isMulti", [
+      z.object({ isMulti: z.literal(true), id: identifier }),
+      z.object({ isMulti: z.literal(false) }),
+    ])
+  ),
+  ...pagination,
 });
 const product = z.object({
   id: z.union([z.number(), z.string()]),
@@ -33,6 +51,7 @@ export const offersResponse = z.object({
   carousel: z.object({ id: z.number() }).optional(),
   entities: z.array(offerEntity),
   success: z.boolean().optional(),
+  ...pagination,
 });
 
 export type OkalaProduct = z.infer<typeof product>;

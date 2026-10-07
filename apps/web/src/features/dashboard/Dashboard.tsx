@@ -35,9 +35,6 @@ export function Dashboard() {
     scans,
     busy,
     needsLocation,
-    okalaSettings,
-    setOkalaSettings,
-    providerErrors,
     dataError,
     load,
   } = useDashboardData();
@@ -94,11 +91,7 @@ export function Dashboard() {
     setMode(run.mode);
     setView("deals");
   };
-  const connection = useProviderConnection(
-    source,
-    okalaSettings,
-    providerErrors
-  );
+  const connection = useProviderConnection(source);
   const openConnectionSettings = () => {
     if (source === "digikalajet") {
       setSource("snappmarket");
@@ -195,13 +188,7 @@ export function Dashboard() {
             {source === "snappmarket" ? (
               <SettingsPanel />
             ) : source === "okala" ? (
-              <OkalaSettings
-                value={okalaSettings}
-                onSaved={(v) => {
-                  setOkalaSettings(v);
-                  setMessage("توکن اکالا ذخیره شد");
-                }}
-              />
+              <OkalaSettings />
             ) : (
               <ProviderDisabledNotice onActivate={openConnectionSettings} />
             )}
@@ -214,11 +201,6 @@ export function Dashboard() {
             onLocation={() => {
               setEditing(null);
               setLocationForm(true);
-            }}
-            onConnectOkala={() => {
-              setSource("okala");
-              setSelectedRunId(null);
-              setView("settings");
             }}
           />
         ) : (

@@ -3,11 +3,9 @@ import { Icon } from "./Icon";
 export function ActivationPanel({
   hasLocation,
   onLocation,
-  onConnectOkala,
 }: {
   hasLocation: boolean;
   onLocation: () => void;
-  onConnectOkala: () => void;
 }) {
   return (
     <section className="activation-panel" aria-labelledby="activation-title">
@@ -38,15 +36,9 @@ export function ActivationPanel({
           <div>
             <strong>اولین اسکن را اجرا کنید</strong>
             <p>
-              پس از انتخاب موقعیت، اسکن اسنپ‌مارکت را شروع کنید؛ نیازی به ورود
-              یا وارد کردن توکن نیست.
+              پس از انتخاب موقعیت، اسکن اسنپ‌مارکت یا اکالا را شروع کنید؛ نیازی
+              به ورود به فروشگاه یا وارد کردن توکن نیست.
             </p>
-            <div className="activation-connections">
-              <button type="button" onClick={onConnectOkala}>
-                اتصال اکالا
-              </button>
-            </div>
-            <p>برای اسکن اکالا ابتدا اتصال آن را تنظیم کنید.</p>
           </div>
         </li>
       </ol>

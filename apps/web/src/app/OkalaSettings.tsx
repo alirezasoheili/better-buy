@@ -1,123 +1,21 @@
-"use client";
-
-import { useOkalaLogin } from "../features/providers/useOkalaLogin";
-import type { ProviderSettingsStatus } from "@better-buy/shared";
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "";
-
-export default function OkalaSettings({
-  value,
-  onSaved,
-}: {
-  value: ProviderSettingsStatus | null;
-  onSaved: (value: ProviderSettingsStatus) => void;
-}) {
-  const {
-    mobile,
-    setMobile,
-    otp,
-    setOtp,
-    step,
-    setStep,
-    saving,
-    error,
-    resetLogin,
-    submit,
-  } = useOkalaLogin(onSaved);
-  const requestOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    return submit(false);
-  };
-  const verify = (e: React.FormEvent) => {
-    e.preventDefault();
-    return submit(true);
-  };
+export default function OkalaSettings() {
   return (
     <section className="settings-page okala-settings">
       <header>
-        <span>ورود امن</span>
-        <h1>ورود به اکالا</h1>
-        <p>
-          با شماره موبایل وارد شوید؛ نشست و refresh token فقط به‌صورت
-          رمزگذاری‌شده در همین دستگاه نگه‌داری و خودکار تازه می‌شوند.
-        </p>
+        <span>دسترسی عمومی</span>
+        <h1>تنظیمات اکالا</h1>
+        <p>برای اسکن اکالا نیازی به ورود یا وارد کردن توکن نیست.</p>
       </header>
-      <div className="credential-status">
-        <span
-          className={`status-dot ${value?.tokenConfigured && !value.tokenExpired ? "ok" : "warn"}`}
-        />
-        <div>
-          <strong>
-            {value?.tokenConfigured
-              ? value.tokenExpired
-                ? "نشست نیاز به ورود دوباره دارد"
-                : "اکالا متصل و آماده اسکن است"
-              : "هنوز وارد نشده‌اید"}
-          </strong>
-          <small>
-            {value?.tokenExpiresAt
-              ? `دسترسی تا ${new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value.tokenExpiresAt))}`
-              : "برای شروع شماره موبایل را وارد کنید"}
-          </small>
-        </div>
-      </div>
-      {step === "mobile" ? (
-        <form onSubmit={requestOtp}>
-          <label>
-            شماره موبایل
-            <input
-              required
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder="۰۹۱۲۱۲۳۴۵۶۷"
-              inputMode="tel"
-              autoComplete="tel"
-              dir="ltr"
-            />
-          </label>
-          {error && <p className="form-error">{error}</p>}
-          <button disabled={saving}>
-            {saving ? "در حال ارسال…" : "ارسال کد پیامک"}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={verify}>
-          <label>
-            کد پیامک
-            <input
-              required
-              autoFocus
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ""))}
-              placeholder="کد ۵ رقمی"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              dir="ltr"
-            />
-          </label>
-          <p className="otp-help">
-            کد به {mobile} ارسال شد.{" "}
-            <button
-              type="button"
-              onClick={() => {
-                setStep("mobile");
-                setOtp("");
-                resetLogin();
-              }}
-            >
-              ویرایش شماره
-            </button>
-          </p>
-          {error && <p className="form-error">{error}</p>}
-          <button disabled={saving}>
-            {saving ? "در حال ورود…" : "تأیید و اتصال اکالا"}
-          </button>
-        </form>
-      )}
+      <p>
+        موقعیت تحویل را انتخاب کنید و اسکن را شروع کنید. ارتباط با فروشگاه هنگام
+        اسکن بررسی می‌شود.
+      </p>
       <aside>
-        <strong>حریم خصوصی</strong>
+        <strong>دامنه پیشنهادها</strong>
         <p>
-          کد پیامک هرگز ذخیره نمی‌شود. اگر نشست باطل شود، فقط همان زمان دوباره
-          کد می‌خواهیم.
+          اسکن، پیشنهادهای کمپین‌های عمومی فروشگاه‌های سرویس‌دهنده در موقعیت شما
+          را بررسی می‌کند. این فهرست شامل تمام کالاهای اکالا نیست؛ نبودن یک کالا
+          در آن به معنی ناموجود بودن آن در همه فروشگاه‌ها نیست.
         </p>
       </aside>
     </section>

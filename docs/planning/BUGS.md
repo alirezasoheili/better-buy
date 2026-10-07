@@ -4,9 +4,9 @@ Priorities: P0 breaks product truth or a critical flow; P1 is production-signifi
 
 ## Current resolution snapshot
 
-- Resolved in this implementation loop: B-001, B-002, B-003, B-004, B-007, B-008, and B-010.
+- Resolved in this implementation loop: B-001, B-002, B-003, B-004, B-007, B-008, B-009, and B-010.
 - Partially resolved: B-005 now has a database uniqueness guard and conflict response, but migration rehearsal is still required; B-015 has a prominent draggable map pin and bounds, while the full accessibility dialog work remains open.
-- Still open: B-006, B-009, B-011–B-014, B-016–B-020, plus runtime/E2E coverage in B-012. Address search remains unavailable in production until a reviewed geocoder endpoint is configured.
+- Still open: B-006, B-011–B-014, B-016–B-020, plus runtime/E2E coverage in B-012. Address search remains unavailable in production until a reviewed geocoder endpoint is configured.
 
 ## P0
 
@@ -20,13 +20,9 @@ Fix direction: make scan context explicit and request matching latest results; g
 
 Regression tests: provider switch, location switch, no matching scan, history open, rapid switch race.
 
-### B-002 — Desktop expired-token action is a dead end
+### B-002 — Credential-gated primary action (resolved)
 
-Evidence: desktop scan is disabled for missing/expired credentials; mobile already turns the same surface into a settings action.
-
-Impact: the primary user cannot recover from the state the UI describes.
-
-Fix direction: shared credential/action state; disable only during scanning or when no valid location exists.
+Both active providers now scan without customer setup. Desktop/mobile use the same action and preserve location/exclusivity constraints.
 
 ### B-003 — Tehran-only policy is not enforced
 
@@ -88,21 +84,13 @@ Impact: a hidden or non-active provider endpoint failure can blank otherwise usa
 
 Fix direction: load core context separately and isolate provider-specific failures.
 
-### B-008 — Empty-state credential logic is provider-incorrect
+### B-008 — Provider-incorrect empty-state access (resolved)
 
-Evidence: it checks only SnappMarket `tokenConfigured`, without expiry or active-provider awareness.
+Both active providers expose credential-free access; copy identifies the selected provider.
 
-Impact: wrong CTA/copy for Okala or an expired connection.
+### B-009 — Upstream access rejection recovery (resolved for active providers)
 
-Fix direction: consume the shared credential/action state.
-
-### B-009 — Upstream auth rejection does not update connection UX
-
-Evidence: a token may look unexpired locally but receive `AUTH_REJECTED`; the UI only receives a scan failure notice.
-
-Impact: repeated scans fail without guiding reconnection.
-
-Fix direction: return stable failure code in scan status, map it to `rejected`, and show renewal.
+Okala public endpoint 401/403 produces UPSTREAM_FORBIDDEN and normal scan retry, without OTP or reconnect. Snapp retains bounded guest renewal and failed-scan feedback. Tests preserve the previous successful history.
 
 ### B-010 — Multi-tenant scan/location join is incomplete
 
@@ -128,19 +116,19 @@ Impact: primary UX and tenancy/location contracts can regress undetected.
 
 Fix direction: add pure state tests, component tests, Worker/D1 integration tests, and targeted desktop/mobile E2E.
 
-### B-013 — Custom OTP and scan endpoints need explicit abuse controls
+### B-013 — Scan endpoints need explicit abuse controls
 
-Evidence: Better Auth has rate limiting, but custom provider OTP and scan endpoints have no documented per-user/IP throttling policy.
+Evidence: Better Auth has rate limiting, but custom scan endpoints have no documented per-user/IP throttling policy.
 
-Impact: upstream abuse, account lockouts, and unnecessary platform/provider load.
+Impact: upstream abuse and unnecessary platform/provider load. Okala OTP/login/token-submission routes have been removed.
 
 Fix direction: add endpoint-specific quotas, cooldown copy, structured rejection metrics, and tests.
 
-### B-014 — Credential encryption configuration is too permissive
+### B-014 — Legacy credential encryption configuration is too permissive
 
 Evidence: arbitrary `BOX_KEY` strings are padded/truncated into AES key material, with no version or rotation metadata.
 
-Impact: weak configuration can silently become a weak at-rest key; rotation can make all stored credentials unreadable.
+Impact: weak configuration can silently become a weak at-rest key for legacy data; rotation can make it unreadable. Active Snapp/Okala scans do not read persisted customer credentials.
 
 Fix direction: require strong encoded key material at startup, version ciphertext/key IDs, document rotation and recovery, and test corruption handling.
 

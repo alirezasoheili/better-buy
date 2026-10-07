@@ -2,7 +2,7 @@ import { Cause, Effect, Exit, Option } from "effect";
 import { groupDeals, scanInputSchema } from "@better-buy/shared";
 import { executeScan, prepareScan } from "../application/scans";
 import { scanServices } from "../composition";
-import { CredentialError, ScanValidationError } from "../domain/failures";
+import { ScanValidationError } from "../domain/failures";
 import { Store } from "../store";
 import type { Api } from "./types";
 export function registerScans(api: Api) {
@@ -45,12 +45,7 @@ export function registerScans(api: Api) {
       await c.req.json().catch(() => null)
     );
     if (!parsed.success) return c.json({ error: "INVALID_INPUT" }, 400);
-    const services = scanServices(
-      c.env.DB,
-      c.get("userId"),
-      c.env.BOX_KEY,
-      c.env.OKALA_CLIENT_SECRET
-    );
+    const services = scanServices(c.env.DB, c.get("userId"), c.env.BOX_KEY);
     const prepared = await Effect.runPromiseExit(
       prepareScan(parsed.data).pipe(Effect.provide(services))
     );
@@ -60,11 +55,7 @@ export function registerScans(api: Api) {
         const error = failure.value;
         return c.json(
           { error: error.code, message: error.message },
-          error instanceof ScanValidationError
-            ? error.status
-            : error instanceof CredentialError
-              ? 409
-              : 502
+          error instanceof ScanValidationError ? error.status : 502
         );
       }
       console.error("Scan preparation defect");

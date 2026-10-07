@@ -6,7 +6,7 @@ Mode: operate. Preserve the established “live grocery shelf” visual language
 
 - Truth before polish: location, provider, threshold, scan time, and results must stay attached.
 - SnappMarket requires only a valid location; first use guides location selection and scan start. Guest-access failures are scan errors without a customer-login action.
-- Okala recovery is an action: expired/missing/rejected customer credentials lead directly to its settings.
+- Okala requires only a valid location and ordinary scan constraints. Public endpoint failures appear in normal scan feedback with retry; no customer setup is offered.
 - One product, one decision row: vendor differences are supporting choices shown as chips.
 - Addresses before coordinates: raw latitude/longitude is an advanced fallback.
 - Every visual state has semantic feedback for keyboard and screen-reader users.
@@ -17,7 +17,7 @@ Mode: operate. Preserve the established “live grocery shelf” visual language
 
 1. Selected location and provider.
 2. Last matching scan time or “no scan for this context.”
-3. Current state: ready, connection required, scanning, success, or failure.
+3. Current state: ready, location required, scanning, success, or failure.
 4. Threshold control.
 5. One primary action.
 
@@ -28,14 +28,11 @@ The idle label should not say “در حال بررسی” when no scan is runni
 | State                  | Label                                     | Action                                                                   | Disabled? |
 | ---------------------- | ----------------------------------------- | ------------------------------------------------------------------------ | --------- |
 | Automatic Snapp access | `اسکن تخفیف‌ها`                           | Start scan with a valid location; connectivity checked during collection | No        |
-| Ready                  | `اسکن تخفیف‌ها` / provider-specific label | Start scan                                                               | No        |
-| Missing token          | `تنظیم اتصال`                             | Open active-provider settings                                            | No        |
-| Expired token          | `تمدید اتصال`                             | Open active-provider settings                                            | No        |
-| Rejected token         | `اتصال دوباره`                            | Open active-provider settings                                            | No        |
+| Public Okala access    | `اسکن تخفیف‌ها` / provider-specific label | Start scan                                                               | No        |
 | No valid location      | `افزودن مکان`                             | Open location flow                                                       | No        |
 | Scanning               | `در حال اسکن`                             | None                                                                     | Yes       |
 
-Missing/expired/rejected token states apply to Okala. Snapp settings explain automatic access and contain no credential-entry fields. Ready to start means configuration permits a scan; it does not verify upstream connectivity.
+Both settings screens explain credential-free scanning and contain no credential-entry fields. Ready to start means configuration permits a scan; it does not verify upstream connectivity.
 
 Desktop and mobile render the same semantic state. Mobile may use sticky placement, but not different business logic.
 
@@ -130,7 +127,7 @@ The existing circle marker should be replaced or strengthened only after runtime
 - Show a contextual empty state for “no scan yet,” distinct from “filters removed every result.”
 - Preserve displayed successful history when a later scan fails.
 - Failed scan copy includes provider-safe error reason and next action.
-- Rejected credentials update the connection status, not only a temporary notice.
+- Public upstream access rejection is a failed scan with a safe explanation and retry, never an OTP/reconnect action.
 
 ## Accessibility and responsive checklist
 
@@ -147,7 +144,7 @@ The existing circle marker should be replaced or strengthened only after runtime
 
 For each UI phase, capture one bounded review set:
 
-- Desktop: ready, expired token, scanning, grouped row with many chips, map search.
+- Desktop: ready, public access failure, scanning, grouped row with many chips, map search.
 - Mobile: same critical states, plus sticky action and open keyboard.
 - Then fix the complete set and run one confirmation set.
 

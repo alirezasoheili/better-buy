@@ -15,4 +15,4 @@
 
 ## Provider access
 
-Better Buy requires Google/Better Auth sign-in for all application data and scans. SnappMarket requires no customer login or settings row: its collector obtains and manages a public PWA guest session for the exact vendor-grouped `/market-party/{latitude}/{longitude}` feed. One device ID identifies that session and its requests. Okala retains its customer authentication and refresh flow. Digikala Jet remains disabled for new scans and settings, with history readable.
+Better Buy requires Google/Better Auth sign-in for all application data and scans. SnappMarket requires no customer login or settings row: its collector obtains and manages a public PWA guest session for the exact vendor-grouped `/market-party/{latitude}/{longitude}` feed. One device ID identifies that session and its requests. Okala uses public nearby-store and campaign endpoints without customer or guest credentials, settings prerequisites, or refresh. Collection covers the promotional campaign feed; absence is not proof of worldwide stock unavailability. Digikala Jet remains disabled for new scans and settings, with history readable.

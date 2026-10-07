@@ -33,7 +33,7 @@ export class CredentialError extends Error {
   readonly _tag = "CredentialError";
   readonly code = "AUTH_EXPIRED";
   constructor() {
-    super("اطلاعات اتصال اکالا معتبر نیست؛ دوباره به فروشگاه متصل شوید.");
+    super("اطلاعات اتصال ذخیره‌شده معتبر نیست.");
   }
 }
 export class ScanValidationError extends Error {
@@ -43,8 +43,6 @@ export class ScanValidationError extends Error {
       | "LOCATION_NOT_FOUND"
       | "OUTSIDE_TEHRAN"
       | "PROVIDER_UNAVAILABLE"
-      | "TOKEN_REQUIRED"
-      | "AUTH_EXPIRED"
       | "SCAN_IN_PROGRESS",
     message: string,
     readonly status: 404 | 422 | 409 = 409

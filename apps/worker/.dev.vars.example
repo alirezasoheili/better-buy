@@ -1,16 +1,13 @@
 # Local-only bindings for `wrangler dev`. Copy to `.dev.vars` and fill in real values.
 # Never commit the real `.dev.vars`; it is gitignored.
 
-# Encryption key for stored provider tokens (any string; keep it stable between runs).
+# Retained encryption key for legacy provider data; active scans do not read customer tokens.
 BOX_KEY=change-me-to-a-long-random-string
 
 # Better Auth + Google OAuth (create credentials at https://console.cloud.google.com/apis/credentials)
 BETTER_AUTH_SECRET=change-me
 GOOGLE_CLIENT_ID=change-me.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=change-me
-
-# Okala phone/OTP sign-in
-OKALA_CLIENT_SECRET=change-me
 
 # Override prod vars for local split-dev: web at :3000 talks to the API at :8787.
 APP_ORIGIN=http://127.0.0.1:3000

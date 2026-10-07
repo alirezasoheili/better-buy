@@ -8,14 +8,14 @@ it("includes the authenticated session and cancellation signal for all API calls
     .spyOn(globalThis, "fetch")
     .mockResolvedValue(Response.json({ data: { sent: true } }));
   expect(
-    await api("/api/settings/okala/otp", {
+    await api("/api/scans", {
       method: "POST",
       signal: controller.signal,
-      body: JSON.stringify({ mobile: "09120000000" }),
+      body: JSON.stringify({ locationId: "home" }),
     })
   ).toEqual({ sent: true });
   expect(fetcher).toHaveBeenCalledWith(
-    "/api/settings/okala/otp",
+    "/api/scans",
     expect.objectContaining({
       credentials: "include",
       signal: controller.signal,

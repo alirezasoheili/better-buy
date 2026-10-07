@@ -10,6 +10,7 @@ export interface RequestPolicy {
   allow401?: boolean;
   discardBody?: boolean;
   forbiddenCode?: "AUTH_REJECTED" | "UPSTREAM_FORBIDDEN";
+  unauthorizedCode?: "AUTH_REJECTED" | "UPSTREAM_FORBIDDEN";
   invalidJsonCode?: "UPSTREAM_CHANGED" | "UPSTREAM_INVALID_JSON";
 }
 
@@ -59,7 +60,7 @@ export function requestJson(
               new CollectorError(
                 response.status === 403
                   ? (policy.forbiddenCode ?? "AUTH_REJECTED")
-                  : "AUTH_REJECTED",
+                  : (policy.unauthorizedCode ?? "AUTH_REJECTED"),
                 "دسترسی به " + policy.provider + " پذیرفته نشد"
               )
             );

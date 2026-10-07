@@ -14,10 +14,10 @@ export interface LocationSearchResult {
   longitude: number;
   displayName: string;
 }
-export interface ProviderSettingsStatus {
-  tokenConfigured: boolean;
-  tokenExpired: boolean;
-  tokenExpiresAt: string | null;
+export interface ProviderCapabilities {
+  requiresCustomerCredentials: false;
+  access: "public";
+  coverage: "campaign-feed";
 }
 export interface ScanRecord {
   id: string;

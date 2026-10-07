@@ -2,6 +2,31 @@
 
 Backend structure, Effect v4 boundaries, service lifetimes, collector changes, and execution limits are documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+## Public Okala scanning — local validation, 2026-10-07
+
+Okala now requires no customer credentials, guest token, settings row, or connection setup. Better Buy's Google/Better Auth sign-in remains required. The Effect collector follows selected location → eligible nearby stores → public HomePage campaigns → every unique multi-store campaign → existing stock/threshold filtering and offer normalization. All Okala requests omit Authorization and Cookie; there is no authenticated BFF or login fallback.
+
+The Persian onboarding, settings, scan actions, and provider indicator reflect public access without claiming current upstream reachability. The authenticated settings GET reports capabilities (`requiresCustomerCredentials: false`, `access: "public"`, `coverage: "campaign-feed"`) instead of credential readiness. OTP/login, manual token submission, refresh helpers, obsolete schemas, and the Okala client-secret configuration requirement are removed. Legacy settings are ignored without decryption or modification. Shared encryption, other provider data, historical migrations, accounts, locations, scans, and deals are retained; this change requires no migration.
+
+| Check                                                    | Result                                                                                                                                                |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                                         | PASS                                                                                                                                                  |
+| `pnpm test`                                              | PASS: 120 Worker, 10 shared, 5 web                                                                                                                    |
+| `pnpm build`                                             | PASS                                                                                                                                                  |
+| `pnpm test:e2e`                                          | PASS: 28 desktop/mobile checks                                                                                                                        |
+| `pnpm --filter @better-buy/web build:worker`             | PASS                                                                                                                                                  |
+| Wrangler `deploy --dry-run` with fresh static export     | PASS; no deployment                                                                                                                                   |
+| Changed implementation formatting and `git diff --check` | PASS                                                                                                                                                  |
+| `pnpm format:check`                                      | PRE-EXISTING FAILURE: 26 files have existing formatting/EOL issues; 25 are untouched, and the legacy API test fixture retains its baseline formatting |
+
+Tests use synthetic retailer responses, mocked Better Auth sessions, and in-memory SQLite through a D1 interface. They cover public request construction, selected coordinates and repeated store IDs, dynamic campaign deduplication, stock/threshold/price rules, legacy credential independence, removed authenticated routes, failed campaign history preservation, tenant isolation, scan exclusivity, Snapp access, and Jet policy/history.
+
+Read-only live validation of the modified collector at a Tehran sample location passed: 76 eligible stores, 16 discovered campaigns, 18 GET requests all HTTP 200, 2,299 product records processed, and 282 unique eligible offers at the 40% threshold. The collector finished in 19.665 seconds under the existing 22-second collection budget; no Authorization or Cookie header was sent. These are observations, not test constants. This local Node run does not prove deployed Worker/D1 timing or the external Google OAuth flow.
+
+Coverage remains the public promotional campaign feed, not the entire Okala catalog. One sampled campaign returned 70 products while reporting `totalCount=1866`, `totalPages=1`, and `hasNextPage=false`; discovery itself returned 16 campaigns with `totalCount=0` and `totalPages=0`. These inconsistent counts do not define additional-page requests or prove exhaustion. The current client has no verified pagination request contract. Indicated additional pages fail with `INCOMPLETE_PAGINATION`; no page parameters are guessed. Valid no-store/no-campaign responses retain explicit `NO_STORES`/`NO_CAMPAIGNS` failures. Feed disappearance means absence from that feed, not stock unavailability everywhere.
+
+No code was deployed and no local or remote database migration was applied. Pre-existing static assets were restored after export/bundling validation. The earlier refactor and deployment notes below are historical evidence.
+
 ## Effect v4 refactor — local validation, 2026-10-07
 
 The backend now uses pinned `effect@4.0.1`. The frontend uses pinned TanStack Query `5.104.1` for server state and polling, with a separate cache per authenticated session and no direct `useEffect`/`useLayoutEffect` calls in its source.
@@ -16,7 +41,7 @@ The backend now uses pinned `effect@4.0.1`. The frontend uses pinned TanStack Qu
 | Wrangler deployment dry run                        | —                                            | PASS, including the fresh static export |
 | Formatting of refactored modules / diff whitespace | —                                            | PASS                                    |
 
-No baseline check failed and no requested check remains blocked. Tests cover credential-free Snapp access, bounded guest renewal/Okala refresh, per-request retry/backoff and cancellation, completeness/stock/deduplication, persistence rollback/progress/terminal state, tenant isolation/exclusivity, session cache isolation, frontend context races, history, and accessible location editing/deletion. Focused behavior fixes reject failed Okala nearby-store envelopes, guard late terminal writes, prevent stale frontend responses, and restore location editor accessibility and selection after deletion.
+No baseline check failed and no requested check remains blocked. Tests cover credential-free Snapp access, bounded guest renewal (the earlier refactor also tested Okala refresh; public access now replaces it), per-request retry/backoff and cancellation, completeness/stock/deduplication, persistence rollback/progress/terminal state, tenant isolation/exclusivity, session cache isolation, frontend context races, history, and accessible location editing/deletion. Focused behavior fixes reject failed Okala nearby-store envelopes, guard late terminal writes, prevent stale frontend responses, and restore location editor accessibility and selection after deletion.
 
 This refactor was **not deployed** and did not modify a remote database or apply migrations. The pre-existing static output was restored after export validation. Retailer responses and auth sessions in this run were fixtures; D1-interface regressions used in-memory SQLite. Live retailer availability, external Google OAuth, deployed D1 behavior, and production scan timing are separate evidence. Existing live/deployment observations below describe the earlier Snapp implementation, not a release of this refactor.
 
@@ -31,7 +56,7 @@ pnpm install
 pnpm dev
 ```
 
-سپس [http://127.0.0.1:3000](http://127.0.0.1:3000) را باز کنید، با گوگل وارد شوید، یک موقعیت تحویل معتبر در تهران انتخاب کنید و اسکن اسنپ‌مارکت را شروع کنید. ورود با شماره موبایل، کد پیامک یا توکن شخصی اسنپ‌مارکت لازم نیست. برای اکالا همچنان باید «تنظیمات اتصال» را تکمیل کنید. API روی `127.0.0.1:8787` با `wrangler dev` اجرا می‌شود و داده‌ها در D1 محلی نگهداری می‌شوند.
+سپس [http://127.0.0.1:3000](http://127.0.0.1:3000) را باز کنید، با گوگل وارد شوید، یک موقعیت تحویل معتبر در تهران انتخاب کنید و اسکن اسنپ‌مارکت یا اکالا را شروع کنید. برای اسکن اکالا نیازی به ورود یا وارد کردن توکن نیست؛ شماره موبایل، کد پیامک و تنظیم اتصال فروشگاه لازم نیست. API روی `127.0.0.1:8787` با `wrangler dev` اجرا می‌شود و داده‌ها در D1 محلی نگهداری می‌شوند.
 
 برای اولین اجرا، migration های D1 را محلی اعمال کنید:
 
@@ -41,13 +66,15 @@ pnpm --filter @better-buy/worker exec wrangler d1 migrations apply better-buy --
 
 Migration `0005_remove_snapp_customer_credentials.sql` فقط اطلاعات اتصال قدیمی اسنپ‌مارکت را حذف می‌کند؛ اطلاعات اکالا و جت و تمام حساب‌ها، موقعیت‌ها و تاریخچه حفظ می‌شوند. اسکن اسنپ‌مارکت حتی پیش از اعمال این migration نیز اطلاعات قدیمی را نمی‌خواند.
 
-مقادیر محلی لازم (کلید رمزنگاری اطلاعات اکالا، ورود گوگل، ورود اکالا) را در `apps/worker/.dev.vars` بگذارید — نمونه در `apps/worker/.dev.vars.example`.
+مقادیر محلی لازم (ورود گوگل و کلید نگه‌داری‌شده برای داده‌های قدیمی) را در `apps/worker/.dev.vars` بگذارید — نمونه در `apps/worker/.dev.vars.example`.
 
 ## ورود
 
 - **Google:** ورود اصلی از طریق Better Auth انجام می‌شود؛ در حالت محلی نیز همین جریان کار می‌کند.
 - **SnappMarket:** Worker به‌صورت خودکار نشست مهمان PWA را دریافت می‌کند. یک شناسه دستگاه و توکن در طول جمع‌آوری صفحات استفاده می‌شود؛ انقضا رعایت می‌شود و پس از پاسخ 401 فقط یک بار دسترسی تازه و همان صفحه دوباره درخواست می‌شود. توکن مهمان در مرورگر، لاگ یا اطلاعات اتصال کاربر ذخیره نمی‌شود. نسخه PWA در collector تنظیم شده است. آماده بودن دکمه اسکن به معنی تأیید ارتباط با فروشگاه نیست؛ خطای دریافت دسترسی یا پاسخ ناقص، اسکن را ناموفق می‌کند و نتیجه موفق قبلی حفظ می‌شود.
-- **ورود با پیامک اکالا:** برای دریافت توکن اکالا با شماره موبایل، مقدار `OKALA_CLIENT_SECRET` باید در `apps/worker/.dev.vars` (محلی) یا متغیرهای سکرت Worker (استقرار) تنظیم شده باشد. کد پیامک ذخیره نمی‌شود؛ access token و refresh token با `BOX_KEY` رمزنگاری می‌شوند و هنگام اسکن به‌صورت خودکار تازه می‌شوند.
+- **اکالا:** فروشگاه‌های نزدیکِ سرویس‌دهنده و کمپین‌های عمومی بر اساس موقعیت انتخابی دریافت می‌شوند؛ پیشنهادهای همه کمپین‌های چندفروشگاهی کشف‌شده با همان فروشگاه‌ها خوانده می‌شوند. هیچ توکن مشتری یا مهمان، کوکی، ورود با پیامک یا تازه‌سازی دسترسی لازم نیست. اطلاعات اتصال قدیمی خوانده یا تغییر داده نمی‌شوند و migration تازه‌ای لازم نیست.
+
+دامنه اکالا، پیشنهادهای کمپین‌های عمومی است و شامل تمام کالاهای اکالا نیست. نبودن کالا در این فهرست به معنی ناموجود بودن آن در همه فروشگاه‌ها نیست. پاسخ زنده با شمار کل بیشتر از کالاهای برگشتی، فقط یک صفحه و نبود صفحه بعد را گزارش می‌کند. قرارداد صفحه‌بندی بیشتری تأیید نشده است؛ اگر پاسخ صفحه‌های بیشتری اعلام کند، اسکن با خطای دریافت ناقص متوقف می‌شود.
 
 ## استقرار
 

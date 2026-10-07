@@ -4,7 +4,7 @@ This backlog describes user-visible behavior. Priority is based on correctness a
 
 ## Delivery snapshot
 
-F-001 through F-006 have implementation slices in the workspace: Jet is hidden but historical data remains readable; token actions and scan context are synchronized; grouped products use a versioned read projection; Tehran validation is authoritative; and address search is proxied through an optional Worker geocoder. Location deletion now removes the location's dependent scans and deals in the same D1 batch. These changes are not deployed until the release gates in `README.md` and `PRODUCTION_READINESS.md` pass.
+F-001 through F-006 have implementation slices in the workspace: Jet is hidden but historical data remains readable; credential-free provider actions and scan context are synchronized; grouped products use a versioned read projection; Tehran validation is authoritative; and address search is proxied through an optional Worker geocoder. Location deletion now removes the location's dependent scans and deals in the same D1 batch. These changes are not deployed until the release gates in `README.md` and `PRODUCTION_READINESS.md` pass.
 
 ## F-001 — Provider availability and temporary Jet removal
 
@@ -34,23 +34,16 @@ Priority: P0. Phase: 1.
 
 SnappMarket uses automatic public-PWA guest access, with no customer phone, OTP, token, renewal action, or provider-settings prerequisite. A valid delivery location permits starting a scan; upstream connectivity is checked during collection. Failed guest acquisition or incomplete feed collection records a failed scan and preserves successful history.
 
-Credential states and customer renewal actions below apply to Okala. Create one derived state for each visible provider:
-
-- `loading`: status is unresolved; action is temporarily unavailable with an explanation.
-- `ready`: action starts a scan.
-- `missing`: action says “تنظیم اتصال” and opens that provider’s settings.
-- `expired`: action says “تمدید اتصال” and opens that provider’s settings.
-- `rejected`: an upstream authentication failure marks the connection unusable and offers renewal.
-- `scanning`: action shows progress and prevents duplicate submission.
-
-Desktop and mobile must consume the same state and action. A credential problem must never produce a permanently disabled orange button.
+Okala uses public nearby-store → HomePage campaigns → multi-store offers, with no customer or guest credentials or provider-settings prerequisite. Both providers allow a signed-in user with a valid location to start immediately; desktop/mobile share the same action.
 
 Acceptance criteria:
 
-- Missing, expired, and rejected states route to the correct provider settings.
-- A location problem is distinguished from a credential problem.
-- Empty states and scan-strip messaging use the active provider, not SnappMarket unconditionally.
-- Okala `AUTH_REJECTED` never receives transient retry treatment and produces a renewal CTA. Snapp uses `GUEST_AUTH_REJECTED` after one automatic 401 renewal, with no customer reconnect CTA.
+- Missing, expired, and corrupt legacy Okala credentials are ignored.
+- Both settings screens explain automatic/public access and have no customer credential fields.
+- Empty states and scan-strip messaging identify the active provider.
+- Okala 401/403 is UPSTREAM_FORBIDDEN, with normal failed-scan feedback and retry; Snapp preserves its bounded guest renewal.
+- Failed campaigns never commit partial results; last successful history remains.
+- Okala scans cover the public campaign feed, with no claim of exhaustive product coverage or universal stock absence.
 
 ## F-003 — Context-correct results
 
@@ -201,7 +194,7 @@ Behavior:
 - Track sanitized scan lifecycle events: queued, running, succeeded, failed, interrupted, provider rejected, and duration.
 - Never log token, OTP, address, exact coordinates, or raw upstream body.
 - Expose a minimal unauthenticated liveness endpoint; keep user/storage diagnostics authenticated.
-- Provide a retry/reconnect recovery action based on stable error codes.
+- Provide a retry recovery action based on stable error codes.
 
 Acceptance criteria:
 

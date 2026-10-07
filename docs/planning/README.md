@@ -9,7 +9,7 @@ Better Buy should remain a Persian RTL, manual grocery-deal scanner. The near-te
 The execution order is driven by correctness first:
 
 1. The displayed results must always match the selected location, provider, threshold, and scan time.
-2. SnappMarket scans use automatic guest access after location selection. Missing or expired Okala credentials must produce a useful connection action.
+2. SnappMarket scans use automatic guest access after location selection. Okala scans use public endpoints without credentials or settings setup.
 3. Repeated offers for the same product should become one readable product row without losing vendor-level history.
 4. Location creation must be understandable and enforce the Tehran-only rule at the API boundary.
 5. Tests, security, observability, migrations, and rollback must become release gates.
@@ -29,7 +29,7 @@ Goal: remove ambiguity before multiple agents change shared behavior.
 
 Owners:
 
-- Product/UX agent: confirm labels, provider visibility, product counts, and token-state behavior.
+- Product/UX agent: confirm labels, provider visibility, product counts, and public-access behavior.
 - Data agent: profile recent D1 scans for grouping collisions and existing out-of-Tehran locations.
 - Platform agent: decide the Tehran boundary format and shortlist tile/geocoder providers.
 - QA agent: establish test fixtures and the current behavior matrix.
@@ -54,14 +54,14 @@ Owners:
 
 - Frontend agent: scan-context synchronization, shared scan CTA state, Jet visibility boundary.
 - Worker/data agent: provider availability enforcement, Tehran validation, active-scan race protection, location-row cleanup.
-- QA agent: component and API regression tests for context switching, token states, provider visibility, and geofencing.
+- QA agent: component and API regression tests for context switching, provider access, provider visibility, and geofencing.
 - Integration agent: review API/UI contract and run the release gate.
 
 Required work:
 
 - Load the latest successful scan for the selected location and provider, or show a clear no-scan state.
-- Use one derived provider-access state for desktop, mobile, the scan strip, and empty states. SnappMarket has automatic access without customer credentials.
-- When Okala credentials are missing or expired, keep the primary action enabled and open its connection settings.
+- Use one derived provider-access state for desktop, mobile, the scan strip, and empty states. Both SnappMarket and Okala have automatic/public access without customer credentials.
+- Okala ignores legacy credentials; a valid location enables scanning and public upstream failures use normal retry feedback.
 - Hide Jet from provider selection, settings, new scans, and retry; preserve read-only historical display.
 - Enforce Tehran membership in shared validation and again authoritatively in create, update, and scan-start routes.
 - Fix the phantom default-location behavior and multi-tenant scan/location joins.
@@ -132,7 +132,7 @@ Goal: make deployment measurable, recoverable, and safe.
 Owners:
 
 - Worker agent: durable scan execution decision, structured errors/logs, D1 indexes/migrations, runtime integration tests.
-- Security agent: credential encryption/key rotation, OTP and scan abuse controls, privacy/retention, security headers.
+- Security agent: legacy credential encryption/key rotation, scan abuse controls, privacy/retention, security headers.
 - QA agent: CI matrix, migration rehearsal, Playwright desktop/mobile suite, failure injection.
 - Release agent: staging deploy, dashboards/alerts, backups, rollback, and runbooks.
 
@@ -147,7 +147,7 @@ Required work:
 Exit gate:
 
 - CI, staging smoke tests, migration checks, monitoring, backup, and rollback all pass from written runbooks.
-- A failed provider, expired token, interrupted scan, and bad deployment are each detectable and recoverable.
+- A failed provider, rejected public access, interrupted scan, and bad deployment are each detectable and recoverable.
 
 ## Implementation loop status
 
@@ -174,6 +174,6 @@ Still required before a production claim: migration rehearsal/backup, runtime-ba
 - `pnpm typecheck`: passes for shared, web, and Worker production/test configs.
 - `pnpm build`: passes for the shared package and Next web build.
 - Impeccable detector: no findings for the dashboard, map, and stylesheet targets.
-- The current dashboard specs now cover automatic Snapp access and Okala setup on desktop and mobile; see the validation note in the root README.
+- The current dashboard specs now cover automatic Snapp access and public Okala access without setup on desktop and mobile; see the validation note in the root README.
 - `/healthz` is now an unauthenticated liveness route; `/api/health` remains authenticated.
 - Cloudflare observability is enabled, but structured product events, alerts, backups, and staging smoke tests remain open.

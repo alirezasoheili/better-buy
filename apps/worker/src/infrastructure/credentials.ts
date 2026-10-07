@@ -1,4 +1,3 @@
-import type { ProviderSettingsStatus } from "@better-buy/shared";
 import { encrypt, decrypt, tokenExpiry } from "./credential-box";
 import { CredentialError } from "../domain/failures";
 type ProviderRow = {
@@ -22,16 +21,6 @@ export class Credentials {
       )
       .bind(this.userId, provider)
       .first<ProviderRow>();
-  }
-  async okalaStatus(): Promise<ProviderSettingsStatus> {
-    const r = await this.provider("okala");
-    const expired =
-      !!r?.token_expires_at && Date.parse(r.token_expires_at) <= Date.now();
-    return {
-      tokenConfigured: !!r?.encrypted_token,
-      tokenExpired: expired,
-      tokenExpiresAt: r?.token_expires_at ?? null,
-    };
   }
   async saveProvider(
     provider: string,

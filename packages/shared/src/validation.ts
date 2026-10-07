@@ -69,22 +69,3 @@ export const scanInputSchema = z.object({
     .default("snappmarket"),
   mode: z.enum(["partial", "full"]).default("partial"),
 });
-export const okalaSettingsInputSchema = z.object({
-  token: z.string().trim().min(20),
-});
-export const okalaOtpRequestSchema = z.object({
-  mobile: z
-    .string()
-    .trim()
-    .regex(/^09\d{9}$/),
-});
-export const okalaOtpVerifySchema = z.object({
-  mobile: z
-    .string()
-    .trim()
-    .regex(/^09\d{9}$/),
-  otp: z
-    .string()
-    .trim()
-    .regex(/^\d{4,8}$/),
-});
