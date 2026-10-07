@@ -4,8 +4,8 @@
 
 **Blocked by:** 01: Establish the Caffeine application shell; 03: Make scan progress and failures actionable.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Each `پیشنهاد` makes the discount, final price, `فروشگاه`, and availability understandable at a glance on desktop and mobile.
-- [ ] Search, sorting, and filters are readable, operable by keyboard, expose their selected state, and do not appear before results are available.
-- [ ] Active filters with no matching `پیشنهاد` items present a distinct recovery state that lets the user adjust or clear filters.
+- [x] Each `پیشنهاد` makes the discount, final price, `فروشگاه`, and availability understandable at a glance on desktop and mobile.
+- [x] Search, sorting, and filters are readable, operable by keyboard, expose their selected state, and do not appear before results are available.
+- [x] Active filters with no matching `پیشنهاد` items present a distinct recovery state that lets the user adjust or clear filters.

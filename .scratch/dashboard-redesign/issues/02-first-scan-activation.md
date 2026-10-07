@@ -4,8 +4,8 @@
 
 **Blocked by:** 01: Establish the Caffeine application shell.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] An unconfigured dashboard presents one clear, ordered activation path instead of inactive result controls and competing calls to action.
-- [ ] Users can understand which `فروشگاه` connections are needed and proceed to connect SnappMarket or Okala.
-- [ ] Jet is not offered as an active `فروشگاه`, while existing historical data remains unaffected.
+- [x] An unconfigured dashboard presents one clear, ordered activation path instead of inactive result controls and competing calls to action.
+- [x] Users can understand which `فروشگاه` connections are needed and proceed to connect SnappMarket or Okala.
+- [x] Jet is not offered as an active `فروشگاه`, while existing historical data remains unaffected.

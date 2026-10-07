@@ -101,7 +101,7 @@ export class Store {
   async locations(): Promise<LocationRecord[]> {
     const { results } = await this.db
       .prepare(
-        "SELECT * FROM locations WHERE user_id=? AND NOT (name='تهران — خانه' AND latitude=35.7285 AND longitude=51.309056) ORDER BY is_default DESC, created_at",
+        "SELECT * FROM locations WHERE user_id=? ORDER BY is_default DESC, created_at",
       )
       .bind(this.userId)
       .all<any>();
@@ -110,7 +110,7 @@ export class Store {
   async location(id: string) {
     const r = await this.db
       .prepare(
-        "SELECT * FROM locations WHERE user_id=? AND id=? AND NOT (name='تهران — خانه' AND latitude=35.7285 AND longitude=51.309056)",
+        "SELECT * FROM locations WHERE user_id=? AND id=?",
       )
       .bind(this.userId, id)
       .first<any>();
@@ -191,24 +191,42 @@ export class Store {
     return this.location(id);
   }
   async deleteLocation(id: string) {
+    const existing = await this.db
+      .prepare("SELECT id FROM locations WHERE user_id=? AND id=?")
+      .bind(this.userId, id)
+      .first<{ id: string }>();
+    if (!existing) return "missing";
+
     const count = await this.db
       .prepare("SELECT COUNT(*) AS c FROM locations WHERE user_id=?")
       .bind(this.userId)
       .first<any>();
     if (Number(count?.c) <= 1) return "last";
-    const used = await this.db
-      .prepare("SELECT 1 FROM scans WHERE user_id=? AND location_id=? LIMIT 1")
+    const active = await this.db
+      .prepare(
+        "SELECT 1 FROM scans WHERE user_id=? AND location_id=? AND status IN ('queued','running') LIMIT 1",
+      )
       .bind(this.userId, id)
       .first();
-    if (used) return "used";
-    return (
-      await this.db
+    if (active) return "active";
+
+    // A location owns its scan history. Delete dependent deals first, then
+    // scans, and finally the location in one D1 batch so no history is left
+    // behind when a location is removed.
+    const result = await this.db.batch([
+      this.db
+        .prepare(
+          "DELETE FROM deals WHERE scan_id IN (SELECT id FROM scans WHERE user_id=? AND location_id=?)",
+        )
+        .bind(this.userId, id),
+      this.db
+        .prepare("DELETE FROM scans WHERE user_id=? AND location_id=?")
+        .bind(this.userId, id),
+      this.db
         .prepare("DELETE FROM locations WHERE user_id=? AND id=?")
-        .bind(this.userId, id)
-        .run()
-    ).meta.changes
-      ? "deleted"
-      : "missing";
+        .bind(this.userId, id),
+    ]);
+    return result[2]?.meta.changes ? "deleted" : "missing";
   }
   async provider(provider: string): Promise<ProviderRow | null> {
     return this.db
@@ -357,7 +375,7 @@ export class Store {
   async scan(id: string) {
     const r = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id WHERE s.user_id=? AND s.id=?",
+        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? AND s.id=?",
       )
       .bind(this.userId, id)
       .first<any>();
@@ -385,7 +403,7 @@ export class Store {
   async scans() {
     const { results } = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 100",
+        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 100",
       )
       .bind(this.userId)
       .all<any>();

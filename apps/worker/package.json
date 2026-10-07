@@ -5,8 +5,9 @@
   "scripts": {
     "predev": "pnpm --filter @better-buy/shared build",
     "dev": "wrangler dev",
-    "build:web": "pnpm --filter @better-buy/web build:worker",
+    "build:web": "pnpm --filter @better-buy/shared build && pnpm --filter @better-buy/web build:worker",
     "deploy": "pnpm run build:web && wrangler deploy",
+    "pretest": "pnpm --filter @better-buy/shared build",
     "test": "vitest run",
     "typecheck": "wrangler types ./src/env.d.ts && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
   },

@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { createAuth, type AuthEnv } from "./auth";
 import {
-  digikalaSettingsInputSchema,
+  API_ERROR_CODES,
+  API_ERROR_MESSAGES,
+  groupDeals,
+  isWithinTehranBoundary,
+  type LocationSearchResult,
   locationInputSchema,
   locationPatchSchema,
   okalaOtpRequestSchema,
@@ -22,13 +26,15 @@ import { collectWithRetry } from "./retry";
 type Env = AuthEnv & {
   BOX_KEY: string;
   OKALA_CLIENT_SECRET: string;
+  GEOCODER_BASE_URL?: string;
   CORS_ORIGIN?: string;
   DEV_MODE?: string;
   ASSETS: Fetcher;
 };
 type Variables = { userId: string };
 
-const api = new Hono<{ Bindings: Env; Variables: Variables }>();
+export const api = new Hono<{ Bindings: Env; Variables: Variables }>();
+const isHiddenProvider = (source: string) => source === "digikalajet";
 
 async function refreshOkalaAccessToken(env: Env, refreshToken: string) {
   let clientSecret = env.OKALA_CLIENT_SECRET?.trim() ?? "";
@@ -91,6 +97,62 @@ const snappUrl = (
 ) =>
   `https://svc.snapp.market${path}?client=JEK_PWA&deviceType=JEK_PWA&appVersion=${encodeURIComponent(q.appVersion)}&UDID=${encodeURIComponent(q.udid)}&lat=${encodeURIComponent(q.latitude)}&long=${encodeURIComponent(q.longitude)}`;
 
+const GEOCODER_RESULT_LIMIT = 5;
+const GEOCODER_TIMEOUT_MS = 8_000;
+
+const sanitizeGeocoderText = (value: unknown, maxLength = 240) =>
+  typeof value === "string"
+    ? value
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, maxLength)
+    : "";
+
+function parseGeocoderResults(body: unknown): LocationSearchResult[] {
+  if (!Array.isArray(body)) return [];
+  const results: LocationSearchResult[] = [];
+  const seen = new Set<string>();
+  for (const item of body) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const latitude = Number(record.lat);
+    const longitude = Number(record.lon);
+    const displayName = sanitizeGeocoderText(record.display_name);
+    if (
+      !displayName ||
+      !isWithinTehranBoundary(latitude, longitude)
+    )
+      continue;
+    const key = `${latitude.toFixed(6)}:${longitude.toFixed(6)}:${displayName}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push({ latitude, longitude, displayName });
+    if (results.length >= GEOCODER_RESULT_LIMIT) break;
+  }
+  return results;
+}
+
+function geocoderUrl(baseUrl: string, query: string) {
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    url.searchParams.set("q", query);
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("limit", String(GEOCODER_RESULT_LIMIT));
+    url.searchParams.set("bounded", "1");
+    url.searchParams.set(
+      "viewbox",
+      "51.18,35.82,51.66,35.56",
+    );
+    url.searchParams.set("addressdetails", "0");
+    url.searchParams.set("accept-language", "fa");
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 api.post("/api/auth/test-login", async (c) => {
   if (c.env.DEV_MODE !== "true")
     return c.json({ error: "NOT_FOUND" }, 404);
@@ -102,6 +164,10 @@ api.post("/api/auth/test-login", async (c) => {
 api.on(["GET", "POST"], "/api/auth/*", (c) =>
   createAuth(c.env).handler(c.req.raw),
 );
+
+// Liveness must not depend on a user session or a D1 read. Keep diagnostics
+// under the authenticated /api/health route below.
+api.get("/healthz", (c) => c.json({ ok: true }));
 
 api.use("/api/*", async (c, next) => {
   const origin = c.req.header("Origin");
@@ -150,9 +216,79 @@ api.get("/api/locations", async (c) => {
   const s = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
   return c.json({ data: await s.locations() });
 });
+api.get("/api/locations/search", async (c) => {
+  const query = (c.req.query("q") ?? "").normalize("NFKC").trim();
+  if (query.length < 2 || query.length > 120)
+    return c.json(
+      {
+        error: API_ERROR_CODES.INVALID_SEARCH_QUERY,
+        message: API_ERROR_MESSAGES.INVALID_SEARCH_QUERY,
+      },
+      400,
+    );
+
+  const configuredBaseUrl = c.env.GEOCODER_BASE_URL?.trim();
+  if (!configuredBaseUrl)
+    return c.json(
+      {
+        error: API_ERROR_CODES.GEOCODER_UNAVAILABLE,
+        message: API_ERROR_MESSAGES.GEOCODER_UNAVAILABLE,
+      },
+      503,
+    );
+
+  const url = geocoderUrl(configuredBaseUrl, query);
+  if (!url)
+    return c.json(
+      {
+        error: API_ERROR_CODES.GEOCODER_UNAVAILABLE,
+        message: API_ERROR_MESSAGES.GEOCODER_UNAVAILABLE,
+      },
+      503,
+    );
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "better-buy-location-search/1.0",
+      },
+      signal: AbortSignal.timeout(GEOCODER_TIMEOUT_MS),
+    });
+  } catch {
+    return c.json(
+      {
+        error: API_ERROR_CODES.GEOCODER_ERROR,
+        message: API_ERROR_MESSAGES.GEOCODER_ERROR,
+      },
+      502,
+    );
+  }
+  if (!response.ok)
+    return c.json(
+      {
+        error: API_ERROR_CODES.GEOCODER_ERROR,
+        message: API_ERROR_MESSAGES.GEOCODER_ERROR,
+      },
+      502,
+    );
+
+  const body = await response.json().catch(() => null);
+  return c.json({ data: parseGeocoderResults(body) });
+});
+
 api.post("/api/locations", async (c) => {
   const p = locationInputSchema.safeParse(await c.req.json().catch(() => null));
   if (!p.success) return c.json({ error: "INVALID_INPUT" }, 400);
+  if (!isWithinTehranBoundary(p.data.latitude, p.data.longitude))
+    return c.json(
+      {
+        error: API_ERROR_CODES.OUTSIDE_TEHRAN,
+        message: API_ERROR_MESSAGES.OUTSIDE_TEHRAN,
+      },
+      422,
+    );
   const v = await new Store(
     c.env.DB,
     c.get("userId"),
@@ -160,14 +296,27 @@ api.post("/api/locations", async (c) => {
   ).createLocation(p.data);
   return c.json({ data: v }, 201);
 });
+
 api.patch("/api/locations/:id", async (c) => {
   const p = locationPatchSchema.safeParse(await c.req.json().catch(() => null));
   if (!p.success) return c.json({ error: "INVALID_INPUT" }, 400);
-  const v = await new Store(
+  const store = new Store(
     c.env.DB,
     c.get("userId"),
     c.env.BOX_KEY,
-  ).updateLocation(c.req.param("id"), p.data);
+  );
+  const current = await store.location(c.req.param("id"));
+  if (!current) return c.json({ error: "NOT_FOUND" }, 404);
+  const merged = { ...current, ...p.data };
+  if (!isWithinTehranBoundary(Number(merged.latitude), Number(merged.longitude)))
+    return c.json(
+      {
+        error: API_ERROR_CODES.OUTSIDE_TEHRAN,
+        message: API_ERROR_MESSAGES.OUTSIDE_TEHRAN,
+      },
+      422,
+    );
+  const v = await store.updateLocation(c.req.param("id"), p.data);
   return v ? c.json({ data: v }) : c.json({ error: "NOT_FOUND" }, 404);
 });
 api.delete("/api/locations/:id", async (c) => {
@@ -183,9 +332,9 @@ api.delete("/api/locations/:id", async (c) => {
           error:
             r === "missing"
               ? "NOT_FOUND"
-              : r === "last"
-                ? "LAST_LOCATION"
-                : "LOCATION_HAS_HISTORY",
+              : r === "active"
+                ? API_ERROR_CODES.SCAN_IN_PROGRESS
+                : "LAST_LOCATION",
         },
         r === "missing" ? 404 : 409,
       );
@@ -309,24 +458,24 @@ api.post("/api/settings/snappmarket/login", async (c) => {
   });
   return c.json({ data: await s.snappStatus() });
 });
-api.get("/api/settings/digikalajet", async (c) =>
-  c.json({
-    data: await new Store(
-      c.env.DB,
-      c.get("userId"),
-      c.env.BOX_KEY,
-    ).digikalaStatus(),
-  }),
+api.get("/api/settings/digikalajet", (c) =>
+  c.json(
+    {
+      error: API_ERROR_CODES.PROVIDER_UNAVAILABLE,
+      message: API_ERROR_MESSAGES.PROVIDER_UNAVAILABLE,
+    },
+    409,
+  ),
 );
-api.put("/api/settings/digikalajet", async (c) => {
-  const p = digikalaSettingsInputSchema.safeParse(
-    await c.req.json().catch(() => null),
-  );
-  if (!p.success) return c.json({ error: "INVALID_INPUT" }, 400);
-  const s = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
-  await s.saveProvider("digikalajet", p.data.token, { appId: p.data.appId });
-  return c.json({ data: await s.digikalaStatus() });
-});
+api.put("/api/settings/digikalajet", (c) =>
+  c.json(
+    {
+      error: API_ERROR_CODES.PROVIDER_UNAVAILABLE,
+      message: API_ERROR_MESSAGES.PROVIDER_UNAVAILABLE,
+    },
+    409,
+  ),
+);
 api.get("/api/settings/okala", async (c) =>
   c.json({
     data: await new Store(
@@ -472,6 +621,21 @@ api.get("/api/scans/:id/deals", async (c) =>
     ),
   }),
 );
+api.get("/api/scans/:id/deal-groups", async (c) => {
+  const store = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
+  const scan = await store.scan(c.req.param("id"));
+  if (!scan) return c.json({ error: "NOT_FOUND" }, 404);
+  const deals = await store.deals(scan.id);
+  const groups = groupDeals(scan.source, deals);
+  return c.json({
+    data: groups,
+    meta: {
+      groupKeyVersion: 1,
+      groupedProductCount: groups.length,
+      offerCount: deals.length,
+    },
+  });
+});
 api.post("/api/scans", async (c) => {
   const parsed = scanInputSchema.safeParse(
     await c.req.json().catch(() => null),
@@ -479,13 +643,37 @@ api.post("/api/scans", async (c) => {
   if (!parsed.success) return c.json({ error: "INVALID_INPUT" }, 400);
   const locationId = parsed.data.locationId;
   const threshold = parsed.data.threshold;
-  const source = parsed.data.source;
+  // Keep the runtime provider string wide so the collector dispatch remains
+  // type-safe if a temporarily hidden provider is restored later.
+  const source: string = parsed.data.source;
   const mode = parsed.data.mode;
+  if (isHiddenProvider(source))
+    return c.json(
+      {
+        error: API_ERROR_CODES.PROVIDER_UNAVAILABLE,
+        message: API_ERROR_MESSAGES.PROVIDER_UNAVAILABLE,
+      },
+      409,
+    );
   const store = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
   const location = await store.location(locationId);
   if (!location) return c.json({ error: "LOCATION_NOT_FOUND" }, 404);
+  if (!isWithinTehranBoundary(location.latitude, location.longitude))
+    return c.json(
+      {
+        error: API_ERROR_CODES.OUTSIDE_TEHRAN,
+        message: API_ERROR_MESSAGES.OUTSIDE_TEHRAN,
+      },
+      422,
+    );
   if (await store.activeScan())
-    return c.json({ error: "SCAN_IN_PROGRESS" }, 409);
+    return c.json(
+      {
+        error: API_ERROR_CODES.SCAN_IN_PROGRESS,
+        message: API_ERROR_MESSAGES.SCAN_IN_PROGRESS,
+      },
+      409,
+    );
   let credentials = await store.credentials(source);
   if (!credentials) return c.json({ error: "TOKEN_REQUIRED" }, 409);
   if (
@@ -521,14 +709,28 @@ api.post("/api/scans", async (c) => {
       },
       409,
     );
-  const id = await store.createScan(
-    locationId,
-    source === "digikalajet" || source === "okala"
-      ? Math.max(30, threshold)
-      : threshold,
-    source,
-    mode,
-  );
+  let id: string;
+  try {
+    id = await store.createScan(
+      locationId,
+      source === "digikalajet" || source === "okala"
+        ? Math.max(30, threshold)
+        : threshold,
+      source,
+      mode,
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (!/scans_one_active_per_user|UNIQUE constraint failed: scans\.user_id/i.test(detail))
+      throw error;
+    return c.json(
+      {
+        error: API_ERROR_CODES.SCAN_IN_PROGRESS,
+        message: API_ERROR_MESSAGES.SCAN_IN_PROGRESS,
+      },
+      409,
+    );
+  }
   c.executionCtx.waitUntil(
     (async () => {
       await store.markRunning(id);

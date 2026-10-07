@@ -9,7 +9,7 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @better-buy/web test:e2e",
     "cf:dev": "pnpm --filter @better-buy/worker dev",
-    "cf:deploy": "pnpm --filter @better-buy/worker deploy"
+    "cf:deploy": "pnpm --filter @better-buy/worker run deploy"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
