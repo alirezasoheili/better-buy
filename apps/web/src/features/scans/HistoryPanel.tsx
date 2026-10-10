@@ -37,9 +37,11 @@ export function HistoryPanel({
                     ? `${faNumber.format(s.dealCount)} پیشنهاد`
                     : s.status === "failed"
                       ? "اسکن ناموفق"
-                      : s.status === "queued"
-                        ? "در انتظار بررسی"
-                        : "در حال بررسی"}
+                      : s.status === "cancelled"
+                        ? "اسکن لغو شده"
+                        : s.status === "queued"
+                          ? "در انتظار بررسی"
+                          : "در حال بررسی"}
                 </strong>
                 {s.errorMessage && (
                   <p className="form-error">{s.errorMessage}</p>
@@ -71,7 +73,8 @@ export function HistoryPanel({
                 <button className="run-row" onClick={() => onOpen(s)}>
                   نمایش نتیجه
                 </button>
-              ) : s.status === "failed" && s.source !== "digikalajet" ? (
+              ) : (s.status === "failed" || s.status === "cancelled") &&
+                s.source !== "digikalajet" ? (
                 <button disabled={blocked} onClick={() => onRetry(s)}>
                   اسکن تازه با این گزینه‌ها
                 </button>
