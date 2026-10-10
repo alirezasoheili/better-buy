@@ -5,6 +5,7 @@ import { readDurableComparison } from "./comparison";
 import { Store } from "../store";
 import { DurableRepository } from "./repository";
 import type { Page, Unit } from "./types";
+import { providerReader } from "./provider";
 import { runDurableScan } from "./runner";
 import {
   beginLegacyScan,
@@ -184,6 +185,62 @@ describe("durable scan persistence", () => {
     expect(await readDurableComparison(db, "tenant", scan.id)).toMatchObject({
       complete: false,
     });
+  });
+
+  it("one 401 guest refresh is persisted across an ephemeral session resume", async () => {
+    const { db } = database(),
+      store = new Store(db, "tenant", "key"),
+      repo = new DurableRepository(db, "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const scan = await repo.reserve(
+      "tenant",
+      {
+        locationId: location!.id,
+        source: "snappmarket",
+        threshold: 40,
+        mode: "partial",
+      },
+      crypto.randomUUID(),
+      false
+    );
+    let access = 0,
+      gets = 0;
+    const fetcher: typeof fetch = async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.includes("oauth2")) {
+        access++;
+        return Response.json({
+          status: true,
+          data: { access_token: "fixture", expires_in: 1000 },
+        });
+      }
+      gets++;
+      return gets === 2
+        ? Response.json({ fixture: true })
+        : Response.json({ error: "expired" }, { status: 401 });
+    };
+    const steps = {
+      do: async <T extends Rpc.Serializable<T>>(
+        _n: string,
+        a: () => Promise<T>
+      ) => a(),
+      sleep: async () => {},
+    };
+    const url = new URL("https://svc.snapp.market/fixture");
+    expect(
+      await providerReader(repo, scan.id, steps, fetcher)(url, "first-page")
+    ).toEqual({ fixture: true });
+    expect(access).toBe(2);
+    await expect(
+      providerReader(repo, scan.id, steps, fetcher)(url, "second-page")
+    ).rejects.toMatchObject({ code: "GUEST_AUTH_REJECTED" });
+    expect(access).toBe(3);
+    expect(gets).toBe(3);
+    expect((await repo.load(scan.id))!.runtime.attempt_count).toBe(6);
   });
   it("reuses a tenant start intent and rejects changed input without another reservation", async () => {
     const { db } = database(),

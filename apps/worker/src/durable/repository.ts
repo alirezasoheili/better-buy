@@ -274,6 +274,16 @@ export class DurableRepository {
       attempt: ordinal,
     });
   }
+  async claimGuestRefresh(id: string) {
+    const job = await this.check(id);
+    const result = await this.db
+      .prepare(
+        `UPDATE scan_execution SET guest_401_refreshed=1 WHERE scan_id=? AND guest_401_refreshed=0 AND ${active}`
+      )
+      .bind(id, id, job.runtime.user_id)
+      .run();
+    return result.meta.changes === 1;
+  }
   async discovery(id: string, key: string) {
     const row = await this.db
       .prepare(

@@ -7,6 +7,7 @@ CREATE TABLE scan_execution (
  phase TEXT NOT NULL DEFAULT 'queued', device_id TEXT NOT NULL,
  enrichment_enabled INTEGER NOT NULL DEFAULT 0, manifest_frozen INTEGER NOT NULL DEFAULT 0,
  cancel_requested INTEGER NOT NULL DEFAULT 0, attempt_count INTEGER NOT NULL DEFAULT 0,
+ guest_401_refreshed INTEGER NOT NULL DEFAULT 0,
  attempt_limit INTEGER NOT NULL DEFAULT 250, page_limit INTEGER NOT NULL DEFAULT 100,
  offer_limit INTEGER NOT NULL DEFAULT 10000, heartbeat_at TEXT,
  deadline_at TEXT NOT NULL, queued_until TEXT NOT NULL, created_at TEXT NOT NULL

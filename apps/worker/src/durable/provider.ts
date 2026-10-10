@@ -38,7 +38,6 @@ export function providerReader(
   fetcher: typeof fetch = fetch
 ) {
   let guest: { token: string; expiresAt: number } | undefined;
-  let refreshed = false;
   let reservationFailure: unknown;
   const physical = async (
     url: string | URL,
@@ -141,8 +140,7 @@ export function providerReader(
     let result = await single(url, {
       headers: { ...headers, authorization: `Bearer ${guest!.token}` },
     });
-    if (result.status === 401 && !refreshed) {
-      refreshed = true;
+    if (result.status === 401 && (await repo.claimGuestRefresh(id))) {
       await acquire();
       result = await single(url, {
         headers: { ...headers, authorization: `Bearer ${guest!.token}` },
