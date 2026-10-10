@@ -78,7 +78,7 @@ export function requestJson(
               new CollectorError(
                 "UPSTREAM_ERROR",
                 "پاسخ ناموفق " + policy.provider + " (" + response.status + ")",
-                response.status >= 500
+                response.status === 408 || response.status >= 500
               )
             );
           if (policy.discardBody)

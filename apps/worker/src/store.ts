@@ -26,6 +26,7 @@ type LocationRow = {
   updated_at: string;
 };
 type ScanRow = {
+  execution_json?: string | null;
   context_json: string | null;
   id: string;
   location_id: string;
@@ -223,12 +224,12 @@ export class Store {
     await this.db.batch([
       this.db
         .prepare(
-          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='queued' AND created_at < ?"
+          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='queued' AND created_at < ? AND NOT EXISTS(SELECT 1 FROM scan_execution e WHERE e.scan_id=scans.id AND e.execution_kind='workflow')"
         )
         .bind(now(), this.userId, queuedCutoff),
       this.db
         .prepare(
-          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='running' AND created_at < ?"
+          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='running' AND created_at < ? AND NOT EXISTS(SELECT 1 FROM scan_execution e WHERE e.scan_id=scans.id AND e.execution_kind='workflow')"
         )
         .bind(now(), this.userId, runningCutoff),
     ]);
@@ -288,7 +289,7 @@ export class Store {
   async scan(id: string) {
     const r = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? AND s.id=?"
+        "SELECT s.*,l.name location_name,(SELECT json_object('kind','workflow','phase',e.phase,'completedUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id AND u.terminal=1),'totalUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id),'completedPages',(SELECT COUNT(*) FROM scan_pages p WHERE p.scan_id=s.id AND p.complete=1),'observedRows',s.product_count,'eligibleOffers',s.deal_count,'attemptCount',e.attempt_count,'heartbeatAt',e.heartbeat_at,'deadlineAt',e.deadline_at,'dispatchState',e.dispatch_state,'cancelRequested',json(CASE WHEN e.cancel_requested=1 THEN 'true' ELSE 'false' END)) FROM scan_execution e WHERE e.scan_id=s.id AND e.execution_kind='workflow') execution_json FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? AND s.id=?"
       )
       .bind(this.userId, id)
       .first<ScanRow>();
@@ -299,6 +300,7 @@ export class Store {
       ? scanContextSchema.parse(JSON.parse(r.context_json))
       : null;
     return {
+      ...(r.execution_json ? { execution: JSON.parse(r.execution_json) } : {}),
       context,
       id: r.id,
       locationId: r.location_id,
@@ -320,7 +322,7 @@ export class Store {
   async scans() {
     const { results } = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 100"
+        "SELECT s.*,l.name location_name,(SELECT json_object('kind','workflow','phase',e.phase,'completedUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id AND u.terminal=1),'totalUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id),'completedPages',(SELECT COUNT(*) FROM scan_pages p WHERE p.scan_id=s.id AND p.complete=1),'observedRows',s.product_count,'eligibleOffers',s.deal_count,'attemptCount',e.attempt_count,'heartbeatAt',e.heartbeat_at,'deadlineAt',e.deadline_at,'dispatchState',e.dispatch_state,'cancelRequested',json(CASE WHEN e.cancel_requested=1 THEN 'true' ELSE 'false' END)) FROM scan_execution e WHERE e.scan_id=s.id AND e.execution_kind='workflow') execution_json FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 100"
       )
       .bind(this.userId)
       .all<ScanRow>();
@@ -489,7 +491,7 @@ export class Store {
   }
   async deals(id: string): Promise<DealRecord[]> {
     const scan = await this.scan(id);
-    if (!scan) return [];
+    if (!scan || scan.status !== "succeeded") return [];
     const { results } = await this.db
       .prepare(
         "SELECT * FROM deals WHERE scan_id=? ORDER BY discount_ratio DESC, final_price_rials"
