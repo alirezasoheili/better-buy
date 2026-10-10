@@ -1,10 +1,22 @@
 import { Cause, Effect, Exit, Option } from "effect";
-import { groupDeals, scanInputSchema } from "@better-buy/shared";
+import {
+  groupDeals,
+  groupDealsV2,
+  scanInputSchema,
+  type DealRecord,
+} from "@better-buy/shared";
 import { executeScan, prepareScan } from "../application/scans";
 import { scanServices } from "../composition";
 import { ScanValidationError } from "../domain/failures";
 import { Store } from "../store";
 import type { Api } from "./types";
+// V1 clients retain their original three-state vocabulary.
+const legacyDeals = (deals: DealRecord[]) =>
+  deals.map((deal) =>
+    deal.state === "current"
+      ? { ...deal, state: "still_available" as const }
+      : deal
+  );
 export function registerScans(api: Api) {
   api.get("/api/scans", async (c) =>
     c.json({
@@ -17,18 +29,17 @@ export function registerScans(api: Api) {
     );
     return v ? c.json({ data: v }) : c.json({ error: "NOT_FOUND" }, 404);
   });
-  api.get("/api/scans/:id/deals", async (c) =>
-    c.json({
-      data: await new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY).deals(
-        c.req.param("id")
-      ),
-    })
-  );
+  api.get("/api/scans/:id/deals", async (c) => {
+    const store = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
+    const scan = await store.scan(c.req.param("id"));
+    if (!scan) return c.json({ error: "NOT_FOUND" }, 404);
+    return c.json({ data: legacyDeals(await store.deals(scan.id)) });
+  });
   api.get("/api/scans/:id/deal-groups", async (c) => {
     const store = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
     const scan = await store.scan(c.req.param("id"));
     if (!scan) return c.json({ error: "NOT_FOUND" }, 404);
-    const deals = await store.deals(scan.id);
+    const deals = legacyDeals(await store.deals(scan.id));
     const groups = groupDeals(scan.source, deals);
     return c.json({
       data: groups,
@@ -39,13 +50,38 @@ export function registerScans(api: Api) {
       },
     });
   });
+  // S03 projection only. Server pagination/materialization belongs to S08.
+  api.get("/api/scans/:id/products", async (c) => {
+    const store = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
+    const scan = await store.scan(c.req.param("id"));
+    if (!scan) return c.json({ error: "NOT_FOUND" }, 404);
+    if (scan.status !== "succeeded")
+      return c.json({ error: "SCAN_NOT_PUBLISHED" }, 409);
+    const products = await groupDealsV2(
+      scan.source,
+      await store.deals(scan.id)
+    );
+    return c.json({
+      data: products,
+      meta: {
+        groupKeyVersion: 2,
+        historyContext: scan.context ? "verified" : "legacy_unverified",
+        coverageSummary: "supported_discount_feeds",
+      },
+    });
+  });
 
   api.post("/api/scans", async (c) => {
     const parsed = scanInputSchema.safeParse(
       await c.req.json().catch(() => null)
     );
     if (!parsed.success) return c.json({ error: "INVALID_INPUT" }, 400);
-    const services = scanServices(c.env.DB, c.get("userId"), c.env.BOX_KEY);
+    const services = scanServices(
+      c.env.DB,
+      c.get("userId"),
+      c.env.BOX_KEY,
+      c.env.SNAPP_STORE_CAMPAIGNS_ENABLED === "true"
+    );
     const prepared = await Effect.runPromiseExit(
       prepareScan(parsed.data).pipe(Effect.provide(services))
     );
@@ -68,6 +104,12 @@ export function registerScans(api: Api) {
       );
     }
     const job = prepared.value;
+    const record = await new Store(
+      c.env.DB,
+      c.get("userId"),
+      c.env.BOX_KEY
+    ).scan(job.id);
+    if (!record) return c.json({ error: "NOT_FOUND" }, 404);
     // waitUntil owns this one Promise. A fiber does not extend the Worker's lifetime.
     const running = Effect.runPromiseExit(
       executeScan(job).pipe(Effect.provide(services))
@@ -76,6 +118,6 @@ export function registerScans(api: Api) {
         console.error("Scan finalization failed", { scanId: job.id });
     });
     c.executionCtx.waitUntil(running);
-    return c.json({ data: { id: job.id, status: "queued" } }, 202);
+    return c.json({ data: record }, 202);
   });
 }

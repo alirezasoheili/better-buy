@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "pnpm --filter @better-buy/shared build",
+    "predev": "pnpm --filter @better-buy/shared build && pnpm run db:migrate:local",
+    "db:migrate:local": "wrangler d1 migrations apply better-buy --local",
     "dev": "wrangler dev --compatibility-date 2026-08-08",
     "build:web": "pnpm --filter @better-buy/shared build && pnpm --filter @better-buy/web build:worker",
     "deploy": "pnpm run build:web && wrangler deploy",

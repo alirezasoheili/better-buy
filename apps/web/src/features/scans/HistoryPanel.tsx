@@ -46,6 +46,20 @@ export function HistoryPanel({
                 )}
                 <details>
                   <summary>جزئیات اسکن</summary>
+                  {s.context ? (
+                    <p>
+                      موقعیت ثبت‌شده:{" "}
+                      <bdi dir="ltr">
+                        {s.context.location.latitude},{" "}
+                        {s.context.location.longitude}
+                      </bdi>
+                    </p>
+                  ) : (
+                    <p>
+                      موقعیت و پوشش تاریخی تأیید نشده؛ مقایسه زمانی انجام
+                      نمی‌شود.
+                    </p>
+                  )}
                   <p>
                     {faNumber.format(s.vendorCount)} فروشگاه بررسی‌شده ·{" "}
                     {faNumber.format(s.productCount)} رکورد کالا

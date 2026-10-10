@@ -12,7 +12,12 @@ import { collectOkala } from "./providers/okala/collector";
 import { Store } from "./store";
 
 // One call per authenticated request. Nothing tenant-bound lives in a shared layer.
-export function scanServices(db: D1Database, userId: string, boxKey: string) {
+export function scanServices(
+  db: D1Database,
+  userId: string,
+  boxKey: string,
+  storeCampaignsEnabled = false
+) {
   const store = new Store(db, userId, boxKey);
   const persisted = <A>(operation: string, run: () => Promise<A>) =>
     Effect.tryPromise({
@@ -22,14 +27,16 @@ export function scanServices(db: D1Database, userId: string, boxKey: string) {
   const persistence = ScanPersistence.of({
     location: (id) => persisted("location", () => store.location(id)),
     active: () => persisted("active", () => store.activeScan()),
-    reserve: (input: ScanInput) =>
+    reserve: (input: ScanInput, location) =>
       Effect.tryPromise({
         try: () =>
           store.createScan(
             input.locationId,
             input.threshold,
             input.source,
-            input.mode
+            input.mode,
+            location,
+            input.requestedThreshold
           ),
         catch: (error) =>
           error instanceof ScanValidationError
@@ -70,8 +77,33 @@ export function scanServices(db: D1Database, userId: string, boxKey: string) {
         threshold: job.threshold,
         onProgress,
       };
-      if (job.source === "snappmarket") return collectDeals(input);
-      if (job.source === "okala") return collectOkala(input);
+      if (job.source === "snappmarket")
+        return collectDeals({
+          ...input,
+          storeCampaigns: storeCampaignsEnabled,
+          onManifest: (scopes) =>
+            persisted("manifest", () =>
+              store.freezeSnappManifest(job.id, scopes)
+            ).pipe(Effect.uninterruptible),
+        }).pipe(
+          Effect.tap((result) =>
+            Effect.sync(() => {
+              if ("campaignResearch" in result)
+                console.info("Snapp store campaign comparison", {
+                  scanId: job.id,
+                  diagnostics: result.campaignResearch,
+                });
+            })
+          )
+        );
+      if (job.source === "okala")
+        return collectOkala({
+          ...input,
+          onManifest: (collectionIds, storeIds) =>
+            persisted("manifest", () =>
+              store.freezeOkalaManifest(job.id, collectionIds, storeIds)
+            ).pipe(Effect.uninterruptible),
+        });
       return Effect.fail(
         new ScanValidationError(
           "PROVIDER_UNAVAILABLE",

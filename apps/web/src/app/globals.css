@@ -34,22 +34,22 @@
 
 :root {
   color-scheme: light;
-  --background: #f7f8fa;
-  --foreground: #20242b;
+  --background: #f8fafc;
+  --foreground: #17202a;
   --card: #fff;
   --muted: #eef0f3;
-  --muted-foreground: #59616e;
-  --border: #d7dce3;
-  --primary: #b84313;
+  --muted-foreground: #475569;
+  --border: #dce2e8;
+  --primary: #9a3412;
   --primary-foreground: #fff;
   --accent: #fff0e8;
-  --ring: #b84313;
+  --ring: #9a3412;
   --destructive: #b42332;
   --error-surface: #fff4f3;
   --status-surface: #edf5f1;
   --status-ink: #266047;
-  --radius-control: 8px;
-  --radius-surface: 12px;
+  --radius-control: 6px;
+  --radius-surface: 10px;
   --layer-overlay: 40;
   --layer-panel: 41;
   --layer-menu: 50;
@@ -296,6 +296,20 @@ details > p {
 }
 .scan-button {
   inline-size: 100%;
+}
+.feed-location {
+  flex: 1;
+  max-inline-size: 360px;
+  min-inline-size: 0;
+}
+.feed-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-end;
+}
+.feed-actions .scan-button {
+  inline-size: auto;
 }
 .scan-options summary {
   font-size: 12px;
@@ -892,6 +906,16 @@ details > p {
   }
 }
 @media (max-width: 520px) {
+  .feed-location {
+    inline-size: 100%;
+    max-inline-size: none;
+  }
+  .feed-actions {
+    inline-size: 100%;
+  }
+  .feed-actions .scan-button {
+    flex: 1;
+  }
   .app-header {
     flex-wrap: wrap;
     gap: 8px;

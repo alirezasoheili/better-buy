@@ -1,4 +1,10 @@
-import { compareDeals } from "@better-buy/shared";
+import {
+  compareDeals,
+  defaultScanContext,
+  identityDigest,
+  scanContextSchema,
+  offerFactsSchema,
+} from "@better-buy/shared";
 import type {
   DealRecord,
   LocationRecord,
@@ -10,6 +16,7 @@ import { ScanValidationError } from "./domain/failures";
 const now = () => new Date().toISOString();
 
 type LocationRow = {
+  coordinate_revision: number;
   id: string;
   name: string;
   latitude: number;
@@ -19,6 +26,7 @@ type LocationRow = {
   updated_at: string;
 };
 type ScanRow = {
+  context_json: string | null;
   id: string;
   location_id: string;
   location_name: string;
@@ -36,6 +44,7 @@ type ScanRow = {
   error_message: string | null;
 };
 type DealRow = {
+  facts_json: string | null;
   deal_key: string;
   product_variation_id: string;
   vendor_id: string;
@@ -85,6 +94,7 @@ export class Store {
       isDefault: !!r.is_default,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      coordinateRevision: r.coordinate_revision ?? 1,
     };
   }
   async createLocation(v: {
@@ -135,9 +145,11 @@ export class Store {
     stmts.push(
       this.db
         .prepare(
-          "UPDATE locations SET name=?,latitude=?,longitude=?,is_default=?,updated_at=? WHERE user_id=? AND id=?"
+          "UPDATE locations SET coordinate_revision=coordinate_revision + CASE WHEN latitude != ? OR longitude != ? THEN 1 ELSE 0 END,name=?,latitude=?,longitude=?,is_default=?,updated_at=? WHERE user_id=? AND id=?"
         )
         .bind(
+          Number(merged.latitude),
+          Number(merged.longitude),
           String(merged.name),
           Number(merged.latitude),
           Number(merged.longitude),
@@ -225,12 +237,27 @@ export class Store {
     locationId: string,
     threshold: number,
     source: ScanRecord["source"],
-    mode: ScanRecord["mode"]
+    mode: ScanRecord["mode"],
+    snapshot?: LocationRecord,
+    requestedThreshold = threshold
   ) {
     const id = crypto.randomUUID();
+    const location = snapshot ?? (await this.location(locationId));
+    if (!location)
+      throw new ScanValidationError(
+        "LOCATION_NOT_FOUND",
+        "موقعیت تحویل پیدا نشد.",
+        404
+      );
+    const context = await defaultScanContext(
+      location,
+      source,
+      threshold,
+      requestedThreshold
+    );
     const result = await this.db
       .prepare(
-        "INSERT INTO scans(id,user_id,location_id,threshold,source,mode,status,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM locations WHERE id=? AND user_id=?)"
+        "INSERT INTO scans(id,user_id,location_id,threshold,source,mode,status,created_at,context_json) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM locations WHERE id=? AND user_id=? AND latitude=? AND longitude=? AND coordinate_revision=? AND name=?)"
       )
       .bind(
         id,
@@ -241,8 +268,13 @@ export class Store {
         mode,
         "queued",
         now(),
+        JSON.stringify(context),
         locationId,
-        this.userId
+        this.userId,
+        location.latitude,
+        location.longitude,
+        location.coordinateRevision ?? 1,
+        location.name
       )
       .run();
     if (!result.meta.changes)
@@ -263,10 +295,14 @@ export class Store {
     return r ? this.mapScan(r) : null;
   }
   private mapScan(r: ScanRow): ScanRecord {
+    const context = r.context_json
+      ? scanContextSchema.parse(JSON.parse(r.context_json))
+      : null;
     return {
+      context,
       id: r.id,
       locationId: r.location_id,
-      locationName: r.location_name,
+      locationName: context?.location.name ?? r.location_name,
       threshold: r.threshold,
       source: r.source,
       mode: r.mode,
@@ -298,6 +334,91 @@ export class Store {
       .bind(now(), this.userId, id)
       .run();
   }
+  async freezeOkalaManifest(
+    id: string,
+    collectionIds: number[],
+    storeIds: number[]
+  ) {
+    const scan = await this.scan(id);
+    if (!scan?.context || scan.status !== "running")
+      throw new Error("Scan is not active");
+    const manifest = {
+      ...scan.context.manifest,
+      collectionIds: [...new Set(collectionIds)].sort((a, b) => a - b),
+      storeIds: [...new Set(storeIds)].sort((a, b) => a - b),
+    };
+    const context = {
+      ...scan.context,
+      manifest,
+      scopeHash: await identityDigest([
+        scan.source,
+        manifest,
+        scan.threshold,
+        scan.context.eligibilityVersion,
+        scan.context.offerKeyVersion,
+      ]),
+    };
+    const result = await this.db
+      .prepare(
+        "UPDATE scans SET context_json=? WHERE user_id=? AND id=? AND status='running' AND json_extract(context_json,'$.manifest.collectionIds') IS NULL"
+      )
+      .bind(JSON.stringify(context), this.userId, id)
+      .run();
+    if (!result.meta.changes) throw new Error("Manifest was already frozen");
+  }
+  async freezeSnappManifest(
+    id: string,
+    scopes: { vendorId: number; vendorCode: string; collectionId: number }[]
+  ) {
+    if (!scopes.length) return;
+    const scan = await this.scan(id);
+    if (
+      !scan?.context ||
+      scan.status !== "running" ||
+      scan.source !== "snappmarket"
+    )
+      throw new Error("Snapp scan is not active");
+    const storeCampaigns = [
+      ...new Map(
+        scopes.map((scope) => [
+          `${scope.vendorId}:${scope.collectionId}`,
+          scope,
+        ])
+      ).values(),
+    ].sort(
+      (a, b) => a.vendorId - b.vendorId || a.collectionId - b.collectionId
+    );
+    const manifest = {
+      adapter: "snapp-market-party-with-store-campaigns",
+      contractVersion: 1,
+      feedKinds: ["market_party", "store_campaign"],
+      collectionIds: [
+        ...new Set(storeCampaigns.map((scope) => scope.collectionId)),
+      ].sort((a, b) => a - b),
+      storeIds: [
+        ...new Set(storeCampaigns.map((scope) => scope.vendorId)),
+      ].sort((a, b) => a - b),
+      storeCampaigns,
+    };
+    const context = scanContextSchema.parse({
+      ...scan.context,
+      manifest,
+      scopeHash: await identityDigest([
+        scan.source,
+        manifest,
+        scan.threshold,
+        scan.context.eligibilityVersion,
+        scan.context.offerKeyVersion,
+      ]),
+    });
+    const result = await this.db
+      .prepare(
+        "UPDATE scans SET context_json=? WHERE user_id=? AND id=? AND status='running' AND json_extract(context_json,'$.manifest.storeCampaigns') IS NULL"
+      )
+      .bind(JSON.stringify(context), this.userId, id)
+      .run();
+    if (!result.meta.changes) throw new Error("Manifest was already frozen");
+  }
   async progress(id: string, c: { vendorCount: number; productCount: number }) {
     await this.db
       .prepare(
@@ -309,7 +430,7 @@ export class Store {
   async fail(id: string, code: string, message: string) {
     await this.db
       .prepare(
-        "UPDATE scans SET status='failed',finished_at=?,error_code=?,error_message=? WHERE user_id=? AND id=? AND status IN ('queued','running')"
+        "UPDATE scans SET status='failed',finished_at=?,error_code=?,error_message=?,context_json=CASE WHEN context_json IS NULL THEN NULL ELSE json_set(context_json,'$.coverage','incomplete') END WHERE user_id=? AND id=? AND status IN ('queued','running')"
       )
       .bind(now(), code, message, this.userId, id)
       .run();
@@ -322,7 +443,7 @@ export class Store {
     const stmts = deals.map((d) =>
       this.db
         .prepare(
-          "INSERT INTO deals(id,scan_id,deal_key,product_variation_id,vendor_id,title,image,vendor_title,vendor_code,category_title,price_rials,discount_rials,final_price_rials,discount_ratio,stock) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM scans WHERE id=? AND user_id=? AND status IN ('queued','running'))"
+          "INSERT INTO deals(id,scan_id,deal_key,product_variation_id,vendor_id,title,image,vendor_title,vendor_code,category_title,price_rials,discount_rials,final_price_rials,discount_ratio,stock,facts_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM scans WHERE id=? AND user_id=? AND status IN ('queued','running'))"
         )
         .bind(
           crypto.randomUUID(),
@@ -340,6 +461,12 @@ export class Store {
           d.finalPriceRials,
           d.discountRatio,
           d.stock,
+          JSON.stringify({
+            benefit: d.benefit,
+            observedAt: d.observedAt,
+            provenance: d.provenance,
+            observationPriority: d.observationPriority,
+          }),
           id,
           this.userId
         )
@@ -347,7 +474,7 @@ export class Store {
     stmts.push(
       this.db
         .prepare(
-          "UPDATE scans SET status='succeeded',finished_at=?,vendor_count=?,product_count=?,deal_count=? WHERE user_id=? AND id=? AND status IN ('queued','running')"
+          "UPDATE scans SET status='succeeded',finished_at=?,vendor_count=?,product_count=?,deal_count=?,context_json=CASE WHEN context_json IS NULL THEN NULL ELSE json_set(context_json,'$.coverage','complete') END WHERE user_id=? AND id=? AND status IN ('queued','running')"
         )
         .bind(
           now(),
@@ -369,18 +496,29 @@ export class Store {
       )
       .bind(id)
       .all<DealRow>();
-    const previous = await this.db
-      .prepare(
-        "SELECT s.id FROM scans s WHERE s.user_id=? AND s.location_id=? AND s.threshold=? AND s.source=? AND s.status='succeeded' AND s.created_at < ? ORDER BY s.created_at DESC LIMIT 1"
-      )
-      .bind(
-        this.userId,
-        scan.locationId,
-        scan.threshold,
-        scan.source,
-        scan.createdAt
-      )
-      .first<{ id: string }>();
+    const previous =
+      scan.status === "succeeded" && scan.context?.coverage === "complete"
+        ? await this.db
+            .prepare(
+              "SELECT s.id FROM scans s WHERE s.user_id=? AND s.location_id=? AND s.threshold=? AND s.source=? AND s.status='succeeded' AND json_extract(s.context_json,'$.coverage')='complete' AND json_extract(s.context_json,'$.scopeHash')=? AND json_extract(s.context_json,'$.location.revision')=? AND json_extract(s.context_json,'$.location.latitude')=? AND json_extract(s.context_json,'$.location.longitude')=? AND json_extract(s.context_json,'$.eligibilityVersion')=? AND json_extract(s.context_json,'$.offerKeyVersion')=? AND (s.created_at < ? OR (s.created_at=? AND s.id<?)) ORDER BY s.created_at DESC,s.id DESC LIMIT 1"
+            )
+            .bind(
+              this.userId,
+              scan.locationId,
+              scan.threshold,
+              scan.source,
+              scan.context.scopeHash,
+              scan.context.location.revision,
+              scan.context.location.latitude,
+              scan.context.location.longitude,
+              scan.context.eligibilityVersion,
+              scan.context.offerKeyVersion,
+              scan.createdAt,
+              scan.createdAt,
+              scan.id
+            )
+            .first<{ id: string }>()
+        : null;
     const priorRows = previous
       ? (
           await this.db
@@ -390,6 +528,7 @@ export class Store {
         ).results
       : [];
     const mapDeal = (r: DealRow) => ({
+      ...(r.facts_json ? offerFactsSchema.parse(JSON.parse(r.facts_json)) : {}),
       title: r.title,
       image: r.image,
       key: r.deal_key,
@@ -404,6 +543,13 @@ export class Store {
       discountRatio: r.discount_ratio,
       stock: r.stock,
     });
-    return compareDeals(results.map(mapDeal), priorRows.map(mapDeal), id);
+    if (scan.status !== "succeeded") return [];
+    return previous
+      ? compareDeals(results.map(mapDeal), priorRows.map(mapDeal), id)
+      : results.map((row) => ({
+          ...mapDeal(row),
+          scanId: id,
+          state: "current" as const,
+        }));
   }
 }

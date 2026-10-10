@@ -18,6 +18,7 @@ export type ScanInput = {
   source: ScanRecord["source"];
   threshold: number;
   mode: ScanRecord["mode"];
+  requestedThreshold?: number;
 };
 export type Counts = { vendorCount: number; productCount: number };
 export type Collection = Counts & {
@@ -38,7 +39,8 @@ export class ScanPersistence extends Context.Service<
     ) => Effect.Effect<LocationRecord | null, PersistenceError>;
     active: () => Effect.Effect<{ id: string } | null, PersistenceError>;
     reserve: (
-      input: ScanInput
+      input: ScanInput,
+      location: LocationRecord
     ) => Effect.Effect<string, PersistenceError | ScanValidationError>;
     running: (id: string) => Effect.Effect<void, PersistenceError>;
     progress: (
@@ -113,12 +115,13 @@ export const prepareScan = (input: ScanInput) =>
     const access = yield* (yield* ProviderAccess).establish(input.source);
     const storedInput = {
       ...input,
+      requestedThreshold: input.threshold,
       threshold:
         input.source === "okala"
           ? Math.max(30, input.threshold)
           : input.threshold,
     };
-    const id = yield* persistence.reserve(storedInput);
+    const id = yield* persistence.reserve(storedInput, location);
     return { ...storedInput, id, location, access } satisfies ScanJob;
   });
 

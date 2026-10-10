@@ -1,16 +1,24 @@
 import { useMutation } from "@tanstack/react-query";
-import type { LocationInput } from "@better-buy/shared";
+import {
+  locationRecordSchema,
+  type LocationInput,
+  type LocationRecord,
+} from "@better-buy/shared";
 import { api } from "../../lib/api";
 export function useLocationMutations(
   locationId: string | undefined,
-  onSaved: () => void
+  onSaved: (location?: LocationRecord) => void
 ) {
   const saveMutation = useMutation({
     mutationFn: (input: LocationInput) =>
-      api("/api/locations" + (locationId ? "/" + locationId : ""), {
-        method: locationId ? "PATCH" : "POST",
-        body: JSON.stringify(input),
-      }),
+      api(
+        "/api/locations" + (locationId ? "/" + locationId : ""),
+        {
+          method: locationId ? "PATCH" : "POST",
+          body: JSON.stringify(input),
+        },
+        locationRecordSchema.parse
+      ),
   });
   const removeMutation = useMutation({
     mutationFn: () => api("/api/locations/" + locationId, { method: "DELETE" }),
@@ -22,7 +30,7 @@ export function useLocationMutations(
   const remove = (onFailure: () => void) => {
     if (locationId && !removeMutation.isPending)
       removeMutation.mutate(undefined, {
-        onSuccess: onSaved,
+        onSuccess: () => onSaved(),
         onError: onFailure,
       });
   };

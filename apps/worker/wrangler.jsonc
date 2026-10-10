@@ -4,18 +4,28 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-10",
   "compatibility_flags": ["nodejs_compat"],
-  "d1_databases": [{ "binding": "DB", "database_name": "better-buy", "database_id": "c1f1e523-5f4e-4ac3-8f70-a2d35d539368", "migrations_dir": "migrations" }],
+  "workers_dev": true,
+  "routes": [{ "pattern": "better-buy.ir", "custom_domain": true }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "better-buy",
+      "database_id": "c1f1e523-5f4e-4ac3-8f70-a2d35d539368",
+      "migrations_dir": "migrations",
+    },
+  ],
   "assets": {
     "directory": "../web/out",
     "binding": "ASSETS",
     "run_worker_first": ["/api/*", "/healthz"],
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
   "vars": {
     "APP_ORIGIN": "https://better-buy.better-buy-worker.workers.dev",
     "BETTER_AUTH_URL": "https://better-buy.better-buy-worker.workers.dev",
     "CORS_ORIGIN": "https://better-buy.better-buy-worker.workers.dev",
-    "DEV_MODE": "false"
+    "DEV_MODE": "false",
+    "SNAPP_STORE_CAMPAIGNS_ENABLED": "true",
   },
-  "observability": { "enabled": true, "head_sampling_rate": 1 }
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
 }

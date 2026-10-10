@@ -27,9 +27,12 @@ const databases: DatabaseSync[] = [];
 function database() {
   const sqlite = new DatabaseSync(":memory:");
   databases.push(sqlite);
-  for (const name of migrations.slice(0, -1)) sqlite.exec(migration(name));
+  for (const name of migrations.filter((name) => !name.startsWith("0005")))
+    sqlite.exec(migration(name));
   sqlite
-    .prepare("INSERT INTO locations VALUES(?,?,?,?,?,?,?,?)")
+    .prepare(
+      "INSERT INTO locations(id,user_id,name,latitude,longitude,is_default,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)"
+    )
     .run(
       locationId,
       "user-1",
@@ -89,7 +92,9 @@ function database() {
 }
 
 async function start(
-  env: ReturnType<typeof database>["env"],
+  env: ReturnType<typeof database>["env"] & {
+    SNAPP_STORE_CAMPAIGNS_ENABLED?: string;
+  },
   source = "snappmarket",
   id = locationId,
   threshold = 40
@@ -193,6 +198,284 @@ afterEach(() => {
 });
 
 describe("Snapp access through authenticated scan API", () => {
+  function campaignFeed() {
+    let failTerminal = false;
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/token")) return guest();
+        if (url.pathname.startsWith("/market-party/")) return feed();
+        if (url.pathname === "/express-vendor/general/vendors-list")
+          return Response.json({
+            status: true,
+            data: {
+              count: 1,
+              finalResult: [{ type: "VENDOR", data: { code: "pz91qe" } }],
+            },
+          });
+        if (url.pathname.startsWith("/express-home/"))
+          return Response.json({
+            vendorInfo: {
+              id: 114458,
+              code: "pz91qe",
+              title: "Campaign store",
+              deliveryData: {
+                doesDeliver: true,
+                id: 114458,
+                detail: { vendorId: 114458 },
+              },
+            },
+            sections: url.pathname.endsWith("/pz91qe")
+              ? [
+                  {
+                    type: "product-list",
+                    value: 901,
+                    title: "اسمارت بازار",
+                    collection_type: "default",
+                    config: null,
+                  },
+                ]
+              : [],
+          });
+        expect(url.pathname).toBe(
+          "/express-search/product-list/901/vendor/pz91qe"
+        );
+        const page = Number(url.searchParams.get("page"));
+        if (page && failTerminal) return new Response(null, { status: 403 });
+        return Response.json({
+          status: true,
+          data: {
+            id: 901,
+            type: "default",
+            count: 1,
+            finalResult: page
+              ? []
+              : [
+                  {
+                    type: "PRODUCT",
+                    data: {
+                      id: 2,
+                      vendor_id: 114458,
+                      document_id: "2-114458",
+                      title: "Campaign product",
+                      stock: 3,
+                      price: 100000,
+                      discount: 45000,
+                      discountRatio: 45,
+                    },
+                  },
+                ],
+          },
+        });
+      });
+    return {
+      upstream,
+      fail: () => {
+        failTerminal = true;
+      },
+    };
+  }
+  it("publishes enrichment through the same saved products API with a frozen server manifest", async () => {
+    const { env } = database();
+    const enabled = { ...env, SNAPP_STORE_CAMPAIGNS_ENABLED: "true" };
+    const f = campaignFeed();
+    const response = await start(enabled);
+    const body = (await response.json()) as { data: { id: string } };
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    expect(await store.scan(body.data.id)).toMatchObject({
+      status: "succeeded",
+      dealCount: 2,
+      vendorCount: 2,
+      productCount: 2,
+      context: {
+        coverage: "complete",
+        effectiveThreshold: 40,
+        manifest: {
+          feedKinds: ["market_party", "store_campaign"],
+          collectionIds: [901],
+          storeIds: [114458],
+          storeCampaigns: [
+            { vendorId: 114458, vendorCode: "pz91qe", collectionId: 901 },
+          ],
+        },
+      },
+    });
+    const callsBeforeRead = f.upstream.mock.calls.length;
+    const products = await api.fetch(
+      new Request(`http://localhost/api/scans/${body.data.id}/products`),
+      enabled,
+      {} as ExecutionContext
+    );
+    const saved = (await products.json()) as {
+      data: { vendors: { provenance?: string[] }[] }[];
+    };
+    expect(saved.data).toHaveLength(2);
+    expect(
+      saved.data
+        .flatMap((product) => product.vendors)
+        .map((offer) => offer.provenance)
+    ).toContainEqual(["snapp:store_campaign:114458:901"]);
+    expect(f.upstream.mock.calls).toHaveLength(callsBeforeRead);
+  });
+  it("keeps admitted failed enrichment incomplete and preserves the prior successful feed", async () => {
+    const { env, sqlite } = database();
+    const enabled = { ...env, SNAPP_STORE_CAMPAIGNS_ENABLED: "true" };
+    const f = campaignFeed();
+    const first = await start(enabled);
+    const body = (await first.json()) as { data: { id: string } };
+    f.fail();
+    const next = await start(enabled);
+    const nextBody = (await next.json()) as { data: { id: string } };
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    expect(await store.scan(nextBody.data.id)).toMatchObject({
+      status: "failed",
+      errorCode: "UPSTREAM_FORBIDDEN",
+      context: { coverage: "incomplete", manifest: { collectionIds: [901] } },
+    });
+    expect(
+      sqlite
+        .prepare("SELECT COUNT(*) total FROM deals WHERE scan_id=?")
+        .get(nextBody.data.id)
+    ).toEqual({ total: 0 });
+    expect(await store.scan(body.data.id)).toMatchObject({
+      status: "succeeded",
+      dealCount: 2,
+    });
+    expect(await store.deals(body.data.id)).toHaveLength(2);
+    const unpublished = await api.fetch(
+      new Request(`http://localhost/api/scans/${nextBody.data.id}/products`),
+      enabled,
+      {} as ExecutionContext
+    );
+    expect(unpublished.status).toBe(409);
+  });
+  it("rolls back collection with the server flag while retaining enriched history", async () => {
+    const { env } = database();
+    const f = campaignFeed();
+    const first = await start({
+      ...env,
+      SNAPP_STORE_CAMPAIGNS_ENABLED: "true",
+    });
+    const enriched = (await first.json()) as { data: { id: string } };
+    const callsBeforeRollback = f.upstream.mock.calls.length;
+    const rolledBack = await start({
+      ...env,
+      SNAPP_STORE_CAMPAIGNS_ENABLED: "false",
+    });
+    const baseline = (await rolledBack.json()) as { data: { id: string } };
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    expect(await store.scan(baseline.data.id)).toMatchObject({
+      dealCount: 1,
+      context: { manifest: { feedKinds: ["market_party"] } },
+    });
+    const prior = await store.scan(enriched.data.id);
+    const current = await store.scan(baseline.data.id);
+    expect(current?.context?.scopeHash).not.toBe(prior?.context?.scopeHash);
+    expect(
+      (await store.deals(baseline.data.id)).every(
+        (row) => row.state === "current"
+      )
+    ).toBe(true);
+    expect(
+      f.upstream.mock.calls
+        .slice(callsBeforeRollback)
+        .map(([url]) => new URL(String(url)).pathname)
+    ).toEqual(["/oauth2/default/token", "/market-party/35.7/51.4"]);
+    expect(await store.deals(enriched.data.id)).toHaveLength(2);
+  });
+  it("keeps gated campaign selectors out of the automatic manifest and saved feed", async () => {
+    const { env } = database();
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        const url = new URL(String(input));
+        expect(url.origin).toBe("https://svc.snapp.market");
+        if (url.pathname === "/oauth2/default/token") return guest();
+        if (url.pathname === "/market-party/35.7/51.4") return feed();
+        throw new Error("Gated upstream path requested: " + url.pathname);
+      });
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    const contexts: unknown[] = [];
+    for (const selectors of [
+      {},
+      {
+        collectionIds: [21166],
+        campaignId: 21166,
+        categoryId: 731217,
+        upstreamUrl: "https://untrusted.example/campaign",
+        manifest: {
+          adapter: "snapp-campaign",
+          feedKinds: ["campaign"],
+          collectionIds: [21166],
+        },
+      },
+    ]) {
+      const tasks: Promise<unknown>[] = [];
+      const response = await api.fetch(
+        new Request("http://localhost/api/scans", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            locationId,
+            source: "snappmarket",
+            threshold: 40,
+            ...selectors,
+          }),
+        }),
+        env,
+        {
+          waitUntil: (task: Promise<unknown>) => tasks.push(task),
+        } as unknown as ExecutionContext
+      );
+      expect(response.status).toBe(202);
+      await Promise.all(tasks);
+      const body = (await response.json()) as { data: { id: string } };
+      const saved = await store.scan(body.data.id);
+      expect(saved).toMatchObject({
+        status: "succeeded",
+        dealCount: 1,
+        context: {
+          coverage: "complete",
+          manifest: {
+            adapter: "snapp-market-party",
+            contractVersion: 1,
+            feedKinds: ["market_party"],
+          },
+        },
+      });
+      contexts.push(saved?.context);
+      const callsBeforeRead = fetcher.mock.calls.length;
+      const products = await api.fetch(
+        new Request(
+          `http://localhost/api/scans/${body.data.id}/products?collectionId=21166`
+        ),
+        env,
+        {} as ExecutionContext
+      );
+      expect(products.status).toBe(200);
+      expect(await products.json()).toMatchObject({
+        data: [
+          {
+            bestCurrentOffer: { finalPriceRials: 60000, stock: 2 },
+            vendors: [{ vendorId: "10" }],
+          },
+        ],
+        meta: { groupKeyVersion: 2 },
+      });
+      expect(fetcher.mock.calls).toHaveLength(callsBeforeRead);
+    }
+    expect(contexts[1]).toEqual(contexts[0]);
+    expect(
+      fetcher.mock.calls.map(([input]) => new URL(String(input)).pathname)
+    ).toEqual([
+      "/oauth2/default/token",
+      "/market-party/35.7/51.4",
+      "/oauth2/default/token",
+      "/market-party/35.7/51.4",
+    ]);
+  });
+
   it.each(["missing", "expired", "corrupt"])(
     "succeeds with %s legacy Snapp settings and never reads them",
     async (legacy) => {
@@ -413,6 +696,174 @@ describe("Snapp access through authenticated scan API", () => {
 });
 
 describe("scan state integrity through real SQLite", () => {
+  it("adds context without rewriting legacy history, units or raw money", () => {
+    const sqlite = new DatabaseSync(":memory:");
+    databases.push(sqlite);
+    for (const name of migrations.filter((name) => !name.startsWith("0006")))
+      sqlite.exec(migration(name));
+    sqlite.exec(
+      "INSERT INTO locations(id,user_id,name,latitude,longitude,created_at,updated_at) VALUES('l','u','Original',35.7,51.4,'2026-01-01','2026-01-01'); INSERT INTO scans(id,user_id,location_id,threshold,source,mode,status,created_at) VALUES('s','u','l',40,'digikalajet','full','succeeded','2026-01-01'); INSERT INTO deals(id,scan_id,deal_key,product_variation_id,vendor_id,title,vendor_title,price_rials,discount_rials,final_price_rials,discount_ratio,stock) VALUES('d','s','v:p','p','v','Legacy','Store',500000,200000,300000,40,2)"
+    );
+    sqlite.exec(migration(migrations.find((name) => name.startsWith("0006"))!));
+    expect(
+      sqlite.prepare("SELECT context_json FROM scans WHERE id='s'").get()
+        ?.context_json
+    ).toBeNull();
+    expect(
+      sqlite
+        .prepare("SELECT coordinate_revision FROM locations WHERE id='l'")
+        .get()?.coordinate_revision
+    ).toBe(1);
+    expect(
+      sqlite
+        .prepare(
+          "SELECT title,final_price_rials,facts_json FROM deals WHERE id='d'"
+        )
+        .get()
+    ).toMatchObject({
+      title: "Legacy",
+      final_price_rials: 300000,
+      facts_json: null,
+    });
+  });
+  it("serves v2 differing-price products while retaining v1 and raw reads", async () => {
+    const { env } = database();
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    const id = await store.createScan(locationId, 40, "snappmarket", "partial");
+    const get = (suffix: string) =>
+      api.fetch(
+        new Request(`http://localhost/api/scans/${id}/${suffix}`),
+        env,
+        {} as ExecutionContext
+      );
+    expect((await get("products")).status).toBe(409);
+    const offer = {
+      key: "a:p",
+      productVariationId: "p",
+      vendorId: "a",
+      vendorTitle: "Store A",
+      vendorCode: null,
+      title: "کالا ۵۰۰ گرم",
+      image: null,
+      categoryTitle: null,
+      priceRials: 100000,
+      discountRials: 40000,
+      finalPriceRials: 60000,
+      discountRatio: 40,
+      stock: 2,
+    };
+    await store.succeed(id, { vendorCount: 2, productCount: 2 }, [
+      offer,
+      {
+        ...offer,
+        key: "b:p",
+        vendorId: "b",
+        priceRials: 120000,
+        discountRials: 72000,
+        finalPriceRials: 48000,
+        discountRatio: 60,
+      },
+    ]);
+    const v2 = (await (await get("products")).json()) as {
+      data: Array<{
+        bestCurrentOffer: { finalPriceRials: number };
+        vendors: unknown[];
+      }>;
+    };
+    expect(v2.data).toHaveLength(1);
+    expect(v2.data[0]!.vendors).toHaveLength(2);
+    expect(v2.data[0]!.bestCurrentOffer.finalPriceRials).toBe(48000);
+    const v1 = (await (await get("deal-groups")).json()) as {
+      data: Array<{ state: string }>;
+    };
+    expect(v1.data).toHaveLength(2);
+    expect(v1.data.every((group) => group.state === "still_available")).toBe(
+      true
+    );
+    const raw = (await (await get("deals")).json()) as { data: unknown[] };
+    expect(raw.data).toHaveLength(2);
+  });
+  it("returns the same 404 for unknown and cross-tenant status and result reads", async () => {
+    const { env } = database();
+    const owner = new Store(env.DB, "user-1", env.BOX_KEY);
+    const id = await owner.createScan(locationId, 40, "snappmarket", "partial");
+    for (const target of ["unknown", id]) {
+      if (target === id)
+        await env.DB.prepare("UPDATE scans SET user_id=? WHERE id=?")
+          .bind("user-2", id)
+          .run();
+      for (const suffix of ["", "/deals", "/deal-groups", "/products"]) {
+        const response = await api.fetch(
+          new Request(`http://localhost/api/scans/${target}${suffix}`),
+          env,
+          {} as ExecutionContext
+        );
+        expect(response.status).toBe(404);
+      }
+    }
+  });
+  it("freezes geographic history, skips incompatible baselines and keeps legacy facts unknown", async () => {
+    const { env, sqlite } = database();
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    const offer = {
+      key: "1:1",
+      productVariationId: "1",
+      vendorId: "1",
+      title: "کالا",
+      image: null,
+      vendorTitle: "فروشگاه",
+      vendorCode: null,
+      categoryTitle: null,
+      priceRials: 100000,
+      discountRials: 40000,
+      finalPriceRials: 60000,
+      discountRatio: 40,
+      stock: 2,
+    };
+    let order = 0;
+    const snapshot = async (offers = [offer], threshold = 40) => {
+      const id = await store.createScan(
+        locationId,
+        threshold,
+        "snappmarket",
+        "partial"
+      );
+      sqlite
+        .prepare("UPDATE scans SET created_at=? WHERE id=?")
+        .run(`2026-10-10T00:00:0${order++}.000Z`, id);
+      await store.succeed(
+        id,
+        { vendorCount: 1, productCount: offers.length },
+        offers
+      );
+      return id;
+    };
+    const first = await snapshot();
+    expect(await store.deals(first)).toMatchObject([{ state: "current" }]);
+    await store.updateLocation(locationId, { name: "نام تازه" });
+    expect((await store.location(locationId))?.coordinateRevision).toBe(1);
+    expect((await store.scan(first))?.locationName).toBe("خانه");
+    const second = await snapshot([]);
+    expect(await store.deals(second)).toMatchObject([
+      { state: "no_longer_present" },
+    ]);
+    await store.updateLocation(locationId, { latitude: 35.71 });
+    expect((await store.location(locationId))?.coordinateRevision).toBe(2);
+    expect(await store.deals(await snapshot([]))).toEqual([]);
+    expect(await store.deals(await snapshot([offer], 50))).toMatchObject([
+      { state: "current" },
+    ]);
+    const changedScope = await snapshot([]);
+    sqlite
+      .prepare(
+        "UPDATE scans SET context_json=json_set(context_json,'$.scopeHash','different') WHERE id=?"
+      )
+      .run(changedScope);
+    expect(await store.deals(changedScope)).toEqual([]);
+    sqlite.prepare("UPDATE scans SET context_json=NULL WHERE id=?").run(first);
+    expect((await store.scan(first))?.context).toBeNull();
+    expect(await store.deals(first)).toMatchObject([{ state: "current" }]);
+  });
   it("persists and compares Okala API requests at one effective threshold without rewriting history", async () => {
     const { env } = database();
     const store = new Store(env.DB, "user-1", env.BOX_KEY);
@@ -464,7 +915,20 @@ describe("scan state integrity through real SQLite", () => {
     });
     const first = await start(env, "okala", locationId, 20);
     expect(first.status).toBe(202);
-    const firstId = ((await first.json()) as { data: { id: string } }).data.id;
+    const firstRecord = (
+      (await first.json()) as {
+        data: {
+          id: string;
+          threshold: number;
+          context: { requestedThreshold: number; effectiveThreshold: number };
+        };
+      }
+    ).data;
+    expect(firstRecord).toMatchObject({
+      threshold: 30,
+      context: { requestedThreshold: 20, effectiveThreshold: 30 },
+    });
+    const firstId = firstRecord.id;
     expect(await store.scan(firstId)).toMatchObject({
       threshold: 30,
       status: "succeeded",
@@ -472,7 +936,7 @@ describe("scan state integrity through real SQLite", () => {
       dealCount: 1,
     });
     expect(await store.deals(firstId)).toMatchObject([
-      { discountRatio: 30, state: "new" },
+      { discountRatio: 30, state: "current" },
     ]);
     const second = await start(env, "okala", locationId, 30);
     const secondId = ((await second.json()) as { data: { id: string } }).data
@@ -752,7 +1216,7 @@ describe("forward migration for obsolete Snapp credentials", () => {
         "SELECT * FROM provider_settings WHERE provider != 'snappmarket'"
       )
       .all();
-    sqlite.exec(migration(migrations.at(-1)!));
+    sqlite.exec(migration(migrations.find((name) => name.startsWith("0005"))!));
     expect(
       sqlite
         .prepare("SELECT * FROM provider_settings WHERE provider='snappmarket'")

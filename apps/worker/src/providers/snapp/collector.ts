@@ -3,12 +3,22 @@ import { Effect } from "effect";
 import { CollectorError, type PersistenceError } from "../../domain/failures";
 import { requestJson } from "../../infrastructure/http";
 import { vendorSchema, responseSchema, normalizeSnappDeals } from "./model";
+import {
+  planStoreCampaigns,
+  enrichStoreCampaigns,
+  type CampaignScope,
+  SNAPP_SCAN_REQUEST_BUDGET,
+} from "./storeCampaigns";
 
 export interface CollectInput {
   latitude: number;
   longitude: number;
   threshold: number;
   fetcher?: typeof fetch;
+  storeCampaigns?: boolean;
+  onManifest?: (
+    scopes: CampaignScope[]
+  ) => Effect.Effect<void, PersistenceError>;
   onProgress?: (counts: {
     vendorCount: number;
     productCount: number;
@@ -37,9 +47,20 @@ const guestSchema = z.object({
 });
 
 export function collectDeals(input: CollectInput) {
-  return Effect.gen(function* () {
-    const fetcher = input.fetcher ?? fetch,
-      vendors = new Map<string, z.infer<typeof vendorSchema>>(),
+  const collection = Effect.gen(function* () {
+    const startedAt = Date.now();
+    const upstream = input.fetcher ?? fetch;
+    let attempts = 0;
+    // Physical requests include guest acquisition, renewal and HTTP retries.
+    const fetcher: typeof fetch = input.storeCampaigns
+      ? (url, init) => {
+          if (attempts >= SNAPP_SCAN_REQUEST_BUDGET)
+            return Promise.resolve(new Response(null, { status: 499 }));
+          attempts++;
+          return upstream(url, init);
+        }
+      : upstream;
+    const vendors = new Map<string, z.infer<typeof vendorSchema>>(),
       pageFingerprints = new Set<string>();
     // A scan owns its guest session. Worker restarts simply acquire a new one.
     const deviceId = crypto.randomUUID();
@@ -103,6 +124,67 @@ export function collectDeals(input: CollectInput) {
           );
         return access;
       });
+    const read = (url: URL) =>
+      Effect.gen(function* () {
+        Object.entries({ ...SNAPP_PWA, UDID: deviceId }).forEach(([k, v]) =>
+          url.searchParams.set(k, v)
+        );
+        if (!guest || guest.expiresAt <= Date.now())
+          guest = yield* acquireGuest();
+        const access = guest;
+        const requestPage = (token = access.token) =>
+          requestJson(
+            url,
+            {
+              headers: { ...snappHeaders, authorization: `Bearer ${token}` },
+            },
+            {
+              fetcher,
+              provider: "اسنپ‌مارکت",
+              allow401: true,
+              forbiddenCode: "UPSTREAM_FORBIDDEN",
+              invalidJsonCode: "UPSTREAM_INVALID_JSON",
+            }
+          );
+        let response = yield* requestPage();
+        if (response.status === 401 && !renewedAfter401) {
+          renewedAfter401 = true;
+          guest = yield* acquireGuest();
+          response = yield* requestPage(guest.token);
+        }
+        if (response.status === 401)
+          return yield* Effect.fail(
+            new CollectorError(
+              "GUEST_AUTH_REJECTED",
+              "اسنپ‌مارکت دسترسی خودکار اسکن را نپذیرفت؛ بعداً دوباره تلاش کنید"
+            )
+          );
+        return response;
+      }).pipe(
+        Effect.mapError((error) =>
+          input.storeCampaigns && attempts >= SNAPP_SCAN_REQUEST_BUDGET
+            ? new CollectorError(
+                "INCOMPLETE_PAGINATION",
+                "Snapp scan exhausted its 40-request budget"
+              )
+            : error
+        )
+      );
+    const planned = input.storeCampaigns
+      ? yield* planStoreCampaigns(
+          read,
+          input,
+          () => SNAPP_SCAN_REQUEST_BUDGET - attempts
+        )
+      : undefined;
+    if (planned && input.onManifest)
+      yield* input.onManifest(
+        planned.plans.map(({ vendorId, vendorCode, collectionId }) => ({
+          vendorId,
+          vendorCode,
+          collectionId,
+        }))
+      );
     let totalCount = Infinity;
     for (let page = 0; page < 50 && vendors.size < totalCount; page++) {
       const url = new URL(
@@ -114,39 +196,8 @@ export function collectDeals(input: CollectInput) {
         isPro: "false",
         page: String(page),
         page_size: "100",
-        ...SNAPP_PWA,
-        UDID: deviceId,
       }).forEach(([k, v]) => url.searchParams.set(k, v));
-      if (!guest || guest.expiresAt <= Date.now())
-        guest = yield* acquireGuest();
-      const access = guest;
-      const requestPage = (token = access.token) =>
-        requestJson(
-          url,
-          {
-            headers: { ...snappHeaders, authorization: `Bearer ${token}` },
-          },
-          {
-            fetcher,
-            provider: "اسنپ‌مارکت",
-            allow401: true,
-            forbiddenCode: "UPSTREAM_FORBIDDEN",
-            invalidJsonCode: "UPSTREAM_INVALID_JSON",
-          }
-        );
-      let response = yield* requestPage();
-      if (response.status === 401 && !renewedAfter401) {
-        renewedAfter401 = true;
-        guest = yield* acquireGuest();
-        response = yield* requestPage(guest.token);
-      }
-      if (response.status === 401)
-        return yield* Effect.fail(
-          new CollectorError(
-            "GUEST_AUTH_REJECTED",
-            "اسنپ‌مارکت دسترسی خودکار اسکن را نپذیرفت؛ بعداً دوباره تلاش کنید"
-          )
-        );
+      const response = yield* read(url);
       const parsed = responseSchema.safeParse(response.body);
       if (!parsed.success || !parsed.data.status)
         return yield* Effect.fail(
@@ -198,6 +249,76 @@ export function collectDeals(input: CollectInput) {
           `تنها ${vendors.size} از ${totalCount} فروشگاه دریافت شد`
         )
       );
-    return normalizeSnappDeals(vendors.values(), vendors.size, input.threshold);
+    const baseline = normalizeSnappDeals(
+      vendors.values(),
+      vendors.size,
+      input.threshold
+    );
+    if (!planned) return baseline;
+    const productKeys = new Set<string>();
+    const vendorIds = new Set<string>();
+    for (const vendor of vendors.values()) {
+      const ownerId = Number(vendor.vendor_id);
+      if (!Number.isSafeInteger(ownerId) || ownerId <= 0)
+        return yield* Effect.fail(
+          new CollectorError(
+            "UPSTREAM_CHANGED",
+            "Market Party vendor_id is not a positive numeric identity"
+          )
+        );
+      vendorIds.add(String(ownerId));
+      for (const product of vendor.products) {
+        if (Number(product.vendorId) !== ownerId)
+          return yield* Effect.fail(
+            new CollectorError(
+              "UPSTREAM_CHANGED",
+              "Market Party product.vendorId conflicts with vendor_id"
+            )
+          );
+        productKeys.add(`${ownerId}:${product.productVariationId}`);
+      }
+    }
+    baseline.deals = baseline.deals.map((deal) => ({
+      ...deal,
+      vendorId: String(Number(deal.vendorId)),
+      key: `${Number(deal.vendorId)}:${deal.productVariationId}`,
+    }));
+    const result = yield* enrichStoreCampaigns(
+      read,
+      input,
+      planned.plans,
+      baseline,
+      productKeys,
+      vendorIds,
+      planned.omitted
+    );
+    if (input.onProgress)
+      yield* input.onProgress({
+        vendorCount: result.vendorCount,
+        productCount: result.productCount,
+      });
+    return {
+      ...result,
+      campaignResearch: {
+        ...result.campaignResearch,
+        requests: attempts,
+        elapsedMs: Date.now() - startedAt,
+        requestBudget: SNAPP_SCAN_REQUEST_BUDGET,
+      },
+    };
   });
+  return input.storeCampaigns
+    ? collection.pipe(
+        Effect.timeoutOrElse({
+          duration: 20_000,
+          orElse: () =>
+            Effect.fail(
+              new CollectorError(
+                "REQUEST_TIMEOUT",
+                "Snapp enrichment exceeded its 20-second collection budget"
+              )
+            ),
+        })
+      )
+    : collection;
 }

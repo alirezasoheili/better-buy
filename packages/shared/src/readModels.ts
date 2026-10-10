@@ -2,7 +2,43 @@ import { z } from "zod";
 import { locationInputSchema } from "./validation";
 const count = z.number().int().nonnegative();
 const date = z.string().refine((value) => Number.isFinite(Date.parse(value)));
-const state = z.enum(["new", "still_available", "no_longer_present"]);
+const state = z.enum([
+  "current",
+  "new",
+  "still_available",
+  "no_longer_present",
+]);
+export const scanContextSchema = z.object({
+  location: z.object({
+    name: z.string(),
+    latitude: z.number().finite(),
+    longitude: z.number().finite(),
+    revision: count.positive(),
+  }),
+  requestedThreshold: z.number(),
+  effectiveThreshold: z.number(),
+  policyVersion: z.literal("automatic-v1"),
+  manifest: z.object({
+    adapter: z.string(),
+    contractVersion: count.positive(),
+    feedKinds: z.array(z.string()),
+    collectionIds: z.array(count).optional(),
+    storeIds: z.array(count).optional(),
+    storeCampaigns: z
+      .array(
+        z.object({
+          vendorId: count.positive(),
+          vendorCode: z.string().min(1),
+          collectionId: count.positive(),
+        })
+      )
+      .optional(),
+  }),
+  scopeHash: z.string(),
+  eligibilityVersion: z.literal(1),
+  offerKeyVersion: z.literal(1),
+  coverage: z.enum(["pending", "complete", "incomplete"]),
+});
 const prices = {
   priceRials: z.number().nonnegative(),
   discountRials: z.number().nonnegative(),
@@ -13,8 +49,10 @@ export const locationRecordSchema = locationInputSchema.extend({
   id: z.string().min(1),
   createdAt: date,
   updatedAt: date,
+  coordinateRevision: count.positive().optional(),
 });
 export const scanRecordSchema = z.object({
+  context: scanContextSchema.nullable().optional(),
   id: z.string().min(1),
   locationId: z.string().min(1),
   locationName: z.string(),
@@ -32,6 +70,20 @@ export const scanRecordSchema = z.object({
   errorMessage: z.string().nullable(),
 });
 const vendorOfferSchema = z.object({
+  benefit: z
+    .object({
+      kind: z.enum(["standard_discount", "market_party", "conditional"]),
+      identity: z.string(),
+      applicable: z.boolean().nullable(),
+      terms: z.string().nullable(),
+    })
+    .optional(),
+  observedAt: date.optional(),
+  provenance: z.array(z.string()).optional(),
+  sourceMoneyUnit: z.enum(["toman", "rial"]).optional(),
+  originalAmountToman: z.number().nonnegative().optional(),
+  discountAmountToman: z.number().nonnegative().optional(),
+  finalAmountToman: z.number().nonnegative().optional(),
   offerKey: z.string(),
   productVariationId: z.string(),
   vendorId: z.string(),
@@ -50,6 +102,9 @@ export const dealRecordSchema = vendorOfferSchema
     image: z.string().nullable(),
     categoryTitle: z.string().nullable(),
   });
+export const offerFactsSchema = vendorOfferSchema
+  .pick({ benefit: true, observedAt: true, provenance: true })
+  .extend({ observationPriority: z.number().int().optional() });
 export const dealGroupSchema = z.object({
   key: z.string(),
   groupKeyVersion: z.literal(1),
@@ -65,10 +120,16 @@ export const locationsReadSchema = z.array(locationRecordSchema);
 export const scansReadSchema = z.array(scanRecordSchema);
 export const dealsReadSchema = z.array(dealRecordSchema);
 export const groupsReadSchema = z.array(dealGroupSchema);
-export const scanStartedSchema = z.object({
-  id: z.string().min(1),
-  status: z.literal("queued"),
+export const productGroupSchema = dealGroupSchema.extend({
+  groupKeyVersion: z.literal(2),
+  vendors: z.array(vendorOfferSchema),
+  bestCurrentOffer: vendorOfferSchema.nullable(),
+  currentStoreOfferCount: count,
+  conditionalOffers: z.array(vendorOfferSchema),
+  diagnostics: z.array(z.string()),
 });
+export const productsReadSchema = z.array(productGroupSchema);
+export const scanStartedSchema = scanRecordSchema;
 export const locationSearchReadSchema = z.array(
   z.object({
     latitude: z.number().finite(),

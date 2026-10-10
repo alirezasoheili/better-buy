@@ -26,7 +26,7 @@ export function ScanFeedback({
                 ? "وضعیت اسکن تازه‌سازی نشد"
                 : active.status === "queued"
                   ? "اسکن در انتظار بررسی است"
-                  : "در حال بررسی پیشنهادها…"}
+                  : "در حال پیدا کردن تخفیف‌ها…"}
             </strong>
             <p>
               {active.locationName} · {sourceLabel(active.source)} · حداقل{" "}

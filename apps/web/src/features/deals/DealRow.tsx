@@ -32,6 +32,7 @@ export function DealRow({
 }) {
   const best = bestOffer(group);
   const historical = best.state === "no_longer_present";
+  const hasCurrent = group.groupKeyVersion === 1 || !!group.bestCurrentOffer;
   const offers = [...group.vendors].sort(
     (a, b) =>
       Number(a.state === "no_longer_present") -
@@ -46,31 +47,40 @@ export function DealRow({
         <h2>
           <bdi>{group.title}</bdi>
         </h2>
-        <p>{best.vendorTitle}</p>
+        <p>{hasCurrent ? best.vendorTitle : "پیشنهاد جاری قابل مقایسه نیست"}</p>
         <small>
           {feedStateLabel(group.state)}
           {group.categoryTitle && ` · ${group.categoryTitle}`}
         </small>
       </div>
-      <div className="price-label">
-        <div className="original-price">
-          <del>
-            <bdi>{money(best.priceRials, source)}</bdi>
-          </del>
-          {best.discountRatio > 0 && (
-            <span className="discount">
-              {faNumber.format(best.discountRatio)}٪
-            </span>
-          )}
+      {hasCurrent ? (
+        <div className="price-label">
+          <div className="original-price">
+            <del>
+              <bdi>{money(best.priceRials, source)}</bdi>
+            </del>
+            {best.discountRatio > 0 && (
+              <span className="discount">
+                {faNumber.format(Math.round(best.discountRatio))}٪
+              </span>
+            )}
+          </div>
+          <strong>
+            <bdi>{money(best.finalPriceRials, source)}</bdi>
+          </strong>
+          <small>{historical ? "قیمت تاریخی" : "کمترین قیمت مشاهده‌شده"}</small>
         </div>
-        <strong>
-          <bdi>{money(best.finalPriceRials, source)}</bdi>
-        </strong>
-        <small>{historical ? "قیمت تاریخی" : "کمترین قیمت مشاهده‌شده"}</small>
-      </div>
+      ) : (
+        <div className="price-label">
+          <small>قیمت جاری در دسترس نیست</small>
+        </div>
+      )}
       <details className="vendor-disclosure">
         <summary>
-          پیشنهادهای فروشگاه‌ها <span>{faNumber.format(offers.length)}</span>
+          مقایسه فروشگاه‌ها{" "}
+          <span>
+            {faNumber.format(group.currentStoreOfferCount ?? offers.length)}
+          </span>
         </summary>
         <div className="vendor-offers" aria-label={`پیشنهادهای ${group.title}`}>
           {offers.map((v) => (
@@ -105,6 +115,18 @@ export function DealRow({
           ))}
         </div>
       </details>
+      {!!group.conditionalOffers?.length && (
+        <details className="vendor-disclosure">
+          <summary>پیشنهادهای مشروط</summary>
+          {group.conditionalOffers.map((offer) => (
+            <div className="vendor-offer" key={offer.offerKey}>
+              <strong>{offer.vendorTitle}</strong>
+              <bdi>{money(offer.finalPriceRials, source)}</bdi>
+              <small>{offer.benefit?.terms ?? "شرایط استفاده مشخص نیست"}</small>
+            </div>
+          ))}
+        </details>
+      )}
     </article>
   );
 }

@@ -28,10 +28,7 @@ export function Dashboard() {
   const latest = data.scans
     .filter((r) => r.locationId === data.selected && r.status === "succeeded")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const source =
-    selection.source ??
-    latest.find((r) => r.source !== "digikalajet")?.source ??
-    "snappmarket";
+  const source = selection.source ?? "snappmarket";
   const threshold =
     selection.threshold ??
     latest.find((r) => r.source === source)?.threshold ??
@@ -39,19 +36,23 @@ export function Dashboard() {
   const activeRecord = data.scans.find(isActiveScan) ?? null;
   const polling = useScanPolling(activeRecord);
   const active = isActiveScan(polling.data) ? polling.data : activeRecord;
-  const start = useStartScan(
-    { locationId: data.selected, source, threshold, mode: "partial" },
-    data.locations
-  );
+  const start = useStartScan({
+    locationId: data.selected,
+    source,
+    threshold,
+    mode: "partial",
+  });
   const ledger = useScanLedger({
     busy: data.busy,
     selected: data.selected,
     scans: data.scans,
     source,
-    threshold,
     selectedRunId: selection.runId,
+    coordinateRevision:
+      data.locations.find((l) => l.id === data.selected)?.coordinateRevision ??
+      1,
   });
-  const filters = useDealFilters(ledger.dealGroups, ledger.scan);
+  const filters = useDealFilters(ledger.dealGroups);
   const valid = data.locations.some(
     (l) =>
       l.id === data.selected && isWithinTehranBoundary(l.latitude, l.longitude)
@@ -102,6 +103,7 @@ export function Dashboard() {
           threshold={threshold}
           blocked={blocked}
           submitting={start.submitting}
+          hasSnapshot={!!ledger.scan}
           onLocation={changeLocation}
           onSource={(source) =>
             setSelection({ source, threshold: null, runId: null })
@@ -211,7 +213,6 @@ export function Dashboard() {
               results={ledger.results}
               hasResults={ledger.hasResults}
               dealGroups={ledger.dealGroups}
-              deals={ledger.deals}
               historical={
                 !!selection.runId && ledger.scan?.id === selection.runId
               }
@@ -224,7 +225,30 @@ export function Dashboard() {
           locations={data.locations}
           initialView={locationDialog}
           onClose={() => setLocationDialog(null)}
-          onSaved={() => void data.load()}
+          onSaved={(saved) => {
+            if (saved) changeLocation(saved.id);
+            // Finish the old history read before publishing the new start into
+            // its cache. Otherwise that read can erase the newly reserved scan.
+            const firstCollection =
+              saved &&
+              data.locations.length === 0 &&
+              !active &&
+              !start.unresolved;
+            void data.load().then(() => {
+              if (firstCollection && saved) {
+                setSelection({
+                  source: "snappmarket",
+                  threshold: 40,
+                  runId: null,
+                });
+                start.start({
+                  locationId: saved.id,
+                  source: "snappmarket",
+                  threshold: 40,
+                });
+              }
+            });
+          }}
         />
       )}
     </main>

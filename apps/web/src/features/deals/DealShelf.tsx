@@ -1,9 +1,4 @@
-import type {
-  DealGroupRecord,
-  DealRecord,
-  ScanRecord,
-} from "@better-buy/shared";
-import { Panel } from "../dashboard/Primitives";
+import type { DealGroupRecord, ScanRecord } from "@better-buy/shared";
 import type { DealSource } from "../dashboard/types";
 import { faDate, faNumber, sourceLabel } from "../dashboard/format";
 import { DealRow } from "./DealRow";
@@ -18,7 +13,6 @@ export function DealShelf({
   results,
   hasResults,
   dealGroups,
-  deals,
   historical,
 }: {
   filters: ReturnType<typeof useDealFilters>;
@@ -29,26 +23,9 @@ export function DealShelf({
   results: ReturnType<typeof useScanLedger>["results"];
   hasResults: boolean;
   dealGroups: DealGroupRecord[];
-  deals: DealRecord[];
   historical: boolean;
 }) {
-  const {
-    query,
-    setQuery,
-    stateFilter,
-    setStateFilter,
-    vendor,
-    setVendor,
-    minPrice,
-    setMinPrice,
-    sort,
-    setSort,
-    vendors,
-    visible,
-    counts,
-    activeCount,
-    reset,
-  } = filters;
+  const { query, setQuery, sort, setSort, visible, reset } = filters;
   return (
     <section className="deal-section" aria-labelledby="offers-title">
       <header className="section-heading">
@@ -76,9 +53,18 @@ export function DealShelf({
             <p>{faNumber.format(scan?.vendorCount ?? 0)} فروشگاه بررسی‌شده</p>
             <p>
               {faNumber.format(scan?.productCount ?? 0)} رکورد کالا ·{" "}
-              {faNumber.format(deals.length)} پیشنهاد فروشگاهی
+              {faNumber.format(
+                dealGroups.reduce((n, g) => n + g.vendors.length, 0)
+              )}{" "}
+              پیشنهاد فروشگاهی
             </p>
             <p>نتیجه‌ها متعلق به زمان اسکن نمایش‌داده‌شده‌اند.</p>
+            {scan?.context == null && scan && (
+              <p>
+                موقعیت و پوشش تاریخی این نتیجه تأیید نشده؛ مقایسه زمانی انجام
+                نمی‌شود.
+              </p>
+            )}
           </details>
         )}
       </header>
@@ -93,7 +79,7 @@ export function DealShelf({
             <p>
               {hasResults
                 ? "نتیجه ذخیره‌شده همین اسکن قابل مشاهده است."
-                : "اسکن ذخیره شده است؛ برای دیدن پیشنهادها، نتیجه همین اسکن را دوباره دریافت کنید."}
+                : "به‌روزرسانی انجام شد و نتیجه ذخیره شده است؛ برای دیدن پیشنهادها، نتیجه همین اسکن را دوباره دریافت کنید."}
             </p>
           </div>
           <button
@@ -104,10 +90,10 @@ export function DealShelf({
           </button>
         </div>
       )}
-      {source === "okala" && scan && (
+      {scan && (
         <p className="coverage-note">
-          پیشنهادهای فهرست عمومی تبلیغاتی اکالا؛ این فهرست تمام کالاهای اکالا را
-          پوشش نمی‌دهد.
+          نتیجه‌ها از فهرست‌های تخفیف پشتیبانی‌شده‌اند و تمام کالاهای فروشگاه‌ها
+          را پوشش نمی‌دهند.
         </p>
       )}
       {busy || (!!scan && !hasResults && results.isPending) ? (
@@ -122,7 +108,7 @@ export function DealShelf({
       ) : !scan ? (
         <div className="empty">
           <h2>هنوز نتیجه‌ای برای این انتخاب ندارید</h2>
-          <p>با «شروع اسکن» پیشنهادهای این موقعیت و فروشگاه را بررسی کنید.</p>
+          <p>با «پیدا کردن تخفیف‌ها» پیشنهادهای این موقعیت را دریافت کنید.</p>
         </div>
       ) : !hasResults ? null : !dealGroups.length ? (
         <div className="empty">
@@ -152,69 +138,7 @@ export function DealShelf({
                 <option value="discount">بیشترین تخفیف</option>
               </select>
             </label>
-            <Panel
-              title="فیلتر پیشنهادها"
-              trigger={
-                <button className="filter-trigger">
-                  فیلترها
-                  {activeCount > 0 && ` (${faNumber.format(activeCount)})`}
-                </button>
-              }
-            >
-              <label>
-                فروشگاه عرضه‌کننده
-                <select
-                  value={vendor}
-                  onChange={(e) => setVendor(e.target.value)}
-                >
-                  <option value="all">همه فروشگاه‌ها</option>
-                  {vendors.map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                حداقل قیمت
-                <select
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(Number(e.target.value))}
-                >
-                  <option value="0">همه قیمت‌ها</option>
-                  {[100000, 200000, 300000, 400000].map((n) => (
-                    <option key={n} value={n}>
-                      بیش از {faNumber.format(n)} تومان
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button onClick={reset}>پاک‌کردن فیلترها</button>
-              <p className="muted">
-                تغییر فیلتر فقط نتیجه همین اسکن را تغییر می‌دهد.
-              </p>
-            </Panel>
-            {activeCount > 0 && (
-              <button className="reset-filters" onClick={reset}>
-                پاک‌کردن فیلترها
-              </button>
-            )}
-          </div>
-          <div className="feed-filters" aria-label="مقایسه با اسکن قبلی">
-            {(
-              [
-                ["all", "همه پیشنهادها", counts.all],
-                ["new", "پیشنهادهای جدید", counts.new],
-                ["still_available", "در فهرست فعلی", counts.still],
-                ["no_longer_present", "دیگر در این فهرست نیست", counts.gone],
-              ] as const
-            ).map(([state, label, count]) => (
-              <button
-                key={state}
-                aria-pressed={stateFilter === state}
-                onClick={() => setStateFilter(state)}
-              >
-                {label} <span>{faNumber.format(count)}</span>
-              </button>
-            ))}
+            {query && <button onClick={reset}>پاک‌کردن جست‌وجو</button>}
           </div>
           <p className="result-count" role="status">
             {faNumber.format(visible.length)} محصول
@@ -232,9 +156,9 @@ export function DealShelf({
             </div>
           ) : (
             <div className="empty">
-              <h2>چیزی با این فیلتر پیدا نشد</h2>
-              <p>فیلترها را پاک کنید یا عبارت جست‌وجو را تغییر دهید.</p>
-              <button onClick={reset}>پاک‌کردن فیلترها</button>
+              <h2>چیزی با این جست‌وجو پیدا نشد</h2>
+              <p>عبارت جست‌وجو را پاک کنید یا تغییر دهید.</p>
+              <button onClick={reset}>پاک‌کردن جست‌وجو</button>
             </div>
           )}
           <p className="observation-note">

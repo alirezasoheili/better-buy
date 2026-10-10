@@ -5,6 +5,7 @@ export type WorkerEnv = AuthEnv & {
   GEOCODER_BASE_URL?: string;
   CORS_ORIGIN?: string;
   DEV_MODE?: string;
+  SNAPP_STORE_CAMPAIGNS_ENABLED?: string;
   ASSETS: Fetcher;
 };
 export type Variables = { userId: string };

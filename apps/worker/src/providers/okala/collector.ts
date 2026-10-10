@@ -68,6 +68,10 @@ export function collectOkala(input: {
   longitude: number;
   threshold: number;
   fetcher?: typeof fetch;
+  onManifest?: (
+    collectionIds: number[],
+    storeIds: number[]
+  ) => Effect.Effect<void, PersistenceError>;
   onProgress?: (counts: {
     vendorCount: number;
     productCount: number;
@@ -128,6 +132,7 @@ export function collectOkala(input: {
           "کمپین چندفروشگاهی فعالی در اکالا پیدا نشد"
         )
       );
+    if (input.onManifest) yield* input.onManifest([...ids], storeIds);
     const rows = new Map<string, Omit<DealRecord, "scanId" | "state">>();
     const eligibleStores = new Set(storeIds);
     const inspectedStores = new Set<number>();

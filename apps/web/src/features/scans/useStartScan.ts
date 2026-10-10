@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   scansReadSchema,
   scanStartedSchema,
-  type LocationRecord,
   type ScanRecord,
 } from "@better-buy/shared";
 import { api, RequestFailure } from "../../lib/api";
@@ -20,10 +19,7 @@ type UncertainAttempt = {
   previousIds: string[];
   failedAt: number;
 };
-export function useStartScan(
-  selection: ScanSelection,
-  locations: LocationRecord[]
-) {
+export function useStartScan(selection: ScanSelection) {
   const client = useQueryClient();
   const locked = useRef(false);
   const [uncertain, setUncertain] = useState<UncertainAttempt | null>(null);
@@ -70,26 +66,13 @@ export function useStartScan(
       target: ScanSelection;
       previousIds: string[];
     }) => {
+      await client.cancelQueries({ queryKey: ["scans"] });
       const started = await api(
         "/api/scans",
         { method: "POST", body: JSON.stringify(target) },
         scanStartedSchema.parse
       );
-      return {
-        ...target,
-        id: started.id,
-        locationName:
-          locations.find((l) => l.id === target.locationId)?.name ?? "",
-        status: "queued",
-        createdAt: new Date().toISOString(),
-        startedAt: null,
-        finishedAt: null,
-        vendorCount: 0,
-        productCount: 0,
-        dealCount: 0,
-        errorCode: null,
-        errorMessage: null,
-      } satisfies ScanRecord;
+      return started;
     },
     onSuccess: (run) => {
       client.setQueryData(["scan", run.id], run);

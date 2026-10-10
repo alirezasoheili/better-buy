@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { locationInputSchema } from "./validation";
 export type LocationInput = z.infer<typeof locationInputSchema>;
-export type DealState = "new" | "still_available" | "no_longer_present";
+export type DealState =
+  "current" | "new" | "still_available" | "no_longer_present";
 export type ScanStatus = "queued" | "running" | "succeeded" | "failed";
 
 export interface LocationRecord extends LocationInput {
+  coordinateRevision?: number;
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -20,6 +22,7 @@ export interface ProviderCapabilities {
   coverage: "campaign-feed";
 }
 export interface ScanRecord {
+  context?: import("./scanContext").ScanContext | null;
   id: string;
   locationId: string;
   locationName: string;
@@ -38,6 +41,15 @@ export interface ScanRecord {
   errorMessage: string | null;
 }
 export interface DealRecord {
+  benefit?: {
+    kind: "standard_discount" | "market_party" | "conditional";
+    identity: string;
+    applicable: boolean | null;
+    terms: string | null;
+  };
+  observedAt?: string;
+  provenance?: string[];
+  observationPriority?: number;
   key: string;
   scanId: string;
   productVariationId: string;

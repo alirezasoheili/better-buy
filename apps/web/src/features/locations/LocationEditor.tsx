@@ -16,7 +16,7 @@ export function LocationEditor({
   onSaved,
 }: {
   location: LocationRecord | null;
-  onSaved: () => void;
+  onSaved: (location?: LocationRecord) => void;
 }) {
   const [name, setName] = useState(location?.name ?? "");
   const [latitude, setLatitude] = useState(location?.latitude ?? 35.7);

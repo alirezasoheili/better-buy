@@ -1,20 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  dealsReadSchema,
-  groupsReadSchema,
-  type ScanRecord,
-} from "@better-buy/shared";
+import { productsReadSchema, type ScanRecord } from "@better-buy/shared";
 import type { DealSource } from "../dashboard/types";
 import { api, RequestFailure } from "../../lib/api";
 export const loadDealLedger = async (scanId: string, signal?: AbortSignal) => {
-  const [rawDeals, groupedDeals] = await Promise.all([
-    api("/api/scans/" + scanId + "/deals", { signal }, dealsReadSchema.parse),
-    api(
-      "/api/scans/" + scanId + "/deal-groups",
-      { signal },
-      groupsReadSchema.parse
-    ),
-  ]);
+  const groupedDeals = await api(
+    "/api/scans/" + scanId + "/products",
+    { signal },
+    productsReadSchema.parse
+  );
   if (
     groupedDeals.some(
       (g) => g.state !== "no_longer_present" && g.scanId !== scanId
@@ -24,30 +17,31 @@ export const loadDealLedger = async (scanId: string, signal?: AbortSignal) => {
       "invalid-response",
       "پاسخ نتیجه با اسکن انتخاب‌شده مطابقت ندارد."
     );
-  // Disappeared raw rows retain their previous scanId by the historical contract.
-  return { rawDeals, groupedDeals };
+  return { groupedDeals };
 };
 export function useScanLedger({
   busy,
   selected,
   scans,
   source,
-  threshold,
   selectedRunId,
+  coordinateRevision,
 }: {
   busy: boolean;
   selected: string;
   scans: ScanRecord[];
   source: DealSource;
-  threshold: number;
   selectedRunId: string | null;
+  coordinateRevision: number;
 }) {
   const contextual = scans
     .filter(
       (r) =>
         r.locationId === selected &&
         r.source === source &&
-        r.threshold === threshold
+        (r.id === selectedRunId ||
+          r.context?.location.revision === coordinateRevision ||
+          (!r.context && coordinateRevision === 1))
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const requested = selectedRunId
@@ -56,13 +50,20 @@ export function useScanLedger({
   const scan =
     requested ?? contextual.find((r) => r.status === "succeeded") ?? null;
   const ledger = useQuery({
-    queryKey: ["ledger", selected, source, threshold, scan?.id ?? null],
+    queryKey: [
+      "ledger",
+      selected,
+      coordinateRevision,
+      source,
+      scan?.id ?? null,
+    ],
+    gcTime: 600_000,
+    staleTime: 600_000,
     enabled: !busy && scan?.status === "succeeded",
     queryFn: ({ signal }) => loadDealLedger(scan!.id, signal),
   });
   return {
     scan,
-    deals: ledger.data?.rawDeals ?? [],
     dealGroups: ledger.data?.groupedDeals ?? [],
     results: ledger,
     hasResults: !!ledger.data,

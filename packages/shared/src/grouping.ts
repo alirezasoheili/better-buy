@@ -8,6 +8,13 @@ import type { DealRecord, DealState } from "./contracts";
  */
 export const DEAL_GROUP_KEY_VERSION = 1 as const;
 export interface VendorOfferRecord {
+  benefit?: DealRecord["benefit"];
+  observedAt?: string;
+  provenance?: string[];
+  sourceMoneyUnit?: "toman" | "rial";
+  originalAmountToman?: number;
+  discountAmountToman?: number;
+  finalAmountToman?: number;
   offerKey: string;
   productVariationId: string;
   vendorId: string;
@@ -22,7 +29,11 @@ export interface VendorOfferRecord {
 }
 export interface DealGroupRecord {
   key: string;
-  groupKeyVersion: typeof DEAL_GROUP_KEY_VERSION;
+  groupKeyVersion: 1 | 2;
+  bestCurrentOffer?: VendorOfferRecord | null;
+  currentStoreOfferCount?: number;
+  conditionalOffers?: VendorOfferRecord[];
+  diagnostics?: string[];
   scanId: string;
   title: string;
   image: string | null;

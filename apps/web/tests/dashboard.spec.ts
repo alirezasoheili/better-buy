@@ -102,6 +102,35 @@ const representative = [
     })),
   },
 ];
+// Fixture projection models the saved v2 contract, including differing prices.
+function products(groups: DealGroupRecord[]): DealGroupRecord[] {
+  return groups.map((group) => {
+    const current = group.vendors
+      .filter((offer) => offer.state !== "no_longer_present")
+      .sort(
+        (a, b) =>
+          a.finalPriceRials - b.finalPriceRials ||
+          a.vendorId.localeCompare(b.vendorId)
+      );
+    const best = current[0] ?? null;
+    return {
+      ...group,
+      groupKeyVersion: 2,
+      bestCurrentOffer: best,
+      currentStoreOfferCount: current.length,
+      conditionalOffers: [],
+      diagnostics: [],
+      ...(best
+        ? {
+            priceRials: best.priceRials,
+            discountRials: best.discountRials,
+            finalPriceRials: best.finalPriceRials,
+            discountRatio: best.discountRatio,
+          }
+        : {}),
+    };
+  });
+}
 async function mock(
   page: Page,
   fixture: {
@@ -186,9 +215,10 @@ async function mock(
           }),
           ...state.scans,
         ];
-        data = { id: "active", status: "queued" };
+        data = state.scans[0];
       } else data = state.scans;
-    } else if (url.pathname.endsWith("/deal-groups")) data = state.groups;
+    } else if (url.pathname.endsWith("/products"))
+      data = products(state.groups);
     else if (url.pathname.endsWith("/deals")) data = [];
     else if (url.pathname.startsWith("/api/scans/")) {
       state.statusReads++;
@@ -201,7 +231,10 @@ async function mock(
   return state;
 }
 const scanButton = (page: Page) =>
-  page.getByRole("button", { name: "شروع اسکن", exact: true });
+  page.getByRole("button", {
+    name: /^(پیدا کردن تخفیف‌ها|به‌روزرسانی تخفیف‌ها)$/,
+    exact: true,
+  });
 const offerHeading = (page: Page, title = representative[0]!.title) =>
   page.getByRole("heading", { name: title, exact: true });
 const success = async (page: Page) => {
@@ -258,6 +291,18 @@ test("first visit creates a location using address search and manual coordinates
   page,
 }) => {
   const state = await mock(page, { locations: [] });
+  let releaseHistory = () => {};
+  const historyRead = new Promise<void>((resolve) => {
+    releaseHistory = resolve;
+  });
+  let delayedHistoryStarted = false;
+  await page.route("**/api/scans", async (route) => {
+    if (route.request().method() === "GET" && state.locations.length) {
+      delayedHistoryStarted = true;
+      await historyRead;
+    }
+    await route.fallback();
+  });
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "موقعیت تحویل را اضافه کنید" })
@@ -288,8 +333,22 @@ test("first visit creates a location using address search and manual coordinates
   await expect(page.getByLabel("موقعیت تحویل", { exact: true })).toContainText(
     "خانه تازه"
   );
-  await expect(scanButton(page)).toBeEnabled();
-  await captureState(page, "ready-no-scan");
+  await expect.poll(() => delayedHistoryStarted).toBe(true);
+  expect(state.posts).toEqual([]);
+  releaseHistory();
+  await expect(page.locator(".active-scan")).toBeVisible();
+  expect(state.posts).toEqual([
+    {
+      locationId: "created",
+      source: "snappmarket",
+      threshold: 40,
+      mode: "partial",
+    },
+  ]);
+  await page.reload();
+  await expect(page.locator(".active-scan")).toBeVisible();
+  expect(state.posts).toHaveLength(1);
+  await captureState(page, "first-automatic-update");
   expect(state.locations).toHaveLength(1);
 });
 test("location reads recover and out-of-area saved locations remain editable", async ({
@@ -347,9 +406,11 @@ test("new scans use the 40 percent default with no mode choice, credential route
   });
   await page.goto("/");
   await expect(scanButton(page)).toBeEnabled();
+  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
   await page
     .getByRole("combobox", { name: "فروشگاه", exact: true })
     .selectOption("okala");
+  await page.keyboard.press("Escape");
   await scanButton(page).dblclick();
   await expect(
     page.getByRole("button", { name: "در حال شروع…", exact: true })
@@ -393,12 +454,14 @@ test("account-wide running scans remain discoverable in another location and sto
   });
   await page.goto("/");
   await expect(
-    page.getByText("در حال بررسی پیشنهادها…", { exact: true })
+    page.getByText("در حال پیدا کردن تخفیف‌ها…", { exact: true })
   ).toBeVisible();
   await page.getByLabel("موقعیت تحویل", { exact: true }).selectOption("office");
+  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
   await page
     .getByRole("combobox", { name: "فروشگاه", exact: true })
     .selectOption("okala");
+  await page.keyboard.press("Escape");
   await expect(page.locator(".active-scan")).toContainText("خانه · اسنپ‌مارکت");
   await expect(scanButton(page)).toBeDisabled();
   finish = true;
@@ -442,11 +505,11 @@ test("transient result GET recovers within the bounded retry count", async ({
 }) => {
   const state = await mock(page, { scans: [run()], groups: representative });
   let calls = 0;
-  await page.route("**/api/scans/saved/deal-groups", (r) => {
+  await page.route("**/api/scans/saved/products", (r) => {
     calls++;
     return calls === 1
       ? r.abort("connectionfailed")
-      : r.fulfill({ json: { data: representative } });
+      : r.fulfill({ json: { data: products(representative) } });
   });
   await page.goto("/");
   await expect(offerHeading(page)).toBeVisible();
@@ -459,11 +522,11 @@ test("persistent result failures show recovery after success and retry the same 
   const state = await mock(page, { scans: [run()], groups: representative });
   let fail = true;
   let calls = 0;
-  await page.route("**/api/scans/saved/deal-groups", (r) => {
+  await page.route("**/api/scans/saved/products", (r) => {
     calls++;
     return fail
       ? r.abort("connectionfailed")
-      : r.fulfill({ json: { data: representative } });
+      : r.fulfill({ json: { data: products(representative) } });
   });
   await page.goto("/");
   await expect(
@@ -482,28 +545,29 @@ test("persistent result failures show recovery after success and retry the same 
   expect(calls).toBe(4);
   expect(state.posts).toEqual([]);
 });
-test("failed raw-deals read is also a result error rather than a successful empty list", async ({
+test("the feed reads one product projection without downloading raw offers", async ({
   page,
 }) => {
-  await mock(page, { scans: [run()], groups: representative });
-  await page.route("**/api/scans/saved/deals", (r) =>
-    r.fulfill({ status: 403, json: { error: "FORBIDDEN" } })
-  );
+  const state = await mock(page, { scans: [run()], groups: representative });
+  let rawReads = 0;
+  await page.route("**/api/scans/saved/deals", (route) => {
+    rawReads++;
+    return route.fulfill({ status: 403 });
+  });
   await page.goto("/");
-  await expect(
-    page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
-  ).toBeVisible();
-  await expect(offerHeading(page)).toHaveCount(0);
+  await expect(offerHeading(page)).toBeVisible();
+  expect(rawReads).toBe(0);
+  expect(state.posts).toEqual([]);
 });
 test("background result failures preserve this context's cached snapshot and clear on recovery", async ({
   page,
 }) => {
   const state = await success(page);
   let fail = true;
-  await page.route("**/api/scans/saved/deal-groups", (r) =>
+  await page.route("**/api/scans/saved/products", (r) =>
     fail
       ? r.abort("connectionfailed")
-      : r.fulfill({ json: { data: representative } })
+      : r.fulfill({ json: { data: products(representative) } })
   );
   await page.getByRole("button", { name: "تازه‌سازی نتیجه" }).click();
   await expect(
@@ -526,7 +590,7 @@ for (const status of [401, 403, 404, 422, 200])
   }) => {
     await mock(page, { scans: [run()] });
     let calls = 0;
-    await page.route("**/api/scans/saved/deal-groups", (r) => {
+    await page.route("**/api/scans/saved/products", (r) => {
       calls++;
       return r.fulfill({
         status,
@@ -544,7 +608,7 @@ for (const status of [401, 403, 404, 422, 200])
 test("long Retry-After prevents rapid repeated requests", async ({ page }) => {
   await mock(page, { scans: [run()] });
   let calls = 0;
-  await page.route("**/api/scans/saved/deal-groups", (r) => {
+  await page.route("**/api/scans/saved/products", (r) => {
     calls++;
     return r.fulfill({
       status: 429,
@@ -652,7 +716,7 @@ test("reconciliation failure keeps duplicate start blocked until the authenticat
   ).toBeVisible();
   expect(posts).toBe(1);
 });
-for (const boundary of ["location", "source", "threshold", "scan"])
+for (const boundary of ["location", "source", "scan"])
   test(`late ledger responses cannot cross the ${boundary} boundary`, async ({
     page,
   }) => {
@@ -663,11 +727,11 @@ for (const boundary of ["location", "source", "threshold", "scan"])
     const waiting = new Promise<void>((r) => {
       release = r;
     });
-    await page.route("**/api/scans/saved/deal-groups", async (r) => {
+    await page.route("**/api/scans/saved/products", async (r) => {
       started = true;
       await waiting;
       await r
-        .fulfill({ json: { data: [group("پیشنهاد زمینه قبلی")] } })
+        .fulfill({ json: { data: products([group("پیشنهاد زمینه قبلی")]) } })
         .catch(() => {});
     });
     await page.goto("/");
@@ -676,15 +740,12 @@ for (const boundary of ["location", "source", "threshold", "scan"])
       await page
         .getByLabel("موقعیت تحویل", { exact: true })
         .selectOption("office");
-    if (boundary === "source")
+    if (boundary === "source") {
+      await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
       await page
         .getByRole("combobox", { name: "فروشگاه", exact: true })
         .selectOption("okala");
-    if (boundary === "threshold") {
-      await page.getByText("گزینه‌های اسکن", { exact: false }).click();
-      await page
-        .getByRole("combobox", { name: "حداقل درصد تخفیف", exact: true })
-        .selectOption("50");
+      await page.keyboard.press("Escape");
     }
     if (boundary === "scan") {
       await page
@@ -711,11 +772,11 @@ test("sign-out retires reads and another account cannot see late private results
   const waiting = new Promise<void>((r) => {
     release = r;
   });
-  await page.route("**/api/scans/saved/deal-groups", async (r) => {
+  await page.route("**/api/scans/saved/products", async (r) => {
     requested = true;
     await waiting;
     await r
-      .fulfill({ json: { data: [group("پیشنهاد خصوصی حساب قبلی")] } })
+      .fulfill({ json: { data: products([group("پیشنهاد خصوصی حساب قبلی")]) } })
       .catch(() => {});
   });
   await page.goto("/");
@@ -760,10 +821,10 @@ test("reconnect refreshes stale failed reads without another scan submission", a
 }) => {
   const state = await mock(page, { scans: [run()] });
   let fail = true;
-  await page.route("**/api/scans/saved/deal-groups", (r) =>
+  await page.route("**/api/scans/saved/products", (r) =>
     fail
       ? r.abort("connectionfailed")
-      : r.fulfill({ json: { data: representative } })
+      : r.fulfill({ json: { data: products(representative) } })
   );
   await page.goto("/");
   await expect(
@@ -785,7 +846,7 @@ test("successful empty results, filter-empty results, and loading have distinct 
   const waiting = new Promise<void>((r) => {
     release = r;
   });
-  await page.route("**/api/scans/saved/deal-groups", async (r) => {
+  await page.route("**/api/scans/saved/products", async (r) => {
     await waiting;
     await r.fulfill({ json: { data: [] } });
   });
@@ -796,16 +857,16 @@ test("successful empty results, filter-empty results, and loading have distinct 
     page.getByRole("heading", { name: "پیشنهادی با این حداقل تخفیف پیدا نشد" })
   ).toBeVisible();
   state.groups = representative;
-  await page.unroute("**/api/scans/saved/deal-groups");
+  await page.unroute("**/api/scans/saved/products");
   await page.reload();
   await expect(offerHeading(page)).toBeVisible();
   await page.getByLabel("جست‌وجوی کالا یا فروشگاه").fill("هیچ نتیجه");
   await expect(
-    page.getByRole("heading", { name: "چیزی با این فیلتر پیدا نشد" })
+    page.getByRole("heading", { name: "چیزی با این جست‌وجو پیدا نشد" })
   ).toBeVisible();
   await page
     .locator(".empty")
-    .getByRole("button", { name: "پاک‌کردن فیلترها" })
+    .getByRole("button", { name: "پاک‌کردن جست‌وجو" })
     .click();
   await expect(offerHeading(page)).toBeVisible();
 });
@@ -830,7 +891,9 @@ test("history identifies context and retains Jet results without new Jet scans",
   await expect(
     page.getByRole("heading", { name: "نتیجه تاریخی", exact: true })
   ).toBeVisible();
+  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
   await expect(page.getByText("دیجی‌کالا جت · فقط مشاهده")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(scanButton(page)).toBeDisabled();
   expect(state.posts).toEqual([]);
 });
@@ -975,21 +1038,26 @@ test("location list, edit and create replace content in the same dialog and disc
   ).toBeFocused();
   expect(state.locations).toHaveLength(3);
 });
-test("offer expansion, actual filters, sorting and reset work with focus containment", async ({
+test("one feed has optional search, sorting, accessible comparison and settings without collection", async ({
   page,
 }) => {
-  await success(page);
-  await page.locator(".vendor-disclosure summary").first().click();
+  const state = await success(page);
+  const disclosure = page.locator(".vendor-disclosure summary").first();
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".vendor-offers").first()).toBeVisible();
-  await page.getByRole("button", { name: "فیلترها", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "فیلتر پیشنهادها" });
-  await expect(dialog).toBeVisible();
-  await dialog
-    .getByRole("combobox", { name: "فروشگاه عرضه‌کننده", exact: true })
-    .selectOption("هایپرمارکت ونک");
-  await dialog
-    .getByRole("combobox", { name: "حداقل قیمت", exact: true })
-    .selectOption("200000");
+  await page.getByLabel("جست‌وجوی کالا یا فروشگاه").fill("چای");
+  await expect(page.locator(".deal-row")).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "پاک‌کردن جست‌وجو", exact: true })
+    .click();
+  await expect(page.locator(".deal-row")).toHaveCount(3);
+  await page
+    .getByRole("combobox", { name: "مرتب‌سازی", exact: true })
+    .selectOption("price");
+  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "تنظیمات تخفیف‌ها" });
+  await dialog.getByLabel("حداقل درصد تخفیف").selectOption("50");
   for (let i = 0; i < 8; i++) {
     await page.keyboard.press("Tab");
     expect(
@@ -997,18 +1065,14 @@ test("offer expansion, actual filters, sorting and reset work with focus contain
     ).toBe(true);
   }
   await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "فیلترها (۲)", exact: true })
+    page.getByRole("button", { name: "تنظیمات", exact: true })
   ).toBeFocused();
-  await expect(page.locator(".deal-row")).toHaveCount(2);
-  await page
-    .getByRole("button", { name: "پاک‌کردن فیلترها", exact: true })
-    .click();
   await expect(page.locator(".deal-row")).toHaveCount(3);
-  await page
-    .getByRole("combobox", { name: "مرتب‌سازی", exact: true })
-    .selectOption("discount");
+  await expect(
+    page.getByText(/Explore|انتخاب دسته|انتخاب کمپین|دامنه اسکن/)
+  ).toHaveCount(0);
+  expect(state.posts).toEqual([]);
 });
 test("best offer uses one store and historical offers never win the current price", async ({
   page,
@@ -1141,8 +1205,8 @@ test("layouts, theme preference, long content, broken images and reduced motion 
       finalPriceRials: 1234567890,
     })),
   };
-  await page.route("**/api/scans/saved/deal-groups", (r) =>
-    r.fulfill({ json: { data: [long] } })
+  await page.route("**/api/scans/saved/products", (r) =>
+    r.fulfill({ json: { data: products([long]) } })
   );
   await page.route("https://images.example.test/**", (r) => r.abort());
   await page.setViewportSize({ width: 360, height: 844 });
@@ -1226,7 +1290,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
   const waiting = new Promise<void>((r) => {
     release = r;
   });
-  await page.route("**/api/scans/saved/deal-groups", async (r) => {
+  await page.route("**/api/scans/saved/products", async (r) => {
     await waiting;
     await r.fulfill({ status: 503, json: { error: "TEMPORARY" } });
   });
@@ -1238,7 +1302,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
     page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
   ).toBeVisible();
   await capture("error-results");
-  await page.unroute("**/api/scans/saved/deal-groups");
+  await page.unroute("**/api/scans/saved/products");
   // URLs observed from Okala's public campaign feed on 2026-10-08. All prices here remain fixtures.
   state.groups = [
     {
@@ -1272,11 +1336,11 @@ test("capture state views, real retailer images, touch targets, focus and token 
   await capture("real-images");
   await page.locator(".vendor-disclosure summary").first().click();
   await capture("expanded-offers");
-  await page.getByRole("button", { name: "فیلترها", exact: true }).click();
-  await capture("filters-dialog");
+  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
+  await capture("settings-dialog");
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "فیلترها", exact: true })
+    page.getByRole("button", { name: "تنظیمات", exact: true })
   ).toBeFocused();
   const metrics = await page.evaluate(() => {
     const contrast = (a: string, b: string) => {
@@ -1323,7 +1387,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
   expect(metrics.badTargets).toBe(0);
   expect(metrics.focusOutline).not.toBe("none");
   expect(metrics.firstOfferTop).toBeLessThan(760);
-  await page.route("**/api/scans/saved/deal-groups", (r) =>
+  await page.route("**/api/scans/saved/products", (r) =>
     r.abort("connectionfailed")
   );
   await page.getByRole("button", { name: "تازه‌سازی نتیجه" }).click();
@@ -1331,7 +1395,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
     page.getByText("تازه‌سازی نتیجه انجام نشد", { exact: true })
   ).toBeVisible();
   await capture("cached-error");
-  await page.unroute("**/api/scans/saved/deal-groups");
+  await page.unroute("**/api/scans/saved/products");
   state.scans = [run({ id: "active", status: "queued", finishedAt: null })];
   await page.reload();
   await expect(page.locator(".active-scan")).toBeVisible();
@@ -1347,7 +1411,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
   ];
   await page.reload();
   await expect(
-    page.getByText("در حال بررسی پیشنهادها…", { exact: true })
+    page.getByText("در حال پیدا کردن تخفیف‌ها…", { exact: true })
   ).toBeVisible();
   await capture("running");
   await page.route("**/api/scans/active", (r) => r.abort("connectionfailed"));

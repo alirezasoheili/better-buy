@@ -1,0 +1,52 @@
+# S05 runtime admission evidence
+
+Checked 2026-10-10 (Asia/Tehran). Scope: G05 for one supplementary campaign in the existing bounded executor. No provider requests, account mutations, deployment, configuration changes or Workflow instances were made for this note. Production account identifiers, credentials and coordinates are omitted.
+
+**Verdict: G05 remains unverified.** The checked-in implementation gives local ceilings, not evidence of the deployed account's plan, CPU consumption, database capacity or latency. Keep the supplementary adapter outside the default manifest until those facts and the provider gates are verified. This does not block the existing automatic feed.
+
+## Local implementation evidence
+
+| Evidence                                                                                                                                                                                                                                                        | Consequence                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`executeScan`](../apps/worker/src/application/scans.ts#L128) gives running/collection/progress a 22,000 ms timeout. Success persistence happens after that timeout; persistence is uninterruptible in [`scanServices`](../apps/worker/src/composition.ts#L57). | The nominal gap to post-response execution expiry is eight seconds. It is a reserve, not a measured guarantee: slow D1 or an uninterruptible progress write can overrun it. |
+| [`registerScans`](../apps/worker/src/http/scans.ts#L108) returns HTTP 202 and registers the scan Promise with `waitUntil`.                                                                                                                                      | Local development staying alive does not prove production completion or durability.                                                                                         |
+| [`collectDeals`](../apps/worker/src/providers/snapp/collector.ts#L107) is sequential, allows up to 50 baseline pages, acquires a scan-owned guest, and refreshes once after a 401.                                                                              | Baseline request capacity must be reserved before admitting supplementary work. Guest expiry can also cause acquisition; count every actual access attempt.                 |
+| [`requestJson`](../apps/worker/src/infrastructure/http.ts#L38) permits three GET attempts, one POST attempt, an eight-second per-attempt timeout and retry delays.                                                                                              | A single retrying GET can exceed the whole 22-second collection budget. Do not assume three attempts will fit; deadline and attempt guards must stop incompletely.          |
+| [`Store.succeed`](../apps/worker/src/store.ts#L385) batches one insert per deal and one publication update, using 18 bind parameters per insert.                                                                                                                | For N eligible offers, final publication alone consumes N + 1 statements. A batch does not exempt its statements from D1 limits.                                            |
+| [`wrangler.jsonc`](../apps/worker/wrangler.jsonc) configures D1 and observability, with no Workflow binding or explicit CPU/subrequest override.                                                                                                                | This proves only the checkout's configuration. It does not prove the deployed settings, plan, Workflow entitlement or live usage.                                           |
+
+## Current primary platform evidence
+
+HTTP `waitUntil` grants at most 30 seconds after response/disconnection, shared across all tasks; unfinished tasks are cancelled. It does not provide replay. [Cloudflare context API](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil)
+
+Workers Free allows 10 ms CPU and 50 external subrequests per invocation; Paid defaults to 30 seconds CPU and 10,000 subrequests. Both allow six simultaneous outgoing connections and 128 MB memory. Network waiting does not consume CPU. Redirects count as additional subrequests; legacy Bundled plans retain smaller limits. These are published limits, not this account's measured settings. [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+
+D1 allows 50 queries per Worker invocation on Free and 1,000 on Paid, 100 bound parameters per query and a 30-second query duration. Each statement in a batch remains subject to query limits. [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/)
+
+Workflows require a configured binding and exported entrypoint; successful steps persist results and can resume after interruption. This checkout has no implemented durable dispatch or tested duplicate/recovery behavior. [Cloudflare Workflow guide](https://developers.cloudflare.com/workflows/get-started/guide/)
+
+## Conditional tiny-campaign budget
+
+The following is a conservative **proposed admission envelope**, not a verified provider capability or an implemented guard. It does not replace D09 terminal evidence or the actual-account check. Reject candidates exceeding it; never interpret a guard as successful exhaustion.
+
+- Exactly one campaign, discovered through at most one verified discovery response; at most two campaign responses **including any terminal empty response**. A campaign needing more responses is excluded.
+- At most 20 supplementary eligible identities. A third page, row overflow, repeated identity page, incompatible total drift or missing terminal evidence fails incompletely; preserve the last successful feed.
+- Reserve at most 11 additional outbound attempts: three GET operations times three attempts, plus two access attempts. Shared guest access may reduce actual usage, but admission must not depend on that saving. Count redirects separately or disallow them. Reserve the baseline's measured upper bound, refresh and retries before these 11 attempts.
+- Supplementary elapsed work must fit a four-second envelope inside the unchanged 22-second collection ceiling. Admission requires representative baseline completion at or below 16 seconds, leaving two seconds of collection margin. Measure discovery, access, retries, parsing and writes together; shorten attempt timeouts to remaining time. A successful primary page at eight seconds is not evidence of this envelope.
+- Reserve at most 24 additional D1 statements for 20 inserted offers, one manifest read/write pair and two progress writes, plus all existing preparation/authentication/publication statements. Measure the actual path; this arithmetic is not a substitute for an invocation query ledger.
+- Measure combined baseline + supplementary CPU and final publication time in the actual Worker configuration. Publish only after both frozen units complete. Maintain the publication/failure reserve and prove cancellation cannot expose supplementary partial rows.
+
+With b baseline GET pages and one possible 401 replay, a useful conditional planning bound is two guest attempts plus 3(b + 1) GET attempts, **before** redirects and expiry-triggered acquisitions. Fifty allowed baseline pages can therefore exceed Free external capacity without any enrichment. Likewise, a locally successful 78-offer scan requires at least 79 publication statements, already above Free's D1 invocation query limit. These are deductions from the source and published ceilings, not production incidents.
+
+## Evidence still needed before admission
+
+1. Read-only actual-account plan/deployed-limit evidence and invocation telemetry: total CPU, subrequests, D1 statements, baseline duration, supplementary duration and final publication duration. Wrangler `whoami` confirmed authenticated account access, but the selected account's read-only subscriptions request returned HTTP 403 at 2026-10-10T12:47:48.829Z. The actual plan remains inaccessible with the available access; no production invocation telemetry was collected. Local D1 tests cannot establish those values. No permission upgrade or account mutation was attempted.
+2. Current sanitized provider measurements for one candidate proving the above page/attempt/time/offer envelope, terminal pagination, stock/price/benefit and location semantics, and net-new eligible identities (G01-G03/G06).
+3. Enforced combined budgets and failure tests covering access refresh, transient retries, pagination anomalies, budget exhaustion and unchanged last-successful results. Current baseline caps are not a manifest-wide attempt ledger.
+4. If measurements cannot fit bounded execution, implement and verify the minimum durable dispatch required by S05/D10 before admitting the candidate; leave larger replay/reconciliation work to S06. Do not extend `waitUntil` or use the spec's proposed 15-minute durable ceiling as an HTTP execution allowance.
+
+The historical 6,254-row campaign at ten rows per page needs roughly 626 pages. It is outside this envelope and the spec's proposed 100-page/250-attempt durable guards; it remains excluded without a newly verified efficient retrieval contract. [Expansion spec D13/S05](better-buy-expansion-spec.md)
+
+The account check used `GET /accounts/{account_id}/subscriptions`, with identifiers and credentials kept in memory and omitted from evidence. The official API requires Billing Read or Billing Write; no further account API requests were attempted after the forbidden response. [Cloudflare account subscriptions API](https://developers.cloudflare.com/api/resources/accounts/subresources/subscriptions/methods/get/)
+
+The [paired provider evidence](better-buy-s05-feed-evidence.md) verifies one small 17-row campaign's terminal page but finds zero additional 40%-eligible offers. That independent usefulness failure also prevents admission.

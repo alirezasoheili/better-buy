@@ -104,7 +104,8 @@ describe("scan ownership and failure boundary", () => {
       );
       expect(prepared.threshold).toBe(source === "okala" ? 30 : 20);
       expect(reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ source, threshold: prepared.threshold })
+        expect.objectContaining({ source, threshold: prepared.threshold }),
+        job.location
       );
       await Effect.runPromise(
         executeScan(prepared).pipe(Effect.provide(context))

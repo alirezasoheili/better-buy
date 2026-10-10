@@ -18,7 +18,7 @@ export function LocationManager({
   locations: LocationRecord[];
   initialView: "list" | "create";
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (location?: LocationRecord) => void;
 }) {
   const [view, setView] = useState<LocationView>({ kind: initialView });
   const [returnFocusTo] = useState(() =>
@@ -110,8 +110,8 @@ export function LocationManager({
               <LocationEditor
                 key={view.kind === "edit" ? view.location.id : "create"}
                 location={view.kind === "edit" ? view.location : null}
-                onSaved={() => {
-                  onSaved();
+                onSaved={(saved) => {
+                  onSaved(saved);
                   if (initialView === "create") onClose();
                   else showList();
                 }}
