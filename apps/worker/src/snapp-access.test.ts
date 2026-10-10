@@ -91,14 +91,15 @@ function database() {
 async function start(
   env: ReturnType<typeof database>["env"],
   source = "snappmarket",
-  id = locationId
+  id = locationId,
+  threshold = 40
 ) {
   const tasks: Promise<unknown>[] = [];
   const response = await api.fetch(
     new Request("http://localhost/api/scans", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ locationId: id, source, threshold: 40 }),
+      body: JSON.stringify({ locationId: id, source, threshold }),
     }),
     env,
     {
@@ -412,6 +413,78 @@ describe("Snapp access through authenticated scan API", () => {
 });
 
 describe("scan state integrity through real SQLite", () => {
+  it("persists and compares Okala API requests at one effective threshold without rewriting history", async () => {
+    const { env } = database();
+    const store = new Store(env.DB, "user-1", env.BOX_KEY);
+    const legacy = await store.createScan(locationId, 20, "okala", "partial");
+    await store.succeed(legacy, { vendorCount: 0, productCount: 0 }, []);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/nearby"))
+        return Response.json({
+          success: true,
+          data: {
+            stores: [10, 11].map((storeId) => ({
+              storeId,
+              isActive: true,
+              isServes: true,
+              isExist: true,
+            })),
+          },
+        });
+      if (path.endsWith("/multi-store"))
+        return Response.json({
+          success: true,
+          entities: [
+            {
+              storeId: 10,
+              storeName: "فروشگاه",
+              products: [25, 29, 30].map((n) => ({
+                id: n,
+                name: "کالا",
+                discountPercent: n,
+                quantity: 2,
+                hasQuantity: true,
+                price: 100000,
+                okPrice: 100000 - n * 1000,
+                storeId: 10,
+                storeName: "فروشگاه",
+              })),
+            },
+            { storeId: 11, storeName: "بدون پیشنهاد", products: [] },
+          ],
+        });
+      return Response.json({
+        success: true,
+        carousels: [
+          { id: 7, isMulti: true },
+          { id: 8, isMulti: true },
+        ],
+      });
+    });
+    const first = await start(env, "okala", locationId, 20);
+    expect(first.status).toBe(202);
+    const firstId = ((await first.json()) as { data: { id: string } }).data.id;
+    expect(await store.scan(firstId)).toMatchObject({
+      threshold: 30,
+      status: "succeeded",
+      vendorCount: 2,
+      dealCount: 1,
+    });
+    expect(await store.deals(firstId)).toMatchObject([
+      { discountRatio: 30, state: "new" },
+    ]);
+    const second = await start(env, "okala", locationId, 30);
+    const secondId = ((await second.json()) as { data: { id: string } }).data
+      .id;
+    expect(await store.deals(secondId)).toMatchObject([
+      { discountRatio: 30, state: "still_available" },
+    ]);
+    expect(await store.scan(legacy)).toMatchObject({
+      threshold: 20,
+      status: "succeeded",
+    });
+  });
   it("rejects direct reservation of another tenant's location", async () => {
     const { env, sqlite } = database();
     await expect(

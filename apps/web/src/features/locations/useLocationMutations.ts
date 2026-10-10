@@ -28,6 +28,7 @@ export function useLocationMutations(
   };
   return {
     error: saveMutation.error?.message ?? removeMutation.error?.message ?? "",
+    pending: saveMutation.isPending || removeMutation.isPending,
     save,
     remove,
   };

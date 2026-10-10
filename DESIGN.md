@@ -1,223 +1,58 @@
----
-name: Better Buy
-description: A Persian RTL live grocery shelf for scanning and comparing deep local discounts.
-colors:
-  signal-orange: "#f4511e"
-  signal-orange-deep: "#b92900"
-  paper: "#f4f1e9"
-  shelf-stock: "#fffdf7"
-  charcoal-ink: "#1b1b18"
-  rail-charcoal: "#20211d"
-  muted-ink: "#68675f"
-  shelf-rule: "#d9d4c7"
-  savings-mint: "#167b58"
-  vanished-gray: "#77736b"
-typography:
-  display:
-    fontFamily: 'IRANSansX, Tahoma, "Segoe UI", sans-serif'
-    fontSize: "clamp(25px, 3vw, 38px)"
-    fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "-0.025em"
-  title:
-    fontFamily: 'IRANSansX, Tahoma, "Segoe UI", sans-serif'
-    fontSize: "22px"
-    fontWeight: 700
-    lineHeight: 1.3
-  body:
-    fontFamily: 'IRANSansX, Tahoma, "Segoe UI", sans-serif'
-    fontSize: "13px"
-    fontWeight: 400
-    lineHeight: 1.8
-  label:
-    fontFamily: 'IRANSansX, Tahoma, "Segoe UI", sans-serif'
-    fontSize: "11px"
-    fontWeight: 700
-    lineHeight: 1.3
-rounded:
-  control: "10px"
-  label: "12px"
-  surface: "14px"
-  scan-strip: "16px"
-  pill: "99px"
-spacing:
-  compact: "8px"
-  control: "12px"
-  row: "18px"
-  surface: "24px"
-  workspace: "34px"
-components:
-  button-scan:
-    backgroundColor: "{colors.signal-orange}"
-    textColor: "#ffffff"
-    typography: "{typography.label}"
-    rounded: "{rounded.label}"
-    padding: "0 23px"
-    height: "56px"
-  button-utility:
-    backgroundColor: "{colors.charcoal-ink}"
-    textColor: "#ffffff"
-    typography: "{typography.label}"
-    rounded: "{rounded.control}"
-    padding: "12px 20px"
-  field:
-    backgroundColor: "#ffffff"
-    textColor: "{colors.charcoal-ink}"
-    typography: "{typography.body}"
-    rounded: "{rounded.control}"
-    padding: "12px"
-  deal-row:
-    backgroundColor: "{colors.shelf-stock}"
-    textColor: "{colors.charcoal-ink}"
-    padding: "16px 18px 16px 0"
----
+# Better Buy design system
 
-# Design System: Better Buy
+Better Buy is a Persian RTL grocery-offer comparison tool. The design is a compact utility: location, retailer, one scan action, and saved observations. The existing «ب» identity mark and Better Buy name remain. Local IRANSansX FaNum remains the only font family. There is no marketing hero, decorative photography, animated scanning machinery, or permanent navigation rail.
 
-## Overview
+## Direction and audit
 
-**Creative North Star: "The Live Grocery Shelf"**
+| Before                                           | After                                                                         | Why                                                             |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Permanent dark location rail                     | Compact header; location management in a Radix panel                          | Give comparisons the main content area                          |
+| Retailer connection settings                     | Concise help panel; retailer selector stays visible                           | Snapp and Okala require no customer setup                       |
+| Repeated desktop/mobile/empty-state scan buttons | One action in the context controls                                            | Prevent competing calls to action and covered mobile content    |
+| Animated scan strip                              | Account-wide text status with its actual context                              | Communicate work and preserve discoverability across navigation |
+| Four oversized summary tiles                     | Compact feed-state filters and counts                                         | Make comparison actionable without inflating statistics         |
+| Vendor-chip wall                                 | Native keyboard-accessible offer disclosure                                   | Keep the best offer legible and other store prices available    |
+| Result failures look empty                       | Loading, error, cached refresh failure, loaded empty, and filter-empty states | Truthful recovery without starting another scan                 |
+| Partial/full choice                              | Omitted from new scans; historical mode remains readable                      | Both active collectors ignore mode                              |
 
-Better Buy turns a data-heavy local scanner into a physical-feeling grocery shelf. Warm paper and shelf-stock surfaces carry the content, charcoal structures establish operational confidence, and signal-orange price tabs make the deepest discounts readable before any supporting detail. The visual world is practical, dense, and unmistakably retail rather than a generic SaaS dashboard.
+## Tokens and layout
 
-Location, scan state, price, and recency stay visually attached to the buying decision. Ruled rows and shelf-label silhouettes organize repeated products; restrained depth keeps the interface calm while a moving scanner line and tactile scan action communicate live work. The Persian RTL reading order is foundational, not a mirrored afterthought.
+| Role                   | Light     | Dark      |
+| ---------------------- | --------- | --------- |
+| Canvas                 | `#f7f8fa` | `#171a20` |
+| Surface                | `#ffffff` | `#20252d` |
+| Text                   | `#20242b` | `#f0f2f5` |
+| Secondary text         | `#59616e` | `#b1b9c6` |
+| Divider/control border | `#d7dce3` | `#434c5b` |
+| Action / focus         | `#b84313` | `#ffb18a` |
+| Action text            | `#ffffff` | `#382013` |
+| Error text             | `#b42332` | `#ffabb3` |
+| Status text            | `#266047` | `#ace0c5` |
 
-**Key Characteristics:**
+The header's «ظاهر» menu selects light, dark, or system appearance through the existing ThemeProvider. The choice is saved in the browser; system appearance is the default. Product images keep a white image well for source fidelity. Semantic colors always accompany text.
 
-- Warm paper and shelf-stock materiality.
-- Charcoal operational framing with sparse signal orange.
-- Ruled, high-density deal rows modeled on shelf labels.
-- Large tabular Persian discount and price numerals.
-- Responsive RTL behavior with a persistent mobile scan action.
+Body is 14px with 1.85 line height; metadata 12–13px, product title 16px (14px on narrow screens), page title 24px (21px on mobile), price 19px (18px on mobile). Spacing steps are 4/8/12/16/24/32px. Controls use 8px corners, content surfaces 12px, and the retained brand mark 10px. Controls and disclosure summaries are at least 44px tall. Overlay/panel/menu layers are 40/41/50.
 
-## Colors
+The header is capped at 1440px and the workspace at 1120px. Context controls precede results; search, sort, and comparison filters remain near the list. At 768px the layout compresses, and at 520px controls and price blocks stack. Nothing is fixed over result content. Dialogs use `100dvh` bounds and scroll within their own surface for small screens/keyboards. CSS uses logical properties and text is isolated with `bdi`; coordinates use LTR inputs. Money display retains shared provider-specific units.
 
-The palette combines grocery-paper warmth with high-contrast charcoal and a single urgent retail signal.
+Only short color/border transitions are used. No recurring list animation, custom polling timers, or direct frontend React effects. Reduced motion removes transitions. Hover styles are gated to a fine pointer. Keyboard focus uses a 3px visible ring. Dialogs and nested deletion confirmations use existing Radix Dialog/AlertDialog portals, focus containment/restoration, and Escape behavior. Vendor comparisons use native `details`/`summary`.
 
-### Primary
+## Product semantics
 
-- **Signal Orange:** Marks discount tabs, the manual scan action, scanner beam, loading indicators, and selected deal states. It is the visual alarm for actionable savings.
-- **Deep Signal Orange:** Carries orange text on pale surfaces, especially section eyebrows, active summaries, and error-adjacent emphasis where the brighter orange would lose contrast.
+The price, original price, discount, and vendor name all come from the same cheapest current offer. Disappeared offers cannot win a current price; an entirely historical group is labelled with a historical price. Expanded offers put current observations first, ordered by price. Group identities and v1 grouping remain unchanged and provider-specific.
 
-### Secondary
+Feed labels are «پیشنهادهای جدید», «در فهرست فعلی», and «دیگر در این فهرست نیست». These describe the feed comparison, not universal availability. Okala coverage is explained once near its results and in help. Scan progress counts distinct inspected stores; no percentage or ETA is invented. New scans default to 40%, and threshold lives behind «گزینه‌های اسکن». Historical scans preserve their original thresholds and modes, including Jet history.
 
-- **Savings Mint:** Confirms healthy connection states, savings amounts, and successful scan outcomes without competing with the discount signal.
+## Requested design sources
 
-### Neutral
+Installed Emil and Taste skills were discovered and read first. Exact upstream sources were then read at these repository revisions on 2026-10-08; the missing Anthropic skill was fetched to a temporary reference directory, with no global installation or setup commands:
 
-- **Warm Paper:** The application canvas; it prevents the dense ledger from feeling clinical.
-- **Shelf Stock:** The primary content surface for deal rows, forms, summaries, and status containers.
-- **Charcoal Ink:** Main copy, top scan strip, and strong utility actions.
-- **Rail Charcoal:** The location rail and mobile navigation shell; it anchors place and navigation outside the product ledger.
-- **Muted Ink:** Secondary copy, metadata, and explanatory text.
-- **Shelf Rule:** Dividers, input strokes, and dashed price separators.
-- **Vanished Gray:** Desaturates deals that have disappeared from the latest scan.
+- Emil: [emil-design-eng](https://github.com/emilkowalski/skills/blob/e8a175de22ae1e49370fc144c1f3bb9aeedf988d/skills/emil-design-eng/SKILL.md), revision `e8a175de22ae1e49370fc144c1f3bb9aeedf988d`.
+- Anthropic: [frontend-design](https://github.com/anthropics/skills/blob/683bc88e56f3e09ba94f7055977f3d3aa499f202/skills/frontend-design/SKILL.md), revision `683bc88e56f3e09ba94f7055977f3d3aa499f202`.
+- Leon: [design-taste-frontend](https://github.com/leonxlnx/taste-skill/blob/b482f7a970abb98c4108d4a9f761e458c64cefc8/skills/taste-skill/SKILL.md), revision `b482f7a970abb98c4108d4a9f761e458c64cefc8`. The current source resolves to `skills/taste-skill/SKILL.md`.
 
-**The Orange Means Action Rule.** Use signal orange for discounts, scanning, and the strongest active state; do not distribute it as general decoration.
+Emil leads feedback/accessibility/restraint; Anthropic leads deliberate tokens, functional copy, and self-critique. Taste explicitly excludes dashboards and multi-step product UI, so only its audit-first process and applicable principles are used. User overrides are variance 3 / motion 2 / density 4. No marketing presets, Latin typography requirements, image-generation requirements, or Impeccable were applied.
 
-**The Warm Shelf Rule.** Product-bearing surfaces stay warm and light. Pure white is reserved for inputs, product-image wells, and momentary hover clarification.
+## Visual evidence
 
-## Typography
-
-**Display Font:** IRANSansX (with Tahoma, Segoe UI, and system sans-serif fallbacks)  
-**Body Font:** IRANSansX (with Tahoma, Segoe UI, and system sans-serif fallbacks)
-
-**Character:** IRANSansX FaNum provides dependable Persian shaping and Persian tabular numerals for fast operational scanning. Hierarchy comes from size, weight, and numeral scale rather than a decorative second family.
-
-### Hierarchy
-
-- **Display** (700, fluid 25–38px, 1.2): Page headings for deals, settings, and history; slightly tightened tracking creates a decisive ledger heading.
-- **Title** (700, 22px, 1.3): Selected location and high-value price labels.
-- **Body** (400, 13px, 1.8): Explanations and contextual copy; product titles use a denser 15px face with generous 1.8 line-height and a 65ch ceiling.
-- **Label** (700, 11px, 1.3): Scan context, metadata, badges, and controls. Tiny labels may step down to 9–10px only inside compact shelf tags.
-- **Price Numerals** (700–900, 17–27px): Discount tabs, totals, and final prices use tabular numerals to keep repeated rows aligned.
-
-**The Number Leads Rule.** In a deal row, the discount and final price must outrank vendor, category, stock, and explanatory savings copy.
-
-## Layout
-
-The desktop shell is an RTL two-column grid: a sticky 246px location rail on the right and a fluid workspace with 34px horizontal padding. The scan strip spans the workspace first, followed by a four-cell summary and a ruled deal ledger. Deal rows use a four-part grid for discount tab, product image, product identity, and price label; repeated horizontal rules establish shelf rhythm more strongly than isolated cards.
-
-At 1050px, the rail compresses to 86px and navigation becomes icon-led. Deal rows collapse their price area beneath product identity while preserving the discount tab as the first strong signal. At 720px, the rail becomes a compact top shell with a location select, the summary becomes two columns, filters become a two-column control grid, and the scan action becomes a fixed full-width bottom control. Mobile workspace padding is 12px with 96px reserved below for the sticky action.
-
-Spacing is dense and purposeful: 8–12px within controls and badges, 16–24px inside surfaces, and 28–40px between major content regions. RTL direction governs layout, while coordinate entry intentionally switches to LTR and restores RTL at each label.
-
-**The Attached Context Rule.** Location and scan time remain above the ledger, while deal state and price remain inside every product row.
-
-## Elevation & Depth
-
-The system is flat by default and uses borders, rules, and tonal contrast for structure. Shadows are reserved for objects that physically float above the shelf: the scan strip, active location, credential status, location sheet, discount tab, and primary scan action. Their role is ambient and directional rather than decorative.
-
-### Shadow Vocabulary
-
-- **Surface Float** (`0 10px 30px rgba(54,45,28,.09)`): Credential and compact elevated surfaces.
-- **Operational Strip** (`0 12px 34px rgba(43,39,28,.15)`): The top scan strip against warm paper.
-- **Signal Lift** (`0 8px 18px rgba(244,81,30,.24)`): Primary scan control at rest; expands on hover.
-- **Sheet Depth** (`18px 0 50px rgba(0,0,0,.22)`): The full-height location editor above its dimmed, blurred backdrop.
-
-**The Flat Shelf Rule.** Repeated content rows use rules and tonal layering, never individual card shadows.
-
-## Shapes
-
-Corners are gently curved and practical. Fields and utility controls use 9–11px radii; repeated content surfaces use 12–14px; the large scan strip reaches 16px. Badges are fully pill-shaped. The signature discount tab deliberately breaks symmetry: it is flush to the row edge with only its inward corners rounded, echoing a clipped shelf-price label.
-
-Thin solid rules structure summaries, fields, and row boundaries. A dashed rule separates price information inside each deal row. Circular geometry is limited to status dots and the first-run 40% marker.
-
-## Components
-
-### Buttons
-
-- **Shape:** Tactile, compact controls with gently curved corners; the primary scan action uses a 13px radius and 56px height.
-- **Primary:** Signal-orange fill, white text, bold label, icon-plus-copy composition, and 23px horizontal padding.
-- **Hover / Focus:** The scan action lifts 2px and gains a broader orange shadow over 180ms. All interactive elements use a visible 3px translucent orange focus ring with 2px offset.
-- **Utility:** Charcoal fill with white text for save and empty-state actions. Icon-only rail controls use a dark tonal fill and 9px radius.
-- **Disabled / Destructive:** Disabled scan controls become flat gray with no shadow. Destructive location deletion is transparent with a restrained red border and copy.
-
-### Chips
-
-- **Style:** Tiny pill badges use a pale botanical gray-green with dark green copy for deal state; adjacent category badges use a warm neutral fill and muted copy.
-- **State:** Summary filters are larger ruled cells rather than pills; the active cell switches to pale orange with deep-orange copy.
-
-### Cards / Containers
-
-- **Corner Style:** Large standalone surfaces use 14–16px corners; repeated deal rows remain rectangular within the continuous shelf ledger.
-- **Background:** Shelf Stock on Warm Paper, with charcoal reserved for operational chrome.
-- **Shadow Strategy:** Flat for repeated content; ambient shadow only for raised controls and overlays.
-- **Border:** One-pixel Shelf Rule dividers, with a two-pixel Charcoal Ink top rule introducing ledgers and forms.
-- **Internal Padding:** Generally 18–25px; deal rows use tighter asymmetric padding so the discount tab meets the edge.
-
-### Inputs / Fields
-
-- **Style:** White fill, one-pixel Shelf Rule stroke, 10–11px radius, and 12px internal padding.
-- **Focus:** Global translucent orange outline; search inputs suppress their own inner outline because the enclosing field carries the control shape.
-- **Error / Disabled:** Form errors use dark red copy. Disabled scan controls visibly lose orange color and depth.
-
-### Navigation
-
-The desktop location rail is a dark, sticky vertical anchor. Saved locations are full-width RTL rows; hover uses a slightly lighter charcoal and the active location becomes a white inset card with dark text and a shadow. Secondary history and settings actions sit at the bottom. On mobile, navigation condenses into a dark header with a visible native location selector and icon-led utility actions.
-
-### Scan Strip
-
-The scan strip is the operational signature: a charcoal full-width surface with selected-location context, a horizontally ruled scanner bay, and the dominant orange action. During a scan, a two-pixel orange beam travels across the bay with a soft glow; reduced-motion preference collapses the animation. Live copy reports vendors and products as they are read.
-
-### Deal Shelf Label
-
-Each deal is one ruled row, not a floating card. A clipped orange discount tab, white product-image well, product identity block, state/category badges, and dashed-separated price block create a stable visual grammar. Disappeared deals are desaturated and reduced to 72% opacity while remaining legible for historical comparison.
-
-## Do's and Don'ts
-
-### Do:
-
-- **Do** keep Persian RTL order as the default spatial and reading model.
-- **Do** attach location, scan time, deal state, and price to the decision they qualify.
-- **Do** use tabular, oversized numerals for discounts, totals, and final prices.
-- **Do** preserve ruled shelf continuity across long result sets.
-- **Do** provide visible keyboard focus and honor reduced-motion preferences.
-
-### Don't:
-
-- **Don't** turn product results into a generic grid of floating SaaS cards.
-- **Don't** use signal orange as ambient decoration or on low-priority metadata.
-- **Don't** separate a price from its discount tab or product identity.
-- **Don't** hide the manual scan action on mobile; keep it sticky and reachable.
-- **Don't** use ornamental typefaces that weaken Persian legibility or numeric scanning.
+Local evidence is kept in ignored `.data/design-evidence/`: real before/after browser screenshots, responsive/theme/state captures, and three public Okala image references. Before/after comparison uses controlled representative Persian grocery data; prices and account/session responses are fixtures. The public image lookup is a separate read-only live observation, not a production application scan. Browser transport fixtures do not reproduce TLS negotiation. See README for behavioral validation and limitations.

@@ -9,6 +9,7 @@
     "start": "next start -H 127.0.0.1 -p 3000",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
+    "pretest:e2e": "pnpm --filter @better-buy/shared build",
     "test:e2e": "playwright test"
   },
   "dependencies": {

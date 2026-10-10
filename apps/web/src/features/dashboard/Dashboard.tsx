@@ -1,251 +1,231 @@
 "use client";
+import { useState } from "react";
+import { isWithinTehranBoundary, type ScanRecord } from "@better-buy/shared";
+import { AppHeader } from "./AppHeader";
+import { ReadNotice } from "./Primitives";
+import { useDashboardData } from "./useDashboardData";
+import { ScanControls } from "../scans/ScanControls";
+import { HistoryPanel } from "../scans/HistoryPanel";
+import { useScanLedger } from "../scans/useScanLedger";
+import { useScanPolling, isActiveScan } from "../scans/useScanPolling";
+import { useStartScan } from "../scans/useStartScan";
+import { LocationManager } from "../locations/LocationManager";
 import { DealShelf } from "../deals/DealShelf";
 import { useDealFilters } from "../deals/useDealFilters";
-import { LocationRail } from "../locations/LocationRail";
-import { ScanControls } from "../scans/ScanControls";
-import { useState } from "react";
-import type { LocationRecord, ScanRecord } from "@better-buy/shared";
-import { isWithinTehranBoundary } from "@better-buy/shared";
-import OkalaSettings from "../../app/OkalaSettings";
-import { useStartScan } from "../scans/useStartScan";
 import type { DealSource } from "./types";
-import { Icon } from "./Icon";
-import { useDashboardData } from "./useDashboardData";
-import { useScanLedger } from "../scans/useScanLedger";
-import { useProviderConnection } from "../providers/useProviderConnection";
-import { SettingsPanel } from "../providers/SnappSettings";
-import { HistoryPanel } from "../scans/HistoryPanel";
-import { LocationEditor } from "../locations/LocationEditor";
-import { ActivationPanel, ProviderDisabledNotice } from "./EmptyStates";
-
+import { ScanFeedback } from "../scans/ScanFeedback";
 export function Dashboard() {
-  const [dismissedNotice, setDismissedNotice] = useState("");
-  const [message, setMessage] = useState(""),
-    [view, setView] = useState<"deals" | "history" | "settings">("deals"),
-    [threshold, setThreshold] = useState(40),
-    [source, setSource] = useState<DealSource>("snappmarket"),
-    [mode, setMode] = useState<"partial" | "full">("partial"),
-    [scanOptionsOpen, setScanOptionsOpen] = useState(false);
-  const [locationForm, setLocationForm] = useState(false),
-    [editing, setEditing] = useState<LocationRecord | null>(null);
-  const {
-    locations,
-    selected,
-    setSelected,
-    scans,
-    busy,
-    needsLocation,
-    dataError,
-    load,
-  } = useDashboardData();
+  const data = useDashboardData();
+  const [view, setView] = useState<"deals" | "history">("deals");
+  const [selection, setSelection] = useState<{
+    source: DealSource | null;
+    threshold: number | null;
+    runId: string | null;
+  }>({ source: null, threshold: null, runId: null });
+  const [locationDialog, setLocationDialog] = useState<
+    "list" | "create" | null
+  >(null);
+  const latest = data.scans
+    .filter((r) => r.locationId === data.selected && r.status === "succeeded")
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const source =
+    selection.source ??
+    latest.find((r) => r.source !== "digikalajet")?.source ??
+    "snappmarket";
+  const threshold =
+    selection.threshold ??
+    latest.find((r) => r.source === source)?.threshold ??
+    40;
+  const activeRecord = data.scans.find(isActiveScan) ?? null;
+  const polling = useScanPolling(activeRecord);
+  const active = isActiveScan(polling.data) ? polling.data : activeRecord;
+  const start = useStartScan(
+    { locationId: data.selected, source, threshold, mode: "partial" },
+    data.locations
+  );
   const ledger = useScanLedger({
-    busy,
-    selected,
-    scans,
+    busy: data.busy,
+    selected: data.selected,
+    scans: data.scans,
     source,
     threshold,
-    setThreshold,
-    setMode,
+    selectedRunId: selection.runId,
   });
-  const { scan, setScan, deals, dealGroups, setSelectedRunId } = ledger;
-  const { start, submitting } = useStartScan(
-    { locationId: selected, source, threshold, mode },
-    locations,
-    (run) => {
-      setScan(run);
-      setView("deals");
-    },
-    setMessage
+  const filters = useDealFilters(ledger.dealGroups, ledger.scan);
+  const valid = data.locations.some(
+    (l) =>
+      l.id === data.selected && isWithinTehranBoundary(l.latitude, l.longitude)
   );
-  const runScan = (overrides?: Parameters<typeof start>[0]) => {
-    setSelectedRunId(null);
-    setMessage("");
-    setDismissedNotice("");
-    return start(overrides);
+  const blocked =
+    start.submitting ||
+    start.unresolved ||
+    !!active ||
+    !valid ||
+    data.busy ||
+    !data.locationsQuery.data ||
+    !data.scansQuery.data;
+  const latestAttempt = data.scans
+    .filter(
+      (r) =>
+        r.locationId === data.selected &&
+        r.source === source &&
+        r.threshold === threshold
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const changeLocation = (id: string) => {
+    data.setSelected(id);
+    setSelection({ ...selection, threshold: null, runId: null });
   };
-  const retryScan = (run: ScanRecord) => {
-    if (run.source === "digikalajet") {
-      setMessage(
-        "اسکن‌های دیجی‌کالا جت فعلاً فقط برای مشاهده هستند و قابل تکرار نیستند."
-      );
-      return;
-    }
-    setSelectedRunId(null);
-    setSelected(run.locationId);
-    setThreshold(run.threshold);
-    setSource(run.source);
-    setMode(run.mode);
-    void runScan({
-      locationId: run.locationId,
-      threshold: run.threshold,
-      source: run.source,
-      mode: run.mode,
-    });
-  };
-  const openRun = (run: ScanRecord) => {
-    setSelectedRunId(run.id);
-    setSelected(run.locationId);
-    setScan(run);
-    setThreshold(run.threshold);
-    setSource(run.source);
-    setMode(run.mode);
+  const openRun = (r: ScanRecord) => {
+    data.setSelected(r.locationId);
+    setSelection({ source: r.source, threshold: r.threshold, runId: r.id });
     setView("deals");
   };
-  const connection = useProviderConnection(source);
-  const openConnectionSettings = () => {
-    if (source === "digikalajet") {
-      setSource("snappmarket");
-      setSelectedRunId(null);
-    }
-    setView("settings");
+  const newScan = () => {
+    if (blocked) return;
+    setSelection({ ...selection, runId: null });
+    start.start();
   };
-  const handleScanAction = () => {
-    if (scanning || !validLocation) return;
-    if (source === "digikalajet") {
-      setMessage(connection.message);
-      return;
-    }
-    if (!connection.canScan) {
-      setView("settings");
-      return;
-    }
-    void runScan();
-  };
-
-  const filters = useDealFilters(dealGroups, scan);
-  const scanning =
-    submitting || scan?.status === "queued" || scan?.status === "running";
-  const validLocation = locations.some(
-    (location) =>
-      location.id === selected &&
-      isWithinTehranBoundary(location.latitude, location.longitude)
-  );
-  const requiresActivation = !busy && !selected;
-  const notice = message || ledger.scanMessage || dataError;
   return (
-    <main
-      className={`app-shell ${connection.canScan && !scanning && view === "deals" ? "scan-ready" : ""}`}
-      aria-hidden={locationForm || undefined}
-    >
-      <LocationRail
-        locations={locations}
-        selected={selected}
-        connection={connection}
+    <main className="app-shell">
+      <AppHeader
+        onLocations={() => setLocationDialog("list")}
+        onHistory={() => setView("history")}
+        onHome={() => setView("deals")}
         view={view}
-        onSelect={(id) => {
-          setSelectedRunId(null);
-          setSelected(id);
-        }}
-        onCreate={() => {
-          setEditing(null);
-          setLocationForm(true);
-        }}
-        onEdit={(location) => {
-          setEditing(location);
-          setLocationForm(true);
-        }}
-        onNavigate={setView}
       />
-      <section className="workspace">
-        {!requiresActivation && (
-          <ScanControls
-            locations={locations}
-            selected={selected}
-            scan={scan}
-            scanning={scanning}
-            validLocation={validLocation}
-            busy={busy}
-            connection={connection}
-            source={source}
-            threshold={threshold}
-            mode={mode}
-            scanOptionsOpen={scanOptionsOpen}
-            setSource={setSource}
-            setThreshold={setThreshold}
-            setMode={setMode}
-            setScanOptionsOpen={setScanOptionsOpen}
-            setSelectedRunId={setSelectedRunId}
-            openConnectionSettings={openConnectionSettings}
-            handleScanAction={handleScanAction}
-          />
+      <div className="workspace">
+        <ScanControls
+          locations={data.locations}
+          selected={data.selected}
+          source={source}
+          threshold={threshold}
+          blocked={blocked}
+          submitting={start.submitting}
+          onLocation={changeLocation}
+          onSource={(source) =>
+            setSelection({ source, threshold: null, runId: null })
+          }
+          onThreshold={(threshold) =>
+            setSelection({ ...selection, threshold, runId: null })
+          }
+          onStart={newScan}
+        />
+        {data.locationsQuery.error && (
+          <ReadNotice
+            title="موقعیت‌ها دریافت نشدند"
+            retry={() => void data.locationsQuery.refetch()}
+            busy={data.locationsQuery.isFetching}
+          >
+            {data.locationsQuery.data
+              ? "موقعیت‌های ذخیره‌شده نمایش داده می‌شوند؛ تازه‌سازی انجام نشد."
+              : "برای انتخاب موقعیت، دریافت دوباره را امتحان کنید."}
+          </ReadNotice>
         )}
-        {notice && notice !== dismissedNotice && (
-          <div className="notice" role="status">
-            <span>{notice}</span>
-            <button
-              onClick={() => {
-                setMessage("");
-                setDismissedNotice(notice);
-              }}
-              aria-label="بستن"
-            >
-              ×
-            </button>
-          </div>
+        {data.scansQuery.error && (
+          <ReadNotice
+            title="تاریخچه اسکن دریافت نشد"
+            retry={() => void data.scansQuery.refetch()}
+            busy={data.scansQuery.isFetching}
+          >
+            وضعیت اسکن‌های حساب را دوباره بررسی کنید.
+          </ReadNotice>
         )}
-        {view === "settings" ? (
-          <>
-            {source === "snappmarket" ? (
-              <SettingsPanel />
-            ) : source === "okala" ? (
-              <OkalaSettings />
-            ) : (
-              <ProviderDisabledNotice onActivate={openConnectionSettings} />
-            )}
-          </>
-        ) : view === "history" ? (
-          <HistoryPanel scans={scans} onOpen={openRun} onRetry={retryScan} />
-        ) : requiresActivation ? (
-          <ActivationPanel
-            hasLocation={!!selected}
-            onLocation={() => {
-              setEditing(null);
-              setLocationForm(true);
-            }}
-          />
-        ) : (
-          <DealShelf
-            filters={filters}
-            scan={scan}
-            threshold={threshold}
-            busy={busy}
-            dealGroups={dealGroups}
-            deals={deals}
-            connection={connection}
-            handleScanAction={handleScanAction}
-          />
-        )}
-      </section>
-      {locationForm && (
-        <LocationEditor
-          required={needsLocation}
-          location={editing}
-          onClose={() => {
-            if (!needsLocation) setLocationForm(false);
-          }}
-          onSaved={async () => {
-            setLocationForm(false);
-            await load();
+        <ScanFeedback
+          active={active ?? null}
+          polling={polling}
+          start={start}
+          locations={data.locations}
+          onOpenContext={(run) => {
+            data.setSelected(run.locationId);
+            setSelection({
+              source: run.source,
+              threshold: run.threshold,
+              runId: null,
+            });
+            setView("deals");
           }}
         />
-      )}
-      {!requiresActivation && (
-        <button
-          className="mobile-scan"
-          disabled={
-            busy || scanning || !validLocation || source === "digikalajet"
-          }
-          onClick={handleScanAction}
-        >
-          <Icon name={connection.canScan ? "scan" : "settings"} />
-          {scanning
-            ? "در حال اسکن"
-            : source === "digikalajet"
-              ? "جت موقتاً غیرفعال"
-              : connection.canScan
-                ? `اسکن ${source === "okala" ? "اکالا" : "تخفیف‌ها"}`
-                : "تنظیم اتصال"}
-        </button>
+        {view === "history" ? (
+          <>
+            <button className="back-button" onClick={() => setView("deals")}>
+              بازگشت به پیشنهادها
+            </button>
+            <HistoryPanel
+              scans={data.scans}
+              onOpen={openRun}
+              blocked={blocked}
+              onRetry={(r) => {
+                if (blocked) return;
+                openRun(r);
+                setSelection({
+                  source: r.source,
+                  threshold: r.threshold,
+                  runId: null,
+                });
+                start.start({
+                  locationId: r.locationId,
+                  source: r.source,
+                  threshold: r.threshold,
+                  mode: r.mode,
+                });
+              }}
+            />
+          </>
+        ) : data.needsLocation ? (
+          <section className="empty onboarding">
+            <h1>موقعیت تحویل را اضافه کنید</h1>
+            <p>
+              برای پیدا کردن پیشنهادهای اطراف، نشانی یا مختصات یک موقعیت در
+              تهران را ثبت کنید.
+            </p>
+            <button
+              className="primary"
+              onClick={() => setLocationDialog("create")}
+            >
+              افزودن موقعیت تحویل
+            </button>
+            <p className="muted">
+              اسنپ‌مارکت و اکالا بدون ورود به فروشگاه بررسی می‌شوند.
+            </p>
+          </section>
+        ) : !valid && !data.busy && !data.locationsQuery.error ? (
+          <ReadNotice title="موقعیت خارج از محدوده خدمات است">
+            فعلاً موقعیت‌های داخل تهران پشتیبانی می‌شوند. موقعیت را از بخش
+            موقعیت‌ها ویرایش کنید.
+          </ReadNotice>
+        ) : (
+          <>
+            {latestAttempt?.status === "failed" && !selection.runId && (
+              <ReadNotice title="اسکن ناموفق بود">
+                {latestAttempt.errorMessage ?? "پیشنهادها کامل دریافت نشدند."}{" "}
+                {ledger.scan && "نتیجه موفق قبلی همچنان نمایش داده می‌شود."}
+              </ReadNotice>
+            )}
+            <DealShelf
+              filters={filters}
+              scan={ledger.scan}
+              threshold={threshold}
+              source={source}
+              busy={data.busy}
+              results={ledger.results}
+              hasResults={ledger.hasResults}
+              dealGroups={ledger.dealGroups}
+              deals={ledger.deals}
+              historical={
+                !!selection.runId && ledger.scan?.id === selection.runId
+              }
+            />
+          </>
+        )}
+      </div>
+      {locationDialog && (
+        <LocationManager
+          locations={data.locations}
+          initialView={locationDialog}
+          onClose={() => setLocationDialog(null)}
+          onSaved={() => void data.load()}
+        />
       )}
     </main>
   );

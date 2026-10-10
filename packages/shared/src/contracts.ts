@@ -30,6 +30,7 @@ export interface ScanRecord {
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
+  /** Distinct stores inspected in returned feed entities, including empty entities. */
   vendorCount: number;
   productCount: number;
   dealCount: number;

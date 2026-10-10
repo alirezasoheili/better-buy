@@ -83,6 +83,38 @@ afterEach(() => {
 });
 
 describe("scan ownership and failure boundary", () => {
+  it.each(["okala", "snappmarket"] as const)(
+    "uses one effective threshold for %s reservation and execution",
+    async (source) => {
+      const fixture = services();
+      const reserve = vi.fn(() => Effect.succeed(job.id));
+      const collect = vi.fn((prepared: ScanJob) => Effect.succeed(result));
+      const context = fixture.context.pipe(
+        Context.add(ScanPersistence, {
+          ...fixture.persistence,
+          reserve,
+          progress: () => Effect.void,
+        }),
+        Context.add(ProviderCollection, { collect })
+      );
+      const prepared = await Effect.runPromise(
+        prepareScan({ ...job, source, threshold: 20 }).pipe(
+          Effect.provide(context)
+        )
+      );
+      expect(prepared.threshold).toBe(source === "okala" ? 30 : 20);
+      expect(reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ source, threshold: prepared.threshold })
+      );
+      await Effect.runPromise(
+        executeScan(prepared).pipe(Effect.provide(context))
+      );
+      expect(collect).toHaveBeenCalledWith(
+        expect.objectContaining({ threshold: prepared.threshold }),
+        expect.any(Function)
+      );
+    }
+  );
   it("awaits progress before persistence and terminal success", async () => {
     vi.useFakeTimers();
     const fixture = services();

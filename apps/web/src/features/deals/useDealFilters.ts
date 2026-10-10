@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import {
   displayToman,
+  normalizeDealGroupText,
   type DealGroupRecord,
   type ScanRecord,
 } from "@better-buy/shared";
-import { activeGroupStock } from "./stock";
+import { bestOffer } from "./presentation";
 export function useDealFilters(
   dealGroups: DealGroupRecord[],
   scan: ScanRecord | null
@@ -13,57 +14,80 @@ export function useDealFilters(
   const [stateFilter, setStateFilter] = useState("all");
   const [selectedVendor, setVendor] = useState("all");
   const [minPrice, setMinPrice] = useState(0);
-  const [sort, setSort] = useState("discount");
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState("price");
   const vendors = useMemo(
     () =>
       [
         ...new Set(
-          dealGroups.flatMap((group) =>
-            group.vendors.map((groupVendor) => groupVendor.vendorTitle)
-          )
+          dealGroups.flatMap((g) => g.vendors.map((v) => v.vendorTitle))
         ),
       ].sort((a, b) => a.localeCompare(b, "fa")),
     [dealGroups]
   );
   const vendor = vendors.includes(selectedVendor) ? selectedVendor : "all";
+  const normalizedQuery =
+    normalizeDealGroupText(query)?.toLocaleLowerCase("fa") ?? "";
   const visible = useMemo(
     () =>
       dealGroups
         .filter(
-          (group) =>
-            (stateFilter === "all" || group.state === stateFilter) &&
+          (g) =>
+            (stateFilter === "all" || g.state === stateFilter) &&
             (vendor === "all" ||
-              group.vendors.some(
-                (groupVendor) => groupVendor.vendorTitle === vendor
-              )) &&
+              g.vendors.some((v) => v.vendorTitle === vendor)) &&
+            (
+              normalizeDealGroupText(
+                `${g.title} ${g.categoryTitle ?? ""} ${g.vendors.map((v) => v.vendorTitle).join(" ")}`
+              )?.toLocaleLowerCase("fa") ?? ""
+            ).includes(normalizedQuery)
+        )
+        .map((g) =>
+          vendor === "all"
+            ? g
+            : {
+                ...g,
+                vendors: g.vendors.filter((v) => v.vendorTitle === vendor),
+              }
+        )
+        .filter(
+          (g) =>
             displayToman(
-              group.finalPriceRials,
+              bestOffer(g).finalPriceRials,
               scan?.source ?? "snappmarket"
-            ) >= minPrice &&
-            `${group.title} ${group.categoryTitle ?? ""} ${group.vendors
-              .map((groupVendor) => groupVendor.vendorTitle)
-              .join(" ")}`.includes(query)
+            ) >= minPrice
         )
         .sort((a, b) =>
           sort === "price"
-            ? a.finalPriceRials - b.finalPriceRials
-            : sort === "stock"
-              ? activeGroupStock(b) - activeGroupStock(a)
-              : b.discountRatio - a.discountRatio
+            ? bestOffer(a).finalPriceRials - bestOffer(b).finalPriceRials
+            : bestOffer(b).discountRatio - bestOffer(a).discountRatio
         ),
-    [dealGroups, stateFilter, vendor, minPrice, query, sort, scan?.source]
+    [
+      dealGroups,
+      stateFilter,
+      vendor,
+      minPrice,
+      normalizedQuery,
+      sort,
+      scan?.source,
+    ]
   );
   const counts = {
-    all: dealGroups.filter((group) => group.state !== "no_longer_present")
-      .length,
-    new: dealGroups.filter((group) => group.state === "new").length,
-    still: dealGroups.filter((group) => group.state === "still_available")
-      .length,
-    gone: dealGroups.filter((group) => group.state === "no_longer_present")
-      .length,
+    all: dealGroups.length,
+    new: dealGroups.filter((g) => g.state === "new").length,
+    still: dealGroups.filter((g) => g.state === "still_available").length,
+    gone: dealGroups.filter((g) => g.state === "no_longer_present").length,
   };
-
+  const activeCount =
+    Number(vendor !== "all") +
+    Number(minPrice > 0) +
+    Number(stateFilter !== "all") +
+    Number(!!query);
+  const reset = () => {
+    setQuery("");
+    setStateFilter("all");
+    setVendor("all");
+    setMinPrice(0);
+  };
   return {
     query,
     setQuery,
@@ -75,10 +99,10 @@ export function useDealFilters(
     setMinPrice,
     sort,
     setSort,
-    filtersOpen,
-    setFiltersOpen,
     vendors,
     visible,
     counts,
+    activeCount,
+    reset,
   };
 }

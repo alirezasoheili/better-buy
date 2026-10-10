@@ -119,8 +119,7 @@ export const prepareScan = (input: ScanInput) =>
           : input.threshold,
     };
     const id = yield* persistence.reserve(storedInput);
-    // Keep the collector's original threshold; Okala's stored comparison threshold has a floor.
-    return { ...input, id, location, access } satisfies ScanJob;
+    return { ...storedInput, id, location, access } satisfies ScanJob;
   });
 
 export const COLLECT_BUDGET_MS = 22_000;

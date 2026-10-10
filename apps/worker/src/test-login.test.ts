@@ -4,12 +4,16 @@ import { issueTestSession, signSessionToken } from "./test-login";
 
 type D1Like = Parameters<typeof issueTestSession>[0];
 
-const verify = () => createHMAC("SHA-256", "base64urlnopad");
+const verify = () => createHMAC("SHA-256", "base64");
 
 type Row = Record<string, string | number | null>;
 
 function makeDb() {
-  const tables: Record<string, Row[]> = { user: [], session: [], locations: [] };
+  const tables: Record<string, Row[]> = {
+    user: [],
+    session: [],
+    locations: [],
+  };
   const calls: string[] = [];
   return {
     tables,
@@ -26,15 +30,18 @@ function makeDb() {
               const tableName = tableMatch[1]!;
               const whereCol = whereMatch[1]!;
               const row = tables[tableName]?.find(
-                (entry) => entry[whereCol] === args[0],
+                (entry) => entry[whereCol] === args[0]
               );
               return row ? { ...row } : null;
             },
             run: async () => {
-              const insert = /INSERT INTO\s+"?(\w+)"?\s*\(([^)]+)\)\s*VALUES/i.exec(sql);
+              const insert =
+                /INSERT INTO\s+"?(\w+)"?\s*\(([^)]+)\)\s*VALUES/i.exec(sql);
               if (insert) {
                 const tableName = insert[1]!;
-                const cols = insert[2]!.split(",").map((col) => col.trim().replace(/"/g, ""));
+                const cols = insert[2]!
+                  .split(",")
+                  .map((col) => col.trim().replace(/"/g, ""));
                 const row: Row = {};
                 cols.forEach((col, index) => {
                   row[col] = args[index] ?? null;
@@ -54,14 +61,14 @@ describe("signSessionToken", () => {
   it("produces a signature Better Auth accepts", async () => {
     const token = crypto.randomUUID();
     const signature = await signSessionToken("change-me", token);
-    await expect(
-      verify().verify("change-me", token, signature),
-    ).resolves.toBe(true);
+    await expect(verify().verify("change-me", token, signature)).resolves.toBe(
+      true
+    );
   });
   it("rejects a tampered signature", async () => {
     const signature = await signSessionToken("change-me", "token-a");
     await expect(
-      verify().verify("change-me", "token-b", signature),
+      verify().verify("change-me", "token-b", signature)
     ).resolves.toBe(false);
   });
 });
@@ -72,11 +79,15 @@ describe("issueTestSession", () => {
     const cookie = await issueTestSession(db as unknown as D1Like, "change-me");
     expect(cookie.startsWith("better-auth.session_token=")).toBe(true);
 
-    const value = cookie.split(";")[0]!.split("=").slice(1).join("=");
+    const value = decodeURIComponent(
+      cookie.split(";")[0]!.split("=").slice(1).join("=")
+    );
     const [token, signature] = value.split(".");
     expect(token).toBeDefined();
     expect(signature).toBeDefined();
-    await expect(verify().verify("change-me", token!, signature!)).resolves.toBe(true);
+    await expect(
+      verify().verify("change-me", token!, signature!)
+    ).resolves.toBe(true);
 
     const sessions = db.tables.session!;
     expect(db.tables.user).toHaveLength(1);

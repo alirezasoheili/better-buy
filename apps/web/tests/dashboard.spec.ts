@@ -1,809 +1,1460 @@
 import { expect, test, type Page } from "@playwright/test";
-
-type DashboardFixture = {
-  locations?: unknown[];
-  scans?: unknown[];
-  dealGroups?: unknown[];
-};
-
-async function mockDashboard(page: Page, fixture: DashboardFixture = {}) {
-  const snappRequests: string[] = [];
-  const okalaRequests: string[] = [];
-  const scanRequests: unknown[] = [];
-  await page.route("**/api/auth/get-session", async (route) => {
-    await route.fulfill({
-      json: {
-        session: {
-          id: "session-1",
-          userId: "user-1",
-          expiresAt: "2099-01-01T00:00:00.000Z",
-        },
-        user: {
-          id: "user-1",
-          name: "کاربر آزمایشی",
-          email: "test@example.com",
-        },
-      },
-    });
+import type {
+  DealGroupRecord,
+  LocationRecord,
+  ScanRecord,
+} from "@better-buy/shared";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+const evidence = path.resolve(__dirname, "../../../.data/design-evidence");
+async function captureState(page: Page, name: string, fullPage = true) {
+  await mkdir(evidence, { recursive: true });
+  await page.screenshot({
+    path: path.join(evidence, `state-${test.info().project.name}-${name}.png`),
+    fullPage,
   });
-  await page.route("**/api/locations", async (route) => {
-    await route.fulfill({
-      json: {
-        data: fixture.locations ?? [
-          {
-            id: "location-1",
-            name: "خانه",
-            latitude: 35.7,
-            longitude: 51.4,
-            isDefault: true,
-          },
-        ],
-      },
-    });
-  });
-  await page.route("**/api/settings/snappmarket**", async (route) => {
-    snappRequests.push(route.request().method() + " " + route.request().url());
-    await route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
-  });
-  await page.route("**/api/settings/okala**", async (route) => {
-    okalaRequests.push(route.request().method() + " " + route.request().url());
-    await route.fulfill({ status: 503, json: { error: "UNAVAILABLE" } });
-  });
-  await page.route("**/api/scans", async (route) => {
-    if (route.request().method() === "POST") {
-      scanRequests.push(route.request().postDataJSON());
-      await route.fulfill({
-        json: { data: { id: "scan-1", status: "queued" } },
-      });
-      return;
-    }
-    await route.fulfill({ json: { data: fixture.scans ?? [] } });
-  });
-  await page.route("**/api/scans/scan-1", async (route) => {
-    await route.fulfill({
-      json: {
-        data: {
-          id: "scan-1",
-          locationId: "location-1",
-          source:
-            (scanRequests.at(-1) as { source?: string } | undefined)?.source ??
-            "snappmarket",
-          threshold: 40,
-          status: "running",
-          vendorCount: 0,
-          productCount: 0,
-        },
-      },
-    });
-  });
-  await page.route("**/api/scans/*/deals", async (route) => {
-    await route.fulfill({ json: { data: [] } });
-  });
-  await page.route("**/api/scans/*/deal-groups", async (route) => {
-    await route.fulfill({ json: { data: fixture.dealGroups ?? [] } });
-  });
-  return { snappRequests, okalaRequests, scanRequests };
 }
-
-test("guides a first-time user to location and credential-free Snapp or Okala scanning", async ({
-  page,
-}) => {
-  const requests = await mockDashboard(page, { locations: [] });
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "برای اولین اسکن آماده شوید" })
-  ).toBeVisible();
-  await expect(page.getByText("محصول روی قفسه")).not.toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "افزودن موقعیت تحویل" })
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "پس از انتخاب موقعیت، اسکن اسنپ‌مارکت یا اکالا را شروع کنید؛ نیازی به ورود به فروشگاه یا وارد کردن توکن نیست."
-    )
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "اتصال اسنپ‌مارکت" })
-  ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "اتصال اکالا" })).toHaveCount(
-    0
-  );
-  expect(requests.snappRequests).toEqual([]);
-});
-
-test("a fresh signed-in user with a location starts Snapp without credential setup", async ({
-  page,
-}) => {
-  const requests = await mockDashboard(page);
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "برای اولین اسکن آماده شوید" })
-  ).not.toBeVisible();
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await expect(scanButton).toContainText("اسکن تخفیف‌ها");
-  await expect(scanButton).toBeEnabled();
-  await scanButton.click();
-  await expect(page.getByText("اسکن در جریان است")).toBeVisible();
-  expect(requests.scanRequests).toEqual([
-    {
-      locationId: "location-1",
-      threshold: 40,
-      source: "snappmarket",
-      mode: "partial",
-    },
-  ]);
-  expect(requests.snappRequests).toEqual([]);
-});
-
-test("Snapp settings explain automatic access without any credential-entry fields", async ({
-  page,
-}) => {
-  const requests = await mockDashboard(page);
-  await page.goto("/");
-  await page
-    .getByRole("button", { name: "تنظیمات فروشگاه", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "تنظیمات اسنپ‌مارکت" })
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "برای اسکن اسنپ‌مارکت نیازی به ورود یا وارد کردن توکن نیست.",
-      { exact: true }
-    )
-  ).toBeVisible();
-  await expect(
-    page.locator(
-      ".settings-page input, .settings-page textarea, .settings-page form"
-    )
-  ).toHaveCount(0);
-  expect(requests.snappRequests).toEqual([]);
-});
-
-test("a fresh signed-in user starts Okala without settings or customer setup", async ({
-  page,
-}) => {
-  const requests = await mockDashboard(page);
-  await page.goto("/");
-  await page
-    .getByRole("combobox", { name: "فروشگاه", exact: true })
-    .selectOption("okala");
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await expect(scanButton).toContainText("اسکن اکالا");
-  await expect(scanButton).toBeEnabled();
-  await expect(page.locator(".rail-foot")).toContainText(
-    "بدون نیاز به ورود اکالا"
-  );
-  await scanButton.click();
-  await expect(page.getByText("اسکن در جریان است")).toBeVisible();
-  expect(requests.scanRequests).toEqual([
-    {
-      locationId: "location-1",
-      threshold: 40,
-      source: "okala",
-      mode: "partial",
-    },
-  ]);
-  expect(requests.okalaRequests).toEqual([]);
-});
-test("Okala settings explain public access and campaign coverage without login fields", async ({
-  page,
-}) => {
-  const requests = await mockDashboard(page);
-  await page.goto("/");
-  await page
-    .getByRole("combobox", { name: "فروشگاه", exact: true })
-    .selectOption("okala");
-  await page
-    .getByRole("button", { name: "تنظیمات فروشگاه", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "تنظیمات اکالا" })
-  ).toBeVisible();
-  await expect(
-    page.getByText("برای اسکن اکالا نیازی به ورود یا وارد کردن توکن نیست.", {
-      exact: true,
-    })
-  ).toBeVisible();
-  await expect(
-    page.locator(
-      ".settings-page input, .settings-page textarea, .settings-page form"
-    )
-  ).toHaveCount(0);
-  await expect(
-    page.getByText(/این فهرست شامل تمام کالاهای اکالا نیست/)
-  ).toBeVisible();
-  expect(requests.okalaRequests).toEqual([]);
-});
-
-test("a failed automatic Snapp scan keeps successful results and offers another scan", async ({
-  page,
-}) => {
-  const requests = await mockDashboard(page, {
-    scans: [
-      {
-        id: "previous",
-        locationId: "location-1",
-        locationName: "خانه",
-        threshold: 40,
-        source: "snappmarket",
-        mode: "partial",
-        status: "succeeded",
-        createdAt: "2026-08-23T10:00:00.000Z",
-        finishedAt: "2026-08-23T10:01:00.000Z",
-        vendorCount: 1,
-        productCount: 1,
-        dealCount: 1,
-      },
-    ],
-    dealGroups: [
-      {
-        key: "group-1",
-        groupKeyVersion: 1,
-        scanId: "previous",
-        title: "پیشنهاد اسکن قبلی",
-        image: null,
-        categoryTitle: "خوراکی",
-        priceRials: 100000,
-        discountRials: 50000,
-        finalPriceRials: 50000,
-        discountRatio: 50,
-        state: "new",
-        vendors: [
-          {
-            offerKey: "10:1",
-            productVariationId: "1",
-            vendorId: "10",
-            vendorTitle: "فروشگاه",
-            vendorCode: null,
-            priceRials: 100000,
-            discountRials: 50000,
-            finalPriceRials: 50000,
-            discountRatio: 50,
-            stock: 2,
-            state: "new",
-          },
-        ],
-      },
-    ],
-  });
-  await page.route("**/api/scans/scan-1", async (route) => {
-    await route.fulfill({
-      json: {
-        data: {
-          id: "scan-1",
-          locationId: "location-1",
-          source: "snappmarket",
-          threshold: 40,
-          status: "failed",
-          errorCode: "GUEST_AUTH_REJECTED",
-          errorMessage:
-            "دسترسی خودکار اسنپ‌مارکت برقرار نشد؛ بعداً دوباره اسکن کنید",
-        },
-      },
-    });
-  });
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "پیشنهاد اسکن قبلی" })
-  ).toBeVisible();
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await scanButton.click();
-  await expect(
-    page.getByText(
-      "دسترسی خودکار اسنپ‌مارکت برقرار نشد؛ بعداً دوباره اسکن کنید"
-    )
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "پیشنهاد اسکن قبلی" })
-  ).toBeVisible();
-  await expect(scanButton).toBeEnabled();
-  await expect(scanButton).toContainText("اسکن تخفیف‌ها");
-  await page.getByRole("button", { name: "بستن", exact: true }).click();
-  await expect(
-    page.getByText(
-      "دسترسی خودکار اسنپ‌مارکت برقرار نشد؛ بعداً دوباره اسکن کنید"
-    )
-  ).toHaveCount(0);
-  expect(requests.snappRequests).toEqual([]);
-});
-
-test("shows an actionable scan state and cycles theme modes", async ({
-  page,
-}) => {
-  await mockDashboard(page);
-  await page.goto("/");
-
-  await expect(
-    page.getByRole("button", { name: "اسکن تخفیف‌ها" })
-  ).toBeVisible();
-  const scanMetrics = await page.evaluate(() => ({
-    stripWidth:
-      document.querySelector(".scan-strip")?.getBoundingClientRect().width ?? 0,
-    controlHeights: [
-      ...document.querySelectorAll(
-        ".scan-strip select, .scan-strip .scan-options-trigger, .scan-strip .scan-button"
-      ),
-    ]
-      .map((element) => Math.round(element.getBoundingClientRect().height))
-      .filter((height) => height > 0),
-    viewportWidth: window.innerWidth,
-  }));
-  if (scanMetrics.viewportWidth > 1050)
-    expect(scanMetrics.stripWidth).toBeLessThanOrEqual(1120);
-  expect(new Set(scanMetrics.controlHeights).size).toBe(1);
-  expect(scanMetrics.controlHeights[0]).toBe(44);
-  await page.getByRole("button", { name: "اسکن تخفیف‌ها" }).click();
-  await expect(page.getByText("اسکن در جریان است")).toBeVisible();
-
-  await page.getByRole("button", { name: "تغییر پوسته" }).click();
-  await page.getByRole("button", { name: "تغییر پوسته" }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-  await page.getByRole("button", { name: "تغییر پوسته" }).click();
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("theme")))
-    .toBe("system");
-});
-
-test("shows scan results and lets users recover from an empty filter", async ({
-  page,
-}) => {
-  await mockDashboard(page, {
-    scans: [
-      {
-        id: "scan-1",
-        locationId: "location-1",
-        locationName: "خانه",
-        threshold: 40,
-        source: "snappmarket",
-        mode: "partial",
-        status: "succeeded",
-        createdAt: "2026-08-23T10:00:00.000Z",
-        startedAt: "2026-08-23T10:00:00.000Z",
-        finishedAt: "2026-08-23T10:01:00.000Z",
-        vendorCount: 1,
-        productCount: 1,
-        dealCount: 1,
-        errorCode: null,
-        errorMessage: null,
-      },
-    ],
-    dealGroups: [
-      {
-        key: "group-1",
-        groupKeyVersion: 1,
-        scanId: "scan-1",
-        title: "چای سیاه ایرانی",
-        image: null,
-        categoryTitle: "نوشیدنی",
-        priceRials: 100000,
-        discountRials: 50000,
-        finalPriceRials: 50000,
-        discountRatio: 50,
-        state: "new",
-        vendors: [
-          {
-            offerKey: "offer-1",
-            productVariationId: "product-1",
-            vendorId: "vendor-1",
-            vendorTitle: "فروشگاه نمونه",
-            vendorCode: null,
-            priceRials: 100000,
-            discountRials: 50000,
-            finalPriceRials: 50000,
-            discountRatio: 50,
-            stock: 4,
-            state: "new",
-          },
-        ],
-      },
-    ],
-  });
-  await page.goto("/");
-
-  await expect(
-    page.getByRole("heading", { name: "چای سیاه ایرانی" })
-  ).toBeVisible();
-  await expect(page.getByText("کمترین قیمت در فروشگاه نمونه")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "گزینه‌های اسکن" })
-  ).toBeVisible();
-  const filterButton = page.getByRole("button", {
-    name: "فیلترها و مرتب‌سازی",
-  });
-  await filterButton.click();
-  await expect(
-    page.getByRole("dialog", { name: "فیلترها و مرتب‌سازی" })
-  ).toBeVisible();
-  const filterPosition = await page
-    .locator(".filter-overlay")
-    .evaluate((element) => getComputedStyle(element).position);
-  expect(filterPosition).toBe(
-    page.viewportSize()?.width && page.viewportSize()!.width <= 720
-      ? "absolute"
-      : "fixed"
-  );
-  await page.getByRole("button", { name: "اعمال فیلتر" }).click();
-  const layout = await page.evaluate(() => {
-    const rail = document
-      .querySelector(".location-rail")
-      ?.getBoundingClientRect();
-    const workspace = document
-      .querySelector(".workspace")
-      ?.getBoundingClientRect();
-    return {
-      hasHorizontalOverflow:
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth,
-      railWidth: rail?.width ?? 0,
-      viewportWidth: window.innerWidth,
-      workspaceWidth: workspace?.width ?? 0,
-    };
-  });
-  expect(layout.hasHorizontalOverflow).toBe(false);
-  if (layout.viewportWidth > 720) {
-    expect(layout.railWidth).toBeLessThanOrEqual(232);
-    expect(layout.workspaceWidth).toBeGreaterThan(layout.railWidth);
-  } else {
-    await expect(page.locator(".mobile-scan")).toBeVisible();
-  }
-  await page
-    .getByRole("textbox", { name: "جست‌وجوی کالا یا فروشگاه" })
-    .fill("ناموجود");
-  await expect(
-    page.getByRole("heading", { name: "چیزی با این فیلتر پیدا نشد" })
-  ).toBeVisible();
-  await page.getByRole("button", { name: "پاک‌کردن فیلترها" }).click();
-  await expect(
-    page.getByRole("heading", { name: "چای سیاه ایرانی" })
-  ).toBeVisible();
-});
-
-const completedRun = {
-  id: "scan-1",
-  locationId: "location-1",
+const date = "2026-10-08T08:00:00.000Z";
+const home: LocationRecord = {
+  id: "home",
+  name: "خانه",
+  latitude: 35.7,
+  longitude: 51.4,
+  isDefault: true,
+  createdAt: date,
+  updatedAt: date,
+};
+const office: LocationRecord = {
+  ...home,
+  id: "office",
+  name: "دفتر",
+  isDefault: false,
+};
+const run = (overrides: Partial<ScanRecord> = {}): ScanRecord => ({
+  id: "saved",
+  locationId: "home",
   locationName: "خانه",
   source: "snappmarket",
   threshold: 40,
   mode: "partial",
   status: "succeeded",
-  createdAt: "2026-10-07T12:00:00.000Z",
-  startedAt: "2026-10-07T12:00:00.000Z",
-  finishedAt: "2026-10-07T12:00:01.000Z",
-  vendorCount: 1,
-  productCount: 1,
-  dealCount: 1,
+  createdAt: date,
+  startedAt: date,
+  finishedAt: date,
+  vendorCount: 12,
+  productCount: 180,
+  dealCount: 3,
   errorCode: null,
   errorMessage: null,
-};
-const shelfGroup = (title: string, scanId = "scan-1") => ({
+  ...overrides,
+});
+const group = (
+  title = "چای سیاه ایرانی، بسته ۵۰۰ گرمی",
+  scanId = "saved"
+): DealGroupRecord => ({
   key: title,
   groupKeyVersion: 1,
   scanId,
   title,
   image: null,
-  categoryTitle: "خوراکی",
-  priceRials: 100000,
-  discountRials: 50000,
-  finalPriceRials: 50000,
+  categoryTitle: "خواربار",
+  priceRials: 200000,
+  discountRials: 100000,
+  finalPriceRials: 100000,
   discountRatio: 50,
   state: "new",
-  vendors: [
-    {
-      offerKey: "10:1",
-      productVariationId: "1",
-      vendorId: "10",
-      vendorTitle: "فروشگاه",
+  vendors: ["فروشگاه محله", "هایپرمارکت ونک", "فروشگاه مرکزی"].map(
+    (vendorTitle, i) => ({
+      offerKey: title + ":" + i,
+      productVariationId: "p",
+      vendorId: String(i),
+      vendorTitle,
       vendorCode: null,
-      priceRials: 100000,
-      discountRials: 50000,
-      finalPriceRials: 50000,
+      priceRials: 200000,
+      discountRials: 100000,
+      finalPriceRials: 100000,
       discountRatio: 50,
-      stock: 2,
+      stock: 4,
       state: "new",
-    },
-  ],
+    })
+  ),
 });
-
-test("polls a successful scan to completion and stops after the terminal state", async ({
-  page,
-}) => {
-  const requests = await mockDashboard(page);
-  let completed = false;
-  let polls = 0;
-  await page.route("**/api/scans", async (route) => {
-    if (route.request().method() === "POST") {
-      requests.scanRequests.push(route.request().postDataJSON());
-      await route.fulfill({
-        json: { data: { id: "scan-1", status: "queued" } },
-      });
-    } else
-      await route.fulfill({ json: { data: completed ? [completedRun] : [] } });
-  });
-  await page.route("**/api/scans/scan-1", async (route) => {
-    polls++;
-    completed = true;
-    await route.fulfill({ json: { data: completedRun } });
-  });
-  await page.route("**/api/scans/scan-1/deal-groups", async (route) => {
-    await route.fulfill({ json: { data: [shelfGroup("پیشنهاد تازه")] } });
-  });
-  await page.goto("/");
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await scanButton.click();
-  await expect(
-    page.getByRole("heading", { name: "پیشنهاد تازه" })
-  ).toBeVisible();
-  await expect(page.getByText("اسکن کامل شد؛ قفسه تازه است.")).toBeVisible();
-  await expect(scanButton).toBeEnabled();
-  await page.waitForTimeout(1500);
-  expect(polls).toBe(1);
-});
-
-test("discards in-flight polling when the selected location changes", async ({
-  page,
-}) => {
-  await mockDashboard(page, {
-    locations: [
-      {
-        id: "location-1",
-        name: "خانه",
-        latitude: 35.7,
-        longitude: 51.4,
-        isDefault: true,
-      },
-      { id: "location-2", name: "دفتر", latitude: 35.72, longitude: 51.41 },
-    ],
-  });
-  let polls = 0;
-  let release: () => void = () => {};
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/api/scans/scan-1", async (route) => {
-    polls++;
-    await pending;
-    await route
-      .fulfill({
-        json: {
-          data: {
-            ...completedRun,
-            status: "failed",
-            errorMessage: "خطای مکان قبلی",
-          },
-        },
-      })
-      .catch(() => {});
-  });
-  await page.goto("/");
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await scanButton.click();
-  await expect.poll(() => polls).toBe(1);
-  if (page.viewportSize()!.width <= 720)
-    await page
-      .getByRole("combobox", { name: "انتخاب مکان" })
-      .selectOption("location-2");
-  else await page.locator(".location").filter({ hasText: "دفتر" }).click();
-  await expect(page.locator(".scan-context strong")).toHaveText("دفتر");
-  release();
-  await page.waitForTimeout(1500);
-  await expect(page.getByText("خطای مکان قبلی")).toHaveCount(0);
-  await expect(page.getByText("اسکن در جریان است")).toHaveCount(0);
-  expect(polls).toBe(1);
-});
-
-test("keeps a late ledger response from a previous provider out of the current shelf", async ({
-  page,
-}) => {
-  await mockDashboard(page, { scans: [completedRun] });
-  let requested = false;
-  let release: () => void = () => {};
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/api/scans/scan-1/deal-groups", async (route) => {
-    requested = true;
-    await pending;
-    await route
-      .fulfill({ json: { data: [shelfGroup("پیشنهاد اسنپ قبلی")] } })
-      .catch(() => {});
-  });
-  await page.goto("/");
-  await expect.poll(() => requested).toBe(true);
-  await page
-    .getByRole("combobox", { name: "فروشگاه", exact: true })
-    .selectOption("okala");
-  release();
-  await expect(
-    page.getByRole("combobox", { name: "فروشگاه", exact: true })
-  ).toHaveValue("okala");
-  await page.waitForTimeout(300);
-  await expect(
-    page.getByRole("heading", { name: "پیشنهاد اسنپ قبلی" })
-  ).toHaveCount(0);
-});
-
-test("opens historical Jet results while keeping new Jet scans disabled", async ({
-  page,
-}) => {
-  const historical = {
-    ...completedRun,
-    id: "jet-history",
-    source: "digikalajet",
+const representative = [
+  group(),
+  {
+    ...group("روغن آفتابگردان، بطری ۱٫۵ لیتری"),
+    priceRials: 300000,
+    finalPriceRials: 200000,
+    vendors: group().vendors.map((v) => ({
+      ...v,
+      priceRials: 300000,
+      finalPriceRials: 200000,
+    })),
+  },
+  {
+    ...group("برنج ایرانی طارم، کیسه ۱۰ کیلوگرمی"),
+    priceRials: 400000,
+    finalPriceRials: 300000,
+    vendors: group().vendors.map((v) => ({
+      ...v,
+      priceRials: 400000,
+      finalPriceRials: 300000,
+    })),
+  },
+];
+async function mock(
+  page: Page,
+  fixture: {
+    locations?: LocationRecord[];
+    scans?: ScanRecord[];
+    groups?: DealGroupRecord[];
+    signedOut?: boolean;
+  } = {}
+) {
+  const state = {
+    locations: fixture.locations ?? [home],
+    scans: fixture.scans ?? [],
+    groups: fixture.groups ?? [],
+    posts: [] as unknown[],
+    retailerRequests: [] as string[],
+    statusReads: 0,
   };
-  const requests = await mockDashboard(page, {
-    scans: [historical],
-    dealGroups: [shelfGroup("پیشنهاد تاریخی جت", "jet-history")],
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    const method = route.request().method();
+    let data: unknown = [];
+    if (url.pathname === "/api/auth/get-session") {
+      await route.fulfill({
+        json: fixture.signedOut
+          ? null
+          : {
+              session: {
+                id: "s",
+                userId: "user-1",
+                expiresAt: "2099-01-01T00:00:00Z",
+              },
+              user: {
+                id: "user-1",
+                name: "کاربر نمونه",
+                email: "fixture@example.com",
+              },
+            },
+      });
+      return;
+    }
+    if (url.pathname.includes("/settings/")) {
+      state.retailerRequests.push(url.pathname);
+      await route.fulfill({ status: 404, json: { error: "NOT_FOUND" } });
+      return;
+    }
+    if (url.pathname === "/api/locations") {
+      if (method === "POST") {
+        state.locations = [
+          ...state.locations,
+          { ...home, ...route.request().postDataJSON(), id: "created" },
+        ];
+        data = state.locations.at(-1);
+      } else data = state.locations;
+    } else if (url.pathname === "/api/locations/search")
+      data = [
+        { displayName: "میدان ونک، تهران", latitude: 35.75, longitude: 51.41 },
+      ];
+    else if (url.pathname.startsWith("/api/locations/")) {
+      const id = url.pathname.split("/").at(-1);
+      if (method === "DELETE") {
+        state.locations = state.locations.filter((l) => l.id !== id);
+        state.scans = state.scans.filter((s) => s.locationId !== id);
+        await route.fulfill({ status: 204 });
+        return;
+      }
+      const input = route.request().postDataJSON();
+      state.locations = state.locations.map((l) =>
+        l.id === id ? { ...l, ...input } : l
+      );
+      data = state.locations.find((l) => l.id === id);
+    } else if (url.pathname === "/api/scans") {
+      if (method === "POST") {
+        const input = route.request().postDataJSON();
+        state.posts.push(input);
+        state.scans = [
+          run({
+            ...input,
+            id: "active",
+            status: "queued",
+            createdAt: new Date().toISOString(),
+            finishedAt: null,
+          }),
+          ...state.scans,
+        ];
+        data = { id: "active", status: "queued" };
+      } else data = state.scans;
+    } else if (url.pathname.endsWith("/deal-groups")) data = state.groups;
+    else if (url.pathname.endsWith("/deals")) data = [];
+    else if (url.pathname.startsWith("/api/scans/")) {
+      state.statusReads++;
+      data =
+        state.scans.find((s) => s.id === url.pathname.split("/").at(-1)) ??
+        run({ id: "active", status: "running", finishedAt: null });
+    }
+    await route.fulfill({ json: { data } });
   });
+  return state;
+}
+const scanButton = (page: Page) =>
+  page.getByRole("button", { name: "شروع اسکن", exact: true });
+const offerHeading = (page: Page, title = representative[0]!.title) =>
+  page.getByRole("heading", { name: title, exact: true });
+const success = async (page: Page) => {
+  const state = await mock(page, { scans: [run()], groups: representative });
   await page.goto("/");
-  await page.getByRole("button", { name: "تاریخچه اسکن", exact: true }).click();
-  await page.locator(".run-row").click();
-  await expect(
-    page.getByRole("heading", { name: "پیشنهاد تاریخی جت" })
-  ).toBeVisible();
-  await expect(page.getByText("دیجی‌کالا جت · فقط مشاهده")).toBeVisible();
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await expect(scanButton).toBeDisabled();
-  expect(requests.scanRequests).toEqual([]);
-});
+  await expect(offerHeading(page)).toBeVisible();
+  return state;
+};
 
-test("selects a remaining location after deleting the selected location", async ({
+test("signed out, pending, and authentication error have clear next steps", async ({
   page,
 }) => {
-  let locations = [
-    {
-      id: "location-1",
-      name: "خانه",
-      latitude: 35.7,
-      longitude: 51.4,
-      isDefault: true,
-    },
-    {
-      id: "location-2",
-      name: "دفتر",
-      latitude: 35.72,
-      longitude: 51.41,
-      isDefault: false,
-    },
-  ];
-  await mockDashboard(page);
-  await page.route("**/api/locations", async (route) => {
-    await route.fulfill({ json: { data: locations } });
+  await mock(page, { signedOut: true });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "بهتر بخر", exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "ادامه با گوگل" })
+  ).toBeVisible();
+  await page.route("**/api/auth/sign-in/social", (r) =>
+    r.fulfill({ status: 500, json: { code: "FAILED", message: "failed" } })
+  );
+  await page.getByRole("button", { name: "ادامه با گوگل" }).click();
+  await expect(page.locator(".auth-error")).toContainText(
+    "شروع ورود با گوگل ممکن نشد"
+  );
+  await captureState(page, "sign-in-error");
+  let release = () => {};
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  await page.route("**/api/locations/location-1", async (route) => {
-    locations = locations.filter((location) => location.id !== "location-1");
-    await route.fulfill({ status: 204 });
+  await page.route("**/api/auth/get-session", async (r) => {
+    await waiting;
+    await r.fulfill({ status: 503, json: { message: "failed" } });
+  });
+  await page.reload();
+  await expect(page.getByText("در حال بررسی ورود…")).toBeVisible();
+  await captureState(page, "auth-pending");
+  release();
+  await expect(
+    page.getByRole("heading", { name: "بررسی ورود انجام نشد" })
+  ).toBeVisible();
+  await captureState(page, "auth-error");
+  await page.route("**/api/auth/get-session", (r) => r.fulfill({ json: null }));
+  await page
+    .getByRole("button", { name: "دریافت دوباره", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "ادامه با گوگل" })
+  ).toBeVisible();
+});
+test("first visit creates a location using address search and manual coordinates without a map", async ({
+  page,
+}) => {
+  const state = await mock(page, { locations: [] });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "موقعیت تحویل را اضافه کنید" })
+  ).toBeVisible();
+  await expect(scanButton(page)).toBeDisabled();
+  await page
+    .locator(".onboarding")
+    .getByRole("button", { name: "افزودن موقعیت تحویل" })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "افزودن موقعیت تحویل",
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("نام مکان").fill("خانه تازه");
+  await dialog.getByLabel("جست‌وجوی نشانی در تهران").fill("ونک");
+  await dialog.getByRole("button", { name: "جست‌وجو", exact: true }).click();
+  await dialog.getByRole("button", { name: "میدان ونک، تهران" }).click();
+  await expect(dialog.getByLabel("عرض جغرافیایی")).toHaveValue("35.75");
+  await dialog.getByLabel("عرض جغرافیایی").fill("0");
+  await expect(
+    dialog.getByRole("button", { name: "ذخیره مکان" })
+  ).toBeDisabled();
+  await captureState(page, "outside-area-editor");
+  await dialog.getByLabel("عرض جغرافیایی").fill("35.75");
+  await dialog.getByRole("button", { name: "ذخیره مکان" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel("موقعیت تحویل", { exact: true })).toContainText(
+    "خانه تازه"
+  );
+  await expect(scanButton(page)).toBeEnabled();
+  await captureState(page, "ready-no-scan");
+  expect(state.locations).toHaveLength(1);
+});
+test("location reads recover and out-of-area saved locations remain editable", async ({
+  page,
+}) => {
+  await mock(page, { locations: [{ ...home, latitude: 0 }] });
+  let calls = 0;
+  let fail = true;
+  let release = () => {};
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/locations", async (r) => {
+    calls++;
+    await waiting;
+    return r.fulfill(
+      fail
+        ? { status: 503, json: { error: "TEMPORARY" } }
+        : { json: { data: [{ ...home, latitude: 0 }] } }
+    );
   });
   await page.goto("/");
-  await expect(page.locator(".scan-context strong")).toHaveText("خانه");
-  if (page.viewportSize()!.width <= 720)
-    await page.getByRole("button", { name: "ویرایش مکان انتخاب‌شده" }).click();
-  else await page.getByRole("button", { name: "ویرایش خانه" }).click();
+  await expect(page.getByText("در حال دریافت اطلاعات…")).toBeVisible();
+  await captureState(page, "location-loading");
+  release();
+  await expect(
+    page.getByText("موقعیت‌ها دریافت نشدند", { exact: true })
+  ).toBeVisible();
+  await captureState(page, "location-error");
+  expect(calls).toBe(3);
+  fail = false;
+  await page
+    .getByRole("button", { name: "دریافت دوباره", exact: true })
+    .click();
+  await expect(page.getByText("موقعیت خارج از محدوده خدمات است")).toBeVisible();
+  await captureState(page, "outside-area");
+  await expect(scanButton(page)).toBeDisabled();
+  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await page.getByRole("button", { name: "ویرایش خانه" }).click();
   await expect(
     page.getByRole("dialog", { name: "ویرایش مکان", exact: true })
   ).toBeVisible();
-  await page.screenshot({
-    path: test.info().outputPath("location-editor.png"),
-    fullPage: true,
-  });
-  await page.getByRole("button", { name: "حذف مکان و تاریخچه" }).click();
-  await page.getByRole("button", { name: "حذف همیشگی" }).click();
-  await expect(page.locator(".scan-context strong")).toHaveText("دفتر");
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await expect(scanButton).toBeEnabled();
 });
-
-test("a failed automatic Okala scan keeps successful results and offers another scan", async ({
+test("new scans use the 40 percent default with no mode choice, credential routes, or duplicate submits", async ({
   page,
 }) => {
-  const requests = await mockDashboard(page, {
-    scans: [
-      {
-        id: "previous",
-        locationId: "location-1",
-        locationName: "خانه",
-        threshold: 40,
-        source: "okala",
-        mode: "partial",
-        status: "succeeded",
-        createdAt: "2026-08-23T10:00:00.000Z",
-        finishedAt: "2026-08-23T10:01:00.000Z",
-        vendorCount: 1,
-        productCount: 1,
-        dealCount: 1,
-      },
-    ],
-    dealGroups: [
-      {
-        key: "group-1",
-        groupKeyVersion: 1,
-        scanId: "previous",
-        title: "پیشنهاد اسکن قبلی",
-        image: null,
-        categoryTitle: "خوراکی",
-        priceRials: 100000,
-        discountRials: 50000,
-        finalPriceRials: 50000,
-        discountRatio: 50,
-        state: "new",
-        vendors: [
-          {
-            offerKey: "10:1",
-            productVariationId: "1",
-            vendorId: "10",
-            vendorTitle: "فروشگاه",
-            vendorCode: null,
-            priceRials: 100000,
-            discountRials: 50000,
-            finalPriceRials: 50000,
-            discountRatio: 50,
-            stock: 2,
-            state: "new",
-          },
-        ],
-      },
-    ],
+  const state = await mock(page);
+  let release = () => {};
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  await page.route("**/api/scans/scan-1", async (route) => {
-    await route.fulfill({
+  await page.route("**/api/scans", async (route) => {
+    if (route.request().method() === "POST") await waiting;
+    await route.fallback();
+  });
+  await page.goto("/");
+  await expect(scanButton(page)).toBeEnabled();
+  await page
+    .getByRole("combobox", { name: "فروشگاه", exact: true })
+    .selectOption("okala");
+  await scanButton(page).dblclick();
+  await expect(
+    page.getByRole("button", { name: "در حال شروع…", exact: true })
+  ).toBeDisabled();
+  await captureState(page, "submitting");
+  release();
+  await expect(
+    page.getByText("اسکن در انتظار بررسی است", { exact: true })
+  ).toBeVisible();
+  expect(state.posts).toEqual([
+    { locationId: "home", source: "okala", threshold: 40, mode: "partial" },
+  ]);
+  await expect(scanButton(page)).toBeDisabled();
+  await expect(page.getByText("دامنه اسکن", { exact: true })).toHaveCount(0);
+  expect(state.retailerRequests).toEqual([]);
+  await page.getByRole("button", { name: "راهنما", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "راهنمای بهتر بخر" })
+  ).toContainText("ورود به فروشگاه نیست");
+});
+test("account-wide running scans remain discoverable in another location and stop at terminal status", async ({
+  page,
+}) => {
+  const state = await mock(page, {
+    locations: [home, office],
+    scans: [run({ id: "active", status: "running", finishedAt: null })],
+  });
+  let finish = false;
+  let polls = 0;
+  await page.route("**/api/scans/active", (r) => {
+    polls++;
+    return r.fulfill({
       json: {
-        data: {
-          id: "scan-1",
-          locationId: "location-1",
-          source: "okala",
-          threshold: 40,
-          status: "failed",
-          errorCode: "UPSTREAM_FORBIDDEN",
-          errorMessage:
-            "دسترسی خودکار اکالا برقرار نشد؛ بعداً دوباره اسکن کنید",
-        },
+        data: run({
+          id: "active",
+          status: finish ? "succeeded" : "running",
+          finishedAt: finish ? date : null,
+        }),
       },
     });
   });
   await page.goto("/");
+  await expect(
+    page.getByText("در حال بررسی پیشنهادها…", { exact: true })
+  ).toBeVisible();
+  await page.getByLabel("موقعیت تحویل", { exact: true }).selectOption("office");
   await page
     .getByRole("combobox", { name: "فروشگاه", exact: true })
     .selectOption("okala");
+  await expect(page.locator(".active-scan")).toContainText("خانه · اسنپ‌مارکت");
+  await expect(scanButton(page)).toBeDisabled();
+  finish = true;
+  await expect(page.locator(".active-scan")).toHaveCount(0);
+  const terminalPolls = polls;
+  await page.waitForTimeout(1800);
+  expect(polls).toBe(terminalPolls);
+  expect(state.posts).toEqual([]);
+});
+test("status transport failure retains the server status and recovers without marking failed", async ({
+  page,
+}) => {
+  await mock(page, {
+    scans: [run({ id: "active", status: "running", finishedAt: null })],
+  });
+  let fail = true;
+  let calls = 0;
+  await page.route("**/api/scans/active", (r) => {
+    calls++;
+    return fail
+      ? r.abort("connectionfailed")
+      : r.fulfill({
+          json: { data: run({ id: "active", status: "succeeded" }) },
+        });
+  });
+  await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "پیشنهاد اسکن قبلی" })
+    page.getByText("وضعیت اسکن تازه‌سازی نشد", { exact: true })
   ).toBeVisible();
-  const scanButton =
-    page.viewportSize()!.width <= 720
-      ? page.locator(".mobile-scan")
-      : page.locator(".scan-button");
-  await scanButton.click();
+  expect(calls).toBe(3);
+  await expect(page.getByText("اسکن ناموفق بود", { exact: true })).toHaveCount(
+    0
+  );
+  fail = false;
+  await page.getByRole("button", { name: "بررسی دوباره وضعیت" }).click();
+  await expect(page.locator(".active-scan")).toHaveCount(0);
+  await expect(scanButton(page)).toBeEnabled();
+});
+test("transient result GET recovers within the bounded retry count", async ({
+  page,
+}) => {
+  const state = await mock(page, { scans: [run()], groups: representative });
+  let calls = 0;
+  await page.route("**/api/scans/saved/deal-groups", (r) => {
+    calls++;
+    return calls === 1
+      ? r.abort("connectionfailed")
+      : r.fulfill({ json: { data: representative } });
+  });
+  await page.goto("/");
+  await expect(offerHeading(page)).toBeVisible();
+  expect(calls).toBe(2);
+  expect(state.posts).toEqual([]);
+});
+test("persistent result failures show recovery after success and retry the same saved scan without POST", async ({
+  page,
+}) => {
+  const state = await mock(page, { scans: [run()], groups: representative });
+  let fail = true;
+  let calls = 0;
+  await page.route("**/api/scans/saved/deal-groups", (r) => {
+    calls++;
+    return fail
+      ? r.abort("connectionfailed")
+      : r.fulfill({ json: { data: representative } });
+  });
+  await page.goto("/");
   await expect(
-    page.getByText("دسترسی خودکار اکالا برقرار نشد؛ بعداً دوباره اسکن کنید")
+    page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "پیشنهاد اسکن قبلی" })
-  ).toBeVisible();
-  await expect(scanButton).toBeEnabled();
-  await expect(scanButton).toContainText("اسکن اکالا");
-  await page.getByRole("button", { name: "بستن", exact: true }).click();
-  await expect(
-    page.getByText("دسترسی خودکار اکالا برقرار نشد؛ بعداً دوباره اسکن کنید")
+    page.getByText("پیشنهادی با این حداقل تخفیف پیدا نشد", { exact: true })
   ).toHaveCount(0);
-  expect(requests.snappRequests).toEqual([]);
+  expect(calls).toBe(3);
+  fail = false;
+  await page.getByRole("button", { name: "دریافت دوباره نتیجه" }).click();
+  await expect(offerHeading(page)).toBeVisible();
+  await expect(
+    page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
+  ).toHaveCount(0);
+  expect(calls).toBe(4);
+  expect(state.posts).toEqual([]);
+});
+test("failed raw-deals read is also a result error rather than a successful empty list", async ({
+  page,
+}) => {
+  await mock(page, { scans: [run()], groups: representative });
+  await page.route("**/api/scans/saved/deals", (r) =>
+    r.fulfill({ status: 403, json: { error: "FORBIDDEN" } })
+  );
+  await page.goto("/");
+  await expect(
+    page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
+  ).toBeVisible();
+  await expect(offerHeading(page)).toHaveCount(0);
+});
+test("background result failures preserve this context's cached snapshot and clear on recovery", async ({
+  page,
+}) => {
+  const state = await success(page);
+  let fail = true;
+  await page.route("**/api/scans/saved/deal-groups", (r) =>
+    fail
+      ? r.abort("connectionfailed")
+      : r.fulfill({ json: { data: representative } })
+  );
+  await page.getByRole("button", { name: "تازه‌سازی نتیجه" }).click();
+  await expect(
+    page.getByText("تازه‌سازی نتیجه انجام نشد", { exact: true })
+  ).toBeVisible();
+  await expect(offerHeading(page)).toBeVisible();
+  await expect(
+    page.getByText("نتیجه ذخیره‌شده؛ تازه‌سازی نشد", { exact: false })
+  ).toBeVisible();
+  fail = false;
+  await page.getByRole("button", { name: "دریافت دوباره نتیجه" }).click();
+  await expect(
+    page.getByText("تازه‌سازی نتیجه انجام نشد", { exact: true })
+  ).toHaveCount(0);
+  expect(state.posts).toEqual([]);
+});
+for (const status of [401, 403, 404, 422, 200])
+  test(`permanent or invalid result HTTP ${status} is not retried`, async ({
+    page,
+  }) => {
+    await mock(page, { scans: [run()] });
+    let calls = 0;
+    await page.route("**/api/scans/saved/deal-groups", (r) => {
+      calls++;
+      return r.fulfill({
+        status,
+        json:
+          status === 200 ? { data: [{ bogus: true }] } : { error: "PERMANENT" },
+      });
+    });
+    await page.goto("/");
+    await expect(
+      page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
+    ).toBeVisible();
+    expect(calls).toBe(1);
+  });
+
+test("long Retry-After prevents rapid repeated requests", async ({ page }) => {
+  await mock(page, { scans: [run()] });
+  let calls = 0;
+  await page.route("**/api/scans/saved/deal-groups", (r) => {
+    calls++;
+    return r.fulfill({
+      status: 429,
+      headers: { "Retry-After": "60" },
+      json: { error: "RATE_LIMIT" },
+    });
+  });
+  await page.goto("/");
+  await expect(
+    page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
+  ).toBeVisible();
+  await page.waitForTimeout(1200);
+  expect(calls).toBe(1);
+});
+test("a lost start response reconciles a known scan with one POST", async ({
+  page,
+}) => {
+  const state = await mock(page);
+  await page.route("**/api/scans", (r) => {
+    if (r.request().method() === "POST") {
+      const input = r.request().postDataJSON();
+      state.posts.push(input);
+      state.scans = [
+        run({
+          ...input,
+          id: "recovered",
+          status: "running",
+          createdAt: new Date().toISOString(),
+          finishedAt: null,
+        }),
+      ];
+      return r.abort("connectionfailed");
+    }
+    return r.fulfill({ json: { data: state.scans } });
+  });
+  await page.goto("/");
+  await scanButton(page).click();
+  await expect(page.locator(".active-scan")).toContainText("خانه");
+  await expect(scanButton(page)).toBeDisabled();
+  await page.waitForTimeout(1000);
+  expect(state.posts).toHaveLength(1);
+});
+test("an unknown start stays uncertain until fresh reads and an explicit new-attempt acknowledgement", async ({
+  page,
+}) => {
+  const state = await mock(page);
+  let posts = 0;
+  await page.route("**/api/scans", (r) => {
+    if (r.request().method() === "POST") {
+      posts++;
+      return r.abort("connectionfailed");
+    }
+    return r.fulfill({ json: { data: state.scans } });
+  });
+  await page.goto("/");
+  await scanButton(page).click();
+  await expect(
+    page.getByText("نتیجه شروع اسکن مشخص نیست", { exact: true })
+  ).toBeVisible();
+  await expect(scanButton(page)).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "ادامه با امکان اسکن تازه" })
+  ).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(posts).toBe(1);
+  await page.getByRole("button", { name: "ادامه با امکان اسکن تازه" }).click();
+  await expect(scanButton(page)).toBeEnabled();
+  expect(posts).toBe(1);
+});
+test("reconciliation failure keeps duplicate start blocked until the authenticated read recovers", async ({
+  page,
+}) => {
+  await mock(page);
+  let failReads = false;
+  let posts = 0;
+  await page.route("**/api/scans", (r) => {
+    if (r.request().method() === "POST") {
+      posts++;
+      failReads = true;
+      return r.abort("connectionfailed");
+    }
+    return r.fulfill(
+      failReads
+        ? { status: 503, json: { error: "TEMPORARY" } }
+        : { json: { data: [] } }
+    );
+  });
+  await page.goto("/");
+  await scanButton(page).click();
+  await expect(
+    page.getByText("نتیجه شروع اسکن مشخص نیست", { exact: true })
+  ).toBeVisible();
+  await expect(scanButton(page)).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "ادامه با امکان اسکن تازه" })
+  ).toHaveCount(0);
+  failReads = false;
+  await page
+    .locator(".read-notice")
+    .filter({ hasText: "نتیجه شروع اسکن مشخص نیست" })
+    .getByRole("button", { name: "دریافت دوباره", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "ادامه با امکان اسکن تازه" })
+  ).toBeVisible();
+  expect(posts).toBe(1);
+});
+for (const boundary of ["location", "source", "threshold", "scan"])
+  test(`late ledger responses cannot cross the ${boundary} boundary`, async ({
+    page,
+  }) => {
+    const old = run({ id: "old", createdAt: "2026-10-07T08:00:00Z" });
+    await mock(page, { locations: [home, office], scans: [run(), old] });
+    let started = false;
+    let release = () => {};
+    const waiting = new Promise<void>((r) => {
+      release = r;
+    });
+    await page.route("**/api/scans/saved/deal-groups", async (r) => {
+      started = true;
+      await waiting;
+      await r
+        .fulfill({ json: { data: [group("پیشنهاد زمینه قبلی")] } })
+        .catch(() => {});
+    });
+    await page.goto("/");
+    await expect.poll(() => started).toBe(true);
+    if (boundary === "location")
+      await page
+        .getByLabel("موقعیت تحویل", { exact: true })
+        .selectOption("office");
+    if (boundary === "source")
+      await page
+        .getByRole("combobox", { name: "فروشگاه", exact: true })
+        .selectOption("okala");
+    if (boundary === "threshold") {
+      await page.getByText("گزینه‌های اسکن", { exact: false }).click();
+      await page
+        .getByRole("combobox", { name: "حداقل درصد تخفیف", exact: true })
+        .selectOption("50");
+    }
+    if (boundary === "scan") {
+      await page
+        .getByRole("button", { name: "تاریخچه اسکن", exact: true })
+        .click();
+      await page
+        .locator(".run-item")
+        .last()
+        .getByRole("button", { name: "نمایش نتیجه", exact: true })
+        .click();
+    }
+    release();
+    await page.waitForTimeout(500);
+    await expect(
+      page.getByRole("heading", { name: "پیشنهاد زمینه قبلی" })
+    ).toHaveCount(0);
+  });
+test("sign-out retires reads and another account cannot see late private results", async ({
+  page,
+}) => {
+  await mock(page, { scans: [run()] });
+  let requested = false;
+  let release = () => {};
+  const waiting = new Promise<void>((r) => {
+    release = r;
+  });
+  await page.route("**/api/scans/saved/deal-groups", async (r) => {
+    requested = true;
+    await waiting;
+    await r
+      .fulfill({ json: { data: [group("پیشنهاد خصوصی حساب قبلی")] } })
+      .catch(() => {});
+  });
+  await page.goto("/");
+  await expect.poll(() => requested).toBe(true);
+  await page.route("**/api/auth/get-session", (r) => r.fulfill({ json: null }));
+  await page.route("**/api/auth/sign-out", (r) =>
+    r.fulfill({ json: { success: true } })
+  );
+  await page.getByRole("button", { name: "حساب", exact: true }).click();
+  await page.getByRole("menuitem", { name: "خروج از حساب" }).click();
+  await expect(
+    page.getByRole("button", { name: "ادامه با گوگل" })
+  ).toBeVisible();
+  release();
+  await page.waitForTimeout(300);
+  await expect(
+    page.getByRole("heading", { name: "پیشنهاد خصوصی حساب قبلی" })
+  ).toHaveCount(0);
+  await page.route("**/api/auth/get-session", (r) =>
+    r.fulfill({
+      json: {
+        session: {
+          id: "s2",
+          userId: "user-2",
+          expiresAt: "2099-01-01T00:00:00Z",
+        },
+        user: { id: "user-2", name: "کاربر دوم", email: "second@example.com" },
+      },
+    })
+  );
+  await page.route("**/api/scans", (r) => r.fulfill({ json: { data: [] } }));
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "هنوز نتیجه‌ای برای این انتخاب ندارید" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "پیشنهاد خصوصی حساب قبلی" })
+  ).toHaveCount(0);
+});
+test("reconnect refreshes stale failed reads without another scan submission", async ({
+  page,
+}) => {
+  const state = await mock(page, { scans: [run()] });
+  let fail = true;
+  await page.route("**/api/scans/saved/deal-groups", (r) =>
+    fail
+      ? r.abort("connectionfailed")
+      : r.fulfill({ json: { data: representative } })
+  );
+  await page.goto("/");
+  await expect(
+    page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
+  ).toBeVisible();
+  fail = false;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("offline"));
+    window.dispatchEvent(new Event("online"));
+  });
+  await expect(offerHeading(page)).toBeVisible();
+  expect(state.posts).toEqual([]);
+});
+test("successful empty results, filter-empty results, and loading have distinct copy", async ({
+  page,
+}) => {
+  const state = await mock(page, { scans: [run()] });
+  let release = () => {};
+  const waiting = new Promise<void>((r) => {
+    release = r;
+  });
+  await page.route("**/api/scans/saved/deal-groups", async (r) => {
+    await waiting;
+    await r.fulfill({ json: { data: [] } });
+  });
+  await page.goto("/");
+  await expect(page.getByText("در حال دریافت نتیجه ذخیره‌شده…")).toBeVisible();
+  release();
+  await expect(
+    page.getByRole("heading", { name: "پیشنهادی با این حداقل تخفیف پیدا نشد" })
+  ).toBeVisible();
+  state.groups = representative;
+  await page.unroute("**/api/scans/saved/deal-groups");
+  await page.reload();
+  await expect(offerHeading(page)).toBeVisible();
+  await page.getByLabel("جست‌وجوی کالا یا فروشگاه").fill("هیچ نتیجه");
+  await expect(
+    page.getByRole("heading", { name: "چیزی با این فیلتر پیدا نشد" })
+  ).toBeVisible();
+  await page
+    .locator(".empty")
+    .getByRole("button", { name: "پاک‌کردن فیلترها" })
+    .click();
+  await expect(offerHeading(page)).toBeVisible();
+});
+test("history identifies context and retains Jet results without new Jet scans", async ({
+  page,
+}) => {
+  const jet = run({
+    id: "jet",
+    source: "digikalajet",
+    threshold: 25,
+    mode: "full",
+  });
+  const state = await mock(page, {
+    scans: [jet],
+    groups: [group("پیشنهاد تاریخی جت", "jet")],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "تاریخچه اسکن", exact: true }).click();
+  await expect(page.locator(".run-item")).toContainText("حداقل ۲۵٪");
+  await page.getByRole("button", { name: "نمایش نتیجه", exact: true }).click();
+  await expect(offerHeading(page, "پیشنهاد تاریخی جت")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "نتیجه تاریخی", exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("دیجی‌کالا جت · فقط مشاهده")).toBeVisible();
+  await expect(scanButton(page)).toBeDisabled();
+  expect(state.posts).toEqual([]);
+});
+test("a failed scan retains the previous snapshot and repeating it is an explicit new scan", async ({
+  page,
+}) => {
+  const state = await mock(page, {
+    scans: [
+      run({
+        id: "failed",
+        status: "failed",
+        createdAt: "2026-10-08T09:00:00Z",
+        errorMessage: "پیشنهادها کامل دریافت نشدند.",
+      }),
+      run(),
+    ],
+    groups: representative,
+  });
+  await page.goto("/");
+  await expect(offerHeading(page)).toBeVisible();
+  await expect(
+    page.getByText("اسکن ناموفق بود", { exact: true })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "تاریخچه اسکن", exact: true }).click();
+  await page.getByRole("button", { name: "اسکن تازه با این گزینه‌ها" }).click();
+  await expect(page.locator(".active-scan")).toBeVisible();
+  expect(state.posts).toHaveLength(1);
+});
+test("location editing and deletion restore selection with keyboard-accessible dialogs", async ({
+  page,
+}) => {
+  await mock(page, { locations: [home, office] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  const manager = page.getByRole("dialog", {
+    name: "موقعیت‌های تحویل",
+    exact: true,
+  });
+  await expect(manager).toBeVisible();
+  await manager.evaluate((element) =>
+    element.setAttribute("data-location-dialog-instance", "original")
+  );
+  await page.getByRole("button", { name: "ویرایش خانه" }).click();
+  const editor = page.getByRole("dialog", { name: "ویرایش مکان", exact: true });
+  await expect(page.locator('[role="dialog"]')).toHaveCount(1);
+  await expect(editor).toHaveAttribute(
+    "data-location-dialog-instance",
+    "original"
+  );
+  await expect(page.locator(".sheet-backdrop")).toHaveCount(1);
+  await captureState(page, "single-location-editor");
+  await editor.getByLabel("نام مکان").fill("خانه من");
+  await editor.getByRole("button", { name: "ذخیره مکان" }).click();
+  await expect(editor).toHaveCount(0);
+  await page.getByRole("button", { name: "ویرایش خانه من" }).click();
+  await page.getByRole("button", { name: "حذف مکان و تاریخچه" }).click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByRole("button", { name: "انصراف" })).toBeFocused();
+  await confirm.getByRole("button", { name: "انصراف" }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(page.locator('[role="dialog"]')).toHaveCount(1);
+  await editor.getByRole("button", { name: "حذف مکان و تاریخچه" }).click();
+  await page.getByRole("button", { name: "حذف همیشگی" }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "ویرایش خانه من" })
+  ).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(manager).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "موقعیت‌ها", exact: true })
+  ).toBeFocused();
+  await expect(page.getByLabel("موقعیت تحویل", { exact: true })).toHaveValue(
+    "office"
+  );
+});
+test("location list, edit and create replace content in the same dialog and discard cancelled drafts", async ({
+  page,
+}) => {
+  const state = await mock(page, { locations: [home, office] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  const shell = page.locator('[role="dialog"]');
+  await shell.evaluate((element) =>
+    element.setAttribute("data-location-dialog-instance", "original")
+  );
+  await shell.getByRole("button", { name: "ویرایش خانه", exact: true }).click();
+  await shell.getByLabel("نام مکان").fill("پیش‌نویس ذخیره‌نشده");
+  await shell.getByRole("button", { name: "بازگشت به موقعیت‌ها" }).click();
+  await expect(
+    shell.getByRole("heading", { name: "موقعیت‌های تحویل" })
+  ).toBeVisible();
+  await expect(shell).toHaveCount(1);
+  await shell.getByRole("button", { name: "ویرایش دفتر" }).click();
+  await expect(shell.getByLabel("نام مکان")).toHaveValue("دفتر");
+  await expect(shell.getByLabel("مکان پیش‌فرض باشد")).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(
+    shell.getByRole("heading", { name: "موقعیت‌های تحویل" })
+  ).toBeVisible();
+  await shell.getByRole("button", { name: "افزودن موقعیت تحویل" }).click();
+  await expect(shell.getByLabel("نام مکان")).toHaveValue("");
+  await shell.getByLabel("نام مکان").fill("پیش‌نویس تازه");
+  await page.keyboard.press("Escape");
+  expect(state.locations).toHaveLength(2);
+  await shell.getByRole("button", { name: "افزودن موقعیت تحویل" }).click();
+  await expect(shell).toHaveCount(1);
+  await expect(shell).toHaveAttribute(
+    "data-location-dialog-instance",
+    "original"
+  );
+  await expect(page.locator(".sheet-backdrop")).toHaveCount(1);
+  await expect(shell.getByLabel("نام مکان")).toHaveValue("");
+  await shell.getByLabel("نام مکان").fill("خانه تازه");
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Tab");
+    expect(
+      await shell.evaluate((element) =>
+        element.contains(document.activeElement)
+      )
+    ).toBe(true);
+  }
+  await shell.getByRole("button", { name: "ذخیره مکان" }).click();
+  await expect(
+    shell.getByRole("heading", { name: "موقعیت‌های تحویل" })
+  ).toBeVisible();
+  await expect(
+    shell.getByRole("button", { name: "ویرایش خانه تازه" })
+  ).toBeVisible();
+  await expect(shell).toHaveAttribute(
+    "data-location-dialog-instance",
+    "original"
+  );
+  await shell.getByRole("button", { name: "ویرایش خانه", exact: true }).click();
+  await expect(shell.getByLabel("نام مکان")).toHaveValue("خانه");
+  await shell.getByRole("button", { name: "بستن پنجره مکان" }).click();
+  await expect(shell).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "موقعیت‌ها", exact: true })
+  ).toBeFocused();
+  expect(state.locations).toHaveLength(3);
+});
+test("offer expansion, actual filters, sorting and reset work with focus containment", async ({
+  page,
+}) => {
+  await success(page);
+  await page.locator(".vendor-disclosure summary").first().click();
+  await expect(page.locator(".vendor-offers").first()).toBeVisible();
+  await page.getByRole("button", { name: "فیلترها", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "فیلتر پیشنهادها" });
+  await expect(dialog).toBeVisible();
+  await dialog
+    .getByRole("combobox", { name: "فروشگاه عرضه‌کننده", exact: true })
+    .selectOption("هایپرمارکت ونک");
+  await dialog
+    .getByRole("combobox", { name: "حداقل قیمت", exact: true })
+    .selectOption("200000");
+  for (let i = 0; i < 8; i++) {
+    await page.keyboard.press("Tab");
+    expect(
+      await dialog.evaluate((el) => el.contains(document.activeElement))
+    ).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "فیلترها (۲)", exact: true })
+  ).toBeFocused();
+  await expect(page.locator(".deal-row")).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "پاک‌کردن فیلترها", exact: true })
+    .click();
+  await expect(page.locator(".deal-row")).toHaveCount(3);
+  await page
+    .getByRole("combobox", { name: "مرتب‌سازی", exact: true })
+    .selectOption("discount");
+});
+test("best offer uses one store and historical offers never win the current price", async ({
+  page,
+}) => {
+  const row = group();
+  row.vendors = [
+    {
+      ...row.vendors[0]!,
+      vendorTitle: "تاریخی",
+      finalPriceRials: 1000,
+      discountRatio: 99,
+      state: "no_longer_present",
+    },
+    {
+      ...row.vendors[1]!,
+      vendorTitle: "قیمت بهتر",
+      priceRials: 250000,
+      finalPriceRials: 100000,
+      discountRatio: 60,
+    },
+    {
+      ...row.vendors[2]!,
+      vendorTitle: "تخفیف بیشتر",
+      priceRials: 1000000,
+      finalPriceRials: 150000,
+      discountRatio: 85,
+    },
+  ];
+  await mock(page, { scans: [run()], groups: [row] });
+  await page.goto("/");
+  await expect(page.locator(".product-copy")).toContainText("قیمت بهتر");
+  await expect(page.locator(".price-label")).toContainText("۲۵۰٬۰۰۰ تومان");
+  await expect(page.locator(".price-label")).toContainText("۱۰۰٬۰۰۰ تومان");
+  await expect(page.locator(".price-label .discount")).toHaveText("۶۰٪");
+  await page.locator(".vendor-disclosure summary").click();
+  await expect(page.locator(".vendor-offer").last()).toContainText(
+    "قیمت تاریخی"
+  );
+});
+test("appearance menu changes and persists light, dark and system themes", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await success(page);
+  const appearance = page.getByRole("button", { name: "ظاهر", exact: true });
+  await appearance.click();
+  await expect(
+    page.getByRole("menuitemradio", { name: "سیستم", exact: true })
+  ).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("menuitemradio", { name: "تیره", exact: true }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.reload();
+  await expect(appearance).toBeVisible();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await appearance.click();
+  await expect(
+    page.getByRole("menuitemradio", { name: "تیره", exact: true })
+  ).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("menuitemradio", { name: "روشن", exact: true }).click();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveClass(/light/);
+  await page.reload();
+  await expect(appearance).toBeVisible();
+  await expect(page.locator("html")).toHaveClass(/light/);
+  await appearance.focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("menuitemradio", { name: "سیستم", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(appearance).toBeFocused();
+  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await page.getByRole("button", { name: "ویرایش خانه", exact: true }).click();
+  await expect(page.locator('[role="dialog"]')).toHaveCount(1);
+  await captureState(page, "single-location-editor-dark", false);
+  await page.getByRole("button", { name: "بستن پنجره مکان" }).click();
+  await appearance.click();
+  await captureState(page, "appearance-menu-dark", false);
+  await page.keyboard.press("Escape");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveClass(/light/);
+  for (const width of [360, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(appearance).toBeInViewport();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth
+      )
+    ).toBe(true);
+  }
+});
+test("layouts, theme preference, long content, broken images and reduced motion are inspected", async ({
+  page,
+}, testInfo) => {
+  await mkdir(evidence, { recursive: true });
+  await success(page);
+  for (const width of [360, 390, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: width < 600 ? 844 : 1000 });
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth
+        )
+      )
+      .toBe(true);
+    await expect(scanButton(page)).toBeVisible();
+    expect(await scanButton(page).count()).toBe(1);
+    await page.screenshot({
+      path: path.join(
+        evidence,
+        `after-${testInfo.project.name}-${width}-light.png`
+      ),
+      fullPage: true,
+    });
+  }
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.screenshot({
+    path: path.join(evidence, `after-${testInfo.project.name}-dark.png`),
+    fullPage: true,
+  });
+  const long = {
+    ...group(
+      "کالای با نام طولانی Persian Product Name ۲۰۲۶ برای بررسی خوانایی و جلوگیری از سرریز در صفحه کوچک"
+    ),
+    image: "https://images.example.test/broken.jpg",
+    vendors: group().vendors.map((v) => ({
+      ...v,
+      vendorTitle: "فروشگاه با نام طولانی در محله و منطقه برای بررسی خوانایی",
+      finalPriceRials: 1234567890,
+    })),
+  };
+  await page.route("**/api/scans/saved/deal-groups", (r) =>
+    r.fulfill({ json: { data: [long] } })
+  );
+  await page.route("https://images.example.test/**", (r) => r.abort());
+  await page.setViewportSize({ width: 360, height: 844 });
+  await page.reload();
+  await expect(offerHeading(page, long.title)).toBeVisible();
+  await expect(
+    page.getByText("تصویر در دسترس نیست", { exact: true })
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth
+      )
+    )
+    .toBe(true);
+  await page.locator(".vendor-disclosure summary").click();
+  await page.screenshot({
+    path: path.join(
+      evidence,
+      `after-${testInfo.project.name}-long-expanded.png`
+    ),
+    fullPage: true,
+  });
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth
+      )
+    )
+    .toBe(true);
+});
+
+test("capture state views, real retailer images, touch targets, focus and token contrast", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60000);
+  await mkdir(evidence, { recursive: true });
+  await page.setViewportSize({
+    width: testInfo.project.name === "mobile" ? 390 : 1280,
+    height: 900,
+  });
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
+  const capture = async (name: string) => {
+    await page.screenshot({
+      path: path.join(evidence, `state-${testInfo.project.name}-${name}.png`),
+      fullPage: true,
+    });
+  };
+  await mock(page, { signedOut: true });
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "ادامه با گوگل" })
+  ).toBeVisible();
+  await capture("signed-out");
+  const state = await mock(page, { locations: [] });
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "موقعیت تحویل را اضافه کنید" })
+  ).toBeVisible();
+  await capture("no-location");
+  await page
+    .locator(".onboarding")
+    .getByRole("button", { name: "افزودن موقعیت تحویل" })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "افزودن موقعیت تحویل", exact: true })
+  ).toBeVisible();
+  await capture("location-editor");
+  await page.keyboard.press("Escape");
+  state.locations = [home];
+  state.scans = [run()];
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "پیشنهادی با این حداقل تخفیف پیدا نشد" })
+  ).toBeVisible();
+  await capture("empty-results");
+  let release = () => {};
+  const waiting = new Promise<void>((r) => {
+    release = r;
+  });
+  await page.route("**/api/scans/saved/deal-groups", async (r) => {
+    await waiting;
+    await r.fulfill({ status: 503, json: { error: "TEMPORARY" } });
+  });
+  await page.reload();
+  await expect(page.getByText("در حال دریافت نتیجه ذخیره‌شده…")).toBeVisible();
+  await capture("loading-results");
+  release();
+  await expect(
+    page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
+  ).toBeVisible();
+  await capture("error-results");
+  await page.unroute("**/api/scans/saved/deal-groups");
+  // URLs observed from Okala's public campaign feed on 2026-10-08. All prices here remain fixtures.
+  state.groups = [
+    {
+      ...group("پنیر خامه ای ویلی کاله 100 گرمی"),
+      image:
+        "https://asset.okala.com/unsigned/rs:fill/size:0:0/plain/s3://cdn/product/35cc5c64-bceb-40e4-aab3-6eed0b3ab359.jpg",
+    },
+    {
+      ...group("دوغ گازدار لار هراز 1 لیتری"),
+      image:
+        "https://asset.okala.com/unsigned/rs:fill/size:0:0/plain/s3://cdn/product/a184e9ba-3071-41d6-a4c0-c054c4f57eb3.jpg",
+    },
+  ];
+  await page.getByRole("button", { name: "دریافت دوباره نتیجه" }).click();
+  await expect(offerHeading(page, state.groups[0]!.title)).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page
+          .locator(".product-image img")
+          .evaluateAll((images) =>
+            images.every(
+              (img) =>
+                (img as HTMLImageElement).complete &&
+                (img as HTMLImageElement).naturalWidth > 0
+            )
+          ),
+      { timeout: 15000 }
+    )
+    .toBe(true);
+  await capture("real-images");
+  await page.locator(".vendor-disclosure summary").first().click();
+  await capture("expanded-offers");
+  await page.getByRole("button", { name: "فیلترها", exact: true }).click();
+  await capture("filters-dialog");
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "فیلترها", exact: true })
+  ).toBeFocused();
+  const metrics = await page.evaluate(() => {
+    const contrast = (a: string, b: string) => {
+      const lum = (s: string) => {
+        const n = s
+          .match(/[\d.]+/g)!
+          .slice(0, 3)
+          .map(Number)
+          .map((v) => {
+            v /= 255;
+            return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+          });
+        return n[0]! * 0.2126 + n[1]! * 0.7152 + n[2]! * 0.0722;
+      };
+      const x = lum(a),
+        y = lum(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    const action = getComputedStyle(document.querySelector(".scan-button")!);
+    const body = getComputedStyle(document.body);
+    const badTargets = [
+      ...document.querySelectorAll(
+        "button,select,summary,input:not([type=checkbox])"
+      ),
+    ]
+      .filter(
+        (el) =>
+          el.getBoundingClientRect().width > 0 &&
+          el.getBoundingClientRect().height > 0
+      )
+      .filter((el) => el.getBoundingClientRect().height < 43).length;
+    return {
+      actionContrast: contrast(action.color, action.backgroundColor),
+      bodyContrast: contrast(body.color, body.backgroundColor),
+      badTargets,
+      focusOutline: getComputedStyle(document.activeElement!).outlineStyle,
+      firstOfferTop: document
+        .querySelector(".deal-row")!
+        .getBoundingClientRect().top,
+    };
+  });
+  expect(metrics.actionContrast).toBeGreaterThanOrEqual(4.5);
+  expect(metrics.bodyContrast).toBeGreaterThanOrEqual(4.5);
+  expect(metrics.badTargets).toBe(0);
+  expect(metrics.focusOutline).not.toBe("none");
+  expect(metrics.firstOfferTop).toBeLessThan(760);
+  await page.route("**/api/scans/saved/deal-groups", (r) =>
+    r.abort("connectionfailed")
+  );
+  await page.getByRole("button", { name: "تازه‌سازی نتیجه" }).click();
+  await expect(
+    page.getByText("تازه‌سازی نتیجه انجام نشد", { exact: true })
+  ).toBeVisible();
+  await capture("cached-error");
+  await page.unroute("**/api/scans/saved/deal-groups");
+  state.scans = [run({ id: "active", status: "queued", finishedAt: null })];
+  await page.reload();
+  await expect(page.locator(".active-scan")).toBeVisible();
+  await capture("queued");
+  state.scans = [
+    run({
+      id: "active",
+      status: "running",
+      finishedAt: null,
+      vendorCount: 2,
+      productCount: 30,
+    }),
+  ];
+  await page.reload();
+  await expect(
+    page.getByText("در حال بررسی پیشنهادها…", { exact: true })
+  ).toBeVisible();
+  await capture("running");
+  await page.route("**/api/scans/active", (r) => r.abort("connectionfailed"));
+  await page.reload();
+  await expect(
+    page.getByText("وضعیت اسکن تازه‌سازی نشد", { exact: true })
+  ).toBeVisible();
+  await capture("status-unknown");
+  await page.unroute("**/api/scans/active");
+  state.scans = [
+    run({
+      id: "failed",
+      status: "failed",
+      errorMessage: "پیشنهادها کامل دریافت نشدند.",
+      createdAt: "2026-10-08T09:00:00Z",
+    }),
+    run(),
+  ];
+  await page.reload();
+  await expect(
+    page.getByText("اسکن ناموفق بود", { exact: true })
+  ).toBeVisible();
+  await capture("failed");
+  state.scans = [run({ id: "jet", source: "digikalajet" })];
+  state.groups = [group("پیشنهاد تاریخی جت", "jet")];
+  await page.reload();
+  await page.getByRole("button", { name: "تاریخچه اسکن", exact: true }).click();
+  await capture("history");
+  await page.getByRole("button", { name: "نمایش نتیجه", exact: true }).click();
+  await expect(offerHeading(page, "پیشنهاد تاریخی جت")).toBeVisible();
+  await capture("jet-history");
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  const darkContrast = await page.locator(".scan-button").evaluate((el) => {
+    const s = getComputedStyle(el);
+    const lum = (str: string) => {
+      const a = str
+        .match(/[\d.]+/g)!
+        .slice(0, 3)
+        .map(Number)
+        .map((v) => {
+          v /= 255;
+          return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        });
+      return a[0]! * 0.2126 + a[1]! * 0.7152 + a[2]! * 0.0722;
+    };
+    const a = lum(s.color),
+      b = lum(s.backgroundColor);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+  expect(darkContrast).toBeGreaterThanOrEqual(4.5);
+  await capture("dark-history");
+  console.log(
+    JSON.stringify({ project: testInfo.project.name, ...metrics, darkContrast })
+  );
+});
+
+test("small mobile keyboard viewport keeps location forms and filters usable", async ({
+  page,
+}) => {
+  await success(page);
+  await page.setViewportSize({ width: 390, height: 480 });
+  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await page.getByRole("button", { name: "ویرایش خانه" }).click();
+  const editor = page.getByRole("dialog", { name: "ویرایش مکان", exact: true });
+  await editor.getByLabel("نام مکان").fill("خانه با صفحه‌کلید باز");
+  await expect(editor.getByLabel("نام مکان")).toBeFocused();
+  await editor
+    .getByRole("button", { name: "ذخیره مکان" })
+    .scrollIntoViewIfNeeded();
+  await expect(
+    editor.getByRole("button", { name: "ذخیره مکان" })
+  ).toBeInViewport();
+  const bounds = await editor.boundingBox();
+  expect(bounds!.height).toBeLessThanOrEqual(456);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "موقعیت‌ها", exact: true })
+  ).toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth
+      )
+    )
+    .toBe(true);
+});
+
+test("optional map loads on demand and tile failure leaves manual coordinates usable", async ({
+  page,
+}) => {
+  await mock(page);
+  await page.route(/https:\/\/[abc]\.tile\.openstreetmap\.org\//, (r) =>
+    r.abort()
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await page.getByRole("button", { name: "ویرایش خانه" }).click();
+  const dialog = page.getByRole("dialog", { name: "ویرایش مکان", exact: true });
+  await expect(dialog.locator(".leaflet-map")).toHaveCount(0);
+  await dialog.getByText("انتخاب روی نقشه (اختیاری)", { exact: true }).click();
+  await expect(dialog.locator(".leaflet-map")).toBeVisible();
+  await expect(
+    dialog.getByText("نمایش نقشه موقتاً در دسترس نیست", { exact: false })
+  ).toBeVisible();
+  await dialog.getByLabel("عرض جغرافیایی").fill("35.72");
+  await dialog.getByRole("button", { name: "ذخیره مکان" }).click();
+  await expect(dialog).toHaveCount(0);
 });

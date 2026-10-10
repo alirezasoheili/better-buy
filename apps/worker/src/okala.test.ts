@@ -62,6 +62,45 @@ afterEach(() => {
 });
 
 describe("public Okala campaign collection", () => {
+  it("counts distinct inspected eligible stores, including empty entities, consistently across campaigns", async () => {
+    const first = {
+      ...offers(),
+      entities: [
+        { storeId: 11, storeName: "فروشگاه", products: [product] },
+        { storeId: 12, storeName: "خالی", products: [] },
+        { storeId: 999, storeName: "خارج", products: [] },
+      ],
+    };
+    const onProgress = vi.fn(() => Effect.void);
+    const result = await collect(
+      fixture([nearby, campaigns, first, offers([])]),
+      { onProgress }
+    );
+    expect(onProgress.mock.calls).toEqual([
+      [{ vendorCount: 2, productCount: 1 }],
+      [{ vendorCount: 2, productCount: 1 }],
+    ]);
+    expect(result.vendorCount).toBe(2);
+    expect(result.deals).toHaveLength(1);
+  });
+  it("excludes 20-29 percent offers at the effective 30 percent threshold", async () => {
+    const result = await collect(
+      fixture([
+        nearby,
+        campaigns,
+        offers(
+          [20, 25, 29, 30].map((n) => ({
+            ...product,
+            id: n,
+            discountPercent: n,
+          }))
+        ),
+        offers([]),
+      ]),
+      { threshold: 30 }
+    );
+    expect(result.deals.map((d) => d.discountRatio)).toEqual([30]);
+  });
   it("uses selected coordinates, repeated serviceable stores, and dynamic unique campaigns without credentials", async () => {
     const fetcher = fixture();
     const result = await collect(fetcher);
@@ -94,7 +133,7 @@ describe("public Okala campaign collection", () => {
         "ui-version": "2.0",
       });
     }
-    expect(result.vendorCount).toBe(2);
+    expect(result.vendorCount).toBe(1);
     expect(result.deals).toHaveLength(1);
     expect(result.deals[0]).toMatchObject({
       key: "11:1",
@@ -230,7 +269,7 @@ describe("public Okala campaign collection", () => {
     await collect(fetcher, { onProgress });
     expect(onProgress.mock.calls).toEqual([
       [{ vendorCount: 1, productCount: 1 }],
-      [{ vendorCount: 2, productCount: 2 }],
+      [{ vendorCount: 1, productCount: 2 }],
     ]);
   });
   it("retries only the failed campaign read with bounded backoff", async () => {

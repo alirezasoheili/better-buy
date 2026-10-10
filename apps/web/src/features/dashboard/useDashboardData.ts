@@ -1,41 +1,35 @@
 import { useCallback, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocationRecord, ScanRecord } from "@better-buy/shared";
+import { useQuery } from "@tanstack/react-query";
+import { locationsReadSchema, scansReadSchema } from "@better-buy/shared";
 import { api } from "../../lib/api";
-const emptyLocations: LocationRecord[] = [];
-const emptyScans: ScanRecord[] = [];
 export function useDashboardData() {
-  const client = useQueryClient();
   const locationsQuery = useQuery({
     queryKey: ["locations"],
     queryFn: ({ signal }) =>
-      api<LocationRecord[]>("/api/locations", { signal }),
+      api("/api/locations", { signal }, locationsReadSchema.parse),
   });
   const scansQuery = useQuery({
     queryKey: ["scans"],
-    queryFn: ({ signal }) => api<ScanRecord[]>("/api/scans", { signal }),
+    queryFn: ({ signal }) =>
+      api("/api/scans", { signal }, scansReadSchema.parse),
   });
   const [selection, setSelected] = useState("");
-  const locations = locationsQuery.data ?? emptyLocations;
-  const selected = locations.some((location) => location.id === selection)
+  const locations = locationsQuery.data ?? [];
+  const selected = locations.some((l) => l.id === selection)
     ? selection
-    : (locations.find((location) => location.isDefault)?.id ??
-      locations[0]?.id ??
-      "");
+    : (locations.find((l) => l.isDefault)?.id ?? locations[0]?.id ?? "");
   const load = useCallback(async () => {
-    await Promise.all([
-      client.invalidateQueries({ queryKey: ["locations"] }),
-      client.invalidateQueries({ queryKey: ["scans"] }),
-    ]);
-  }, [client]);
+    await Promise.all([locationsQuery.refetch(), scansQuery.refetch()]);
+  }, [locationsQuery.refetch, scansQuery.refetch]);
   return {
     locations,
     selected,
     setSelected,
-    scans: scansQuery.data ?? emptyScans,
+    scans: scansQuery.data ?? [],
     busy: locationsQuery.isPending || scansQuery.isPending,
+    locationsQuery,
+    scansQuery,
     needsLocation: locationsQuery.isSuccess && locations.length === 0,
-    dataError: locationsQuery.error?.message ?? scansQuery.error?.message ?? "",
     load,
   };
 }

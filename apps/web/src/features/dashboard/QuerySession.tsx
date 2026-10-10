@@ -1,15 +1,17 @@
 "use client";
 import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { retryApplicationRead, readRetryDelay } from "../../lib/queryPolicy";
 export function createDashboardQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        retry: false,
+        retry: retryApplicationRead,
+        retryDelay: readRetryDelay,
         staleTime: 60_000,
-        gcTime: 0,
+        gcTime: 300_000,
         refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
+        refetchOnReconnect: true,
         networkMode: "always",
       },
       mutations: { retry: false, gcTime: 0, networkMode: "always" },

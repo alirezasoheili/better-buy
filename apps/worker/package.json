@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "predev": "pnpm --filter @better-buy/shared build",
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --compatibility-date 2026-08-08",
     "build:web": "pnpm --filter @better-buy/shared build && pnpm --filter @better-buy/web build:worker",
     "deploy": "pnpm run build:web && wrangler deploy",
     "pretest": "pnpm --filter @better-buy/shared build",

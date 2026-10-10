@@ -8,7 +8,11 @@ export function GoogleSignIn() {
     setError("");
     setSubmitting(true);
     try {
-      await authClient.signIn.social({ provider: "google", callbackURL: "/" });
+      const result = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/",
+      });
+      if (result.error) throw new Error("sign-in rejected");
     } catch {
       setError("شروع ورود با گوگل ممکن نشد؛ دوباره تلاش کنید.");
       setSubmitting(false);
@@ -18,11 +22,10 @@ export function GoogleSignIn() {
     <main className="auth-shell">
       <section className="auth-card" aria-labelledby="sign-in-title">
         <div className="auth-mark">ب</div>
-        <p className="auth-kicker">قفسهٔ خصوصی تخفیف‌های شما</p>
-        <h1 id="sign-in-title">تخفیف‌های بهترِ خرید روزانه را پیدا کن.</h1>
+        <h1 id="sign-in-title">بهتر بخر</h1>
         <p>
-          با گوگل وارد شوید تا مکان‌های ذخیره‌شده، اسکن‌ها و اتصال فروشگاه‌ها
-          فقط در حساب خودتان باقی بمانند.
+          پیشنهادهای اسنپ‌مارکت و اکالا را برای موقعیت تحویل خود پیدا کنید و
+          قیمت فروشگاه‌ها را مقایسه کنید.
         </p>
         <button
           className="google-button"
@@ -55,8 +58,8 @@ export function GoogleSignIn() {
           </p>
         )}
         <small>
-          ورود فقط با گوگل انجام می‌شود. توکن‌های فروشگاهی رمزنگاری شده‌اند و با
-          حساب دیگری به اشتراک گذاشته نمی‌شوند.
+          موقعیت‌ها و تاریخچه در حساب شما نگهداری می‌شوند. برای بررسی پیشنهادها،
+          ورود به فروشگاه لازم نیست.
         </small>
       </section>
     </main>

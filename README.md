@@ -2,6 +2,36 @@
 
 Backend structure, Effect v4 boundaries, service lifetimes, collector changes, and execution limits are documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
+## Reliability and UX redesign — local validation, 2026-10-08
+
+The application now uses a compact Persian RTL header, visible location/retailer selectors, one primary scan action, and accessible secondary location/help/filter panels. Account controls live in a menu and history clearly identifies its location, provider, threshold, date and outcome, including read-only Jet snapshots. Local IRANSansX and the existing identity mark remain. Both system light/dark themes use coherent tokens; decorative scan animation, large summary tiles, repeated scan actions, connection settings and the unused partial/full choice are retired. Stored mode remains readable. The design source revisions and Before / After / Why audit are in [DESIGN.md](./DESIGN.md).
+
+The transport boundary distinguishes HTTP status/code, unknown transport failure, invalid response and cancellation, including aborted body reads. Application GET queries get at most two retries (1s/2s backoff, Retry-After bounded at 5s); long server guidance declines automatic retry. Permanent 4xx, authentication/permission failures, malformed responses and cancellation do not retry. Reconnect and manual recovery use Query; writes never retry automatically. A lost start acknowledgement remains explicitly uncertain and reconciles through authenticated scan reads before an explicit new-attempt acknowledgement is offered. Known active scans stay visible account-wide while the person views another context. Read errors do not invent a failed scan; result retry reloads the same saved scan and never starts another retailer scan. Same-context cached results stay visible with snapshot time and stale feedback.
+
+Okala preparation now applies its minimum 30% once to reservation, ScanJob and collection. An API request at 20% creates a 30% snapshot, without 20–29% offers. Future comparisons use that effective threshold; historical scans are untouched. Progress and final vendorCount both count distinct eligible stores whose returned entities were inspected (including empty entities), rather than campaign completions or all nearby stores. The collection budget, sequential retailer requests, atomic D1 results, terminal guards, tenant isolation, public provider access and pinned libraries remain intact.
+
+Baseline: typecheck, 135 unit/integration tests (120 Worker / 10 shared / 5 web), production build and 28 browser checks passed. Full formatting had 25 pre-existing failures.
+
+| Check                                                             | Final result                                                                                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`                                                  | PASS                                                                                                                        |
+| `pnpm test`                                                       | PASS: 169 tests (125 Worker / 10 shared / 34 web)                                                                           |
+| `pnpm build`                                                      | PASS                                                                                                                        |
+| `pnpm test:e2e`                                                   | PASS: 70 desktop/mobile browser checks against the production build; 8 affected checks re-passed after extra state captures |
+| `pnpm --filter @better-buy/web build:worker`                      | PASS: fresh static export                                                                                                   |
+| `pnpm --filter @better-buy/worker exec wrangler deploy --dry-run` | PASS: bundled with 40 files from the fresh static export; no deployment                                                     |
+| Changed-file formatting / `git diff --check`                      | PASS                                                                                                                        |
+| Frontend effects / custom polling timer source guard              | PASS: no direct `useEffect`/`useLayoutEffect`, `setInterval` or `setTimeout`                                                |
+| `pnpm format:check`                                               | PRE-EXISTING FAILURE: 22 untouched files; no new formatting failures                                                        |
+
+Next reports the root page at 82.6 kB and 185 kB first-load JavaScript, compared with 115 kB and 217 kB at baseline. These are build-reported bundle sizes, not production performance or Web Vitals measurements. Effect remains pinned at 4.0.1 and TanStack Query at 5.104.1; no dependencies or lockfile versions changed.
+
+Screenshots and local logs are retained in ignored `.data/design-evidence/`, `.data/final-validation.log`, `.data/static-validation.log` and `.data/worker-dry-run.log`. Before/after screenshots use controlled representative fixtures. Additional captures inspect signed-out/authentication pending/error, no-location/location loading/error/outside-area, ready/submitting/queued/running/failed/unknown status, loading/error/empty/cached results, real retailer images, expanded offers, dialogs, history/Jet and narrow-screen layouts. A self-critique reduced mobile navigation/context spacing so the first offer appears sooner. The optional map now mounts only when opened; failed tiles leave manual coordinates usable. Dialog focus/Escape/restoration, visible control heights and action contrast were checked; local measurements are 5.45:1 in light mode and 8.60:1 in dark mode. Reduced-motion screenshots, reflow at 360/390/768/1280/1440px, 200% text scaling and a reduced-height keyboard viewport are covered. The latter is a simulation, not physical-device keyboard validation or a complete WCAG audit.
+
+A separate read-only live Okala lookup returned three real product-image references; browser captures verified the images load. Scan lifecycle, Google session and network failure cases use fixtures; persistence regressions use real in-memory SQLite through the D1 interface. These checks do not prove external Google OAuth, deployed D1 timing, production scan execution, real TLS negotiation or production Web Vitals. The observed browser-to-Cloudflare TLS negotiation problem is outside frontend route handling: read recovery improves resilience but does not repair TLS. No HTTPS downgrade, insecure proxy or disabled certificate verification was introduced.
+
+No commit, push, deployment, remote migration or production-secret change was made. Generated assets and evidence stay ignored; the implementation remains a reviewable working-tree diff.
+
 ## Public Okala scanning — local validation, 2026-10-07
 
 Okala now requires no customer credentials, guest token, settings row, or connection setup. Better Buy's Google/Better Auth sign-in remains required. The Effect collector follows selected location → eligible nearby stores → public HomePage campaigns → every unique multi-store campaign → existing stock/threshold filtering and offer normalization. All Okala requests omit Authorization and Cookie; there is no authenticated BFF or login fallback.
@@ -56,6 +86,8 @@ pnpm install
 pnpm dev
 ```
 
+The Worker development script overrides the compatibility date to `2026-08-08`, the maximum supported by the local workerd bundled with installed Wrangler 4.120.0. The deployment configuration retains `2026-08-10`; this local override does not prove behavior under that newer runtime date. Local Wrangler state and temporary files in `.wrangler/` are ignored.
+
 سپس [http://127.0.0.1:3000](http://127.0.0.1:3000) را باز کنید، با گوگل وارد شوید، یک موقعیت تحویل معتبر در تهران انتخاب کنید و اسکن اسنپ‌مارکت یا اکالا را شروع کنید. برای اسکن اکالا نیازی به ورود یا وارد کردن توکن نیست؛ شماره موبایل، کد پیامک و تنظیم اتصال فروشگاه لازم نیست. API روی `127.0.0.1:8787` با `wrangler dev` اجرا می‌شود و داده‌ها در D1 محلی نگهداری می‌شوند.
 
 برای اولین اجرا، migration های D1 را محلی اعمال کنید:
@@ -69,6 +101,19 @@ Migration `0005_remove_snapp_customer_credentials.sql` فقط اطلاعات ا�
 مقادیر محلی لازم (ورود گوگل و کلید نگه‌داری‌شده برای داده‌های قدیمی) را در `apps/worker/.dev.vars` بگذارید — نمونه در `apps/worker/.dev.vars.example`.
 
 ## ورود
+
+For local testing without Google OAuth, set `DEV_MODE=true` in the ignored Worker `.dev.vars`, build with `pnpm --filter @better-buy/worker build:web`, and run `pnpm cf:dev`. When serving both web and API at `http://127.0.0.1:8787`, use that origin for `APP_ORIGIN`, `BETTER_AUTH_URL` and `CORS_ORIGIN`. On that local page, run this in the browser console:
+
+```javascript
+const login = await fetch("/api/auth/test-login", {
+  method: "POST",
+  credentials: "include",
+});
+if (!login.ok) throw new Error(`Development login failed: ${login.status}`);
+location.assign("/");
+```
+
+The development helper issues a real Better Auth session for the local test account and seeds its first location. It uses Better Auth's own padded-base64 cookie signature and URL-encodes the value; the former base64url signature passed a shallow cryptographic test but was rejected by the actual session-cookie reader. The endpoint remains HTTP 404 with no account/session writes when `DEV_MODE` is disabled. Verification on 2026-10-08 passed typecheck, 172 unit/integration tests (128 Worker / 10 shared / 34 web), actual local session/protected-route reads, and a Chrome login/reload that displayed the dashboard. The three new integration regressions use the real Better Auth handler and in-memory SQLite through its D1 adapter. This does not verify Google OAuth. Local browser evidence is in `.data/design-evidence/dev-login-local.png`.
 
 - **Google:** ورود اصلی از طریق Better Auth انجام می‌شود؛ در حالت محلی نیز همین جریان کار می‌کند.
 - **SnappMarket:** Worker به‌صورت خودکار نشست مهمان PWA را دریافت می‌کند. یک شناسه دستگاه و توکن در طول جمع‌آوری صفحات استفاده می‌شود؛ انقضا رعایت می‌شود و پس از پاسخ 401 فقط یک بار دسترسی تازه و همان صفحه دوباره درخواست می‌شود. توکن مهمان در مرورگر، لاگ یا اطلاعات اتصال کاربر ذخیره نمی‌شود. نسخه PWA در collector تنظیم شده است. آماده بودن دکمه اسکن به معنی تأیید ارتباط با فروشگاه نیست؛ خطای دریافت دسترسی یا پاسخ ناقص، اسکن را ناموفق می‌کند و نتیجه موفق قبلی حفظ می‌شود.

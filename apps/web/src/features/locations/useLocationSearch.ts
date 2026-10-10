@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { LocationSearchResult } from "@better-buy/shared";
+import { locationSearchReadSchema } from "@better-buy/shared";
 import { api } from "../../lib/api";
 export function useLocationSearch() {
   const [searchQuery, updateQuery] = useState("");
@@ -13,9 +13,10 @@ export function useLocationSearch() {
     queryKey: ["locationSearch", submitted?.text, submitted?.revision],
     enabled: !!submitted,
     queryFn: ({ signal }) =>
-      api<LocationSearchResult[]>(
+      api(
         "/api/locations/search?q=" + encodeURIComponent(submitted?.text ?? ""),
-        { signal }
+        { signal },
+        locationSearchReadSchema.parse
       ),
   });
   const setSearchQuery = (text: string) => {

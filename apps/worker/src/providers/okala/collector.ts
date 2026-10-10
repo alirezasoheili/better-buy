@@ -129,8 +129,9 @@ export function collectOkala(input: {
         )
       );
     const rows = new Map<string, Omit<DealRecord, "scanId" | "state">>();
-    let products = 0,
-      completed = 0;
+    const eligibleStores = new Set(storeIds);
+    const inspectedStores = new Set<number>();
+    let products = 0;
     for (const carouselId of ids) {
       const query = new URLSearchParams({ carouselId: String(carouselId) });
       storeIds.forEach((id) => query.append("StoreIds", String(id)));
@@ -139,7 +140,10 @@ export function collectOkala(input: {
         yield* get("/carousel/v4/offers/multi-store", query)
       );
       yield* checkPagination(payload);
-      for (const entity of payload.entities)
+      for (const entity of payload.entities) {
+        // Empty returned entities count; repeated campaign appearances do not.
+        if (eligibleStores.has(entity.storeId))
+          inspectedStores.add(entity.storeId);
         for (const item of entity.products) {
           products++;
           if (
@@ -152,15 +156,15 @@ export function collectOkala(input: {
           )
             rows.set(`${item.storeId}:${item.id}`, normalizeOkalaOffer(item));
         }
-      completed++;
+      }
       if (input.onProgress)
         yield* input.onProgress({
-          vendorCount: Math.min(storeIds.length, completed),
+          vendorCount: inspectedStores.size,
           productCount: products,
         });
     }
     return {
-      vendorCount: storeIds.length,
+      vendorCount: inspectedStores.size,
       productCount: products,
       deals: [...rows.values()],
     };
