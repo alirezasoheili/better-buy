@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { collectDeals } from "./providers/snapp/collector";
 
 const home = () => ({
@@ -149,6 +149,54 @@ function fixture(
 }
 
 describe("store-specific campaign enrichment", () => {
+  afterEach(() => vi.useRealTimers());
+  it("selects a later campaign price tuple over an older Market Party observation", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const result = await fixture({
+      page: (page) => {
+        vi.setSystemTime(
+          new Date(
+            page === 0 ? "2026-10-10T08:00:00.000Z" : "2026-10-10T08:02:00.000Z"
+          )
+        );
+        return {
+          count: 101,
+          rows:
+            page === 0
+              ? Array.from({ length: 100 }, (_, index) => product(index + 100))
+              : page === 1
+                ? [
+                    product(1, {
+                      price: 200000,
+                      discount: 100000,
+                      discountRatio: 50,
+                      stock: 7,
+                    }),
+                  ]
+                : [],
+        };
+      },
+      party: () => {
+        vi.setSystemTime(new Date("2026-10-10T08:01:00.000Z"));
+        return party();
+      },
+    }).run();
+    expect(result.deals.find((row) => row.key === "114458:1")).toMatchObject({
+      priceRials: 200000,
+      discountRials: 100000,
+      finalPriceRials: 100000,
+      discountRatio: 50,
+      stock: 7,
+      observedAt: "2026-10-10T08:02:00.000Z",
+      provenance: ["snapp:market_party", "snapp:store_campaign:114458:901"],
+    });
+    expect(
+      "campaignResearch" in result && result.campaignResearch
+    ).toMatchObject({
+      conflictingOfferCount: 1,
+      conflictingOfferIdentities: ["114458:1"],
+    });
+  });
   function dynamicFixture(
     options: {
       stores?: string[];

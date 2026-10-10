@@ -1,12 +1,14 @@
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readDurableComparison } from "./comparison";
 import { Store } from "../store";
 import { DurableRepository } from "./repository";
 import type { Page, Unit } from "./types";
 import { providerReader } from "./provider";
 import { runDurableScan } from "./runner";
+import { materializeProducts } from "../saved-products";
+import { collectPage, planUnits } from "./adapters";
 import {
   beginLegacyScan,
   reconcileDurableScan,
@@ -48,8 +50,529 @@ function database() {
   } as unknown as D1Database;
   return { db, sqlite };
 }
-afterEach(() => databases.splice(0).forEach((d) => d.close()));
+afterEach(() => {
+  databases.splice(0).forEach((d) => d.close());
+  vi.useRealTimers();
+});
 describe("durable scan persistence", () => {
+  it.each([false, true])(
+    "uses deterministic priority and feed identity for equal-time tuples, reversed=%s",
+    async (reversed) => {
+      const { db } = database(),
+        store = new Store(db, "tenant", "key"),
+        repo = new DurableRepository(db, "key");
+      const location = await store.createLocation({
+        name: "Fixture",
+        latitude: 35.7,
+        longitude: 51.4,
+      });
+      const scan = await repo.reserve(
+        "tenant",
+        {
+          locationId: location!.id,
+          source: "snappmarket",
+          threshold: 40,
+          mode: "partial",
+        },
+        crypto.randomUUID(),
+        true
+      );
+      await repo.started(scan.id);
+      const units: Unit[] = [
+        { id: "market-party", kind: "market_party" },
+        { id: "campaign-a", kind: "store_campaign" },
+        { id: "campaign-z", kind: "store_campaign" },
+      ];
+      await repo.freeze(scan.id, units, scan.context!.manifest);
+      const offer = {
+        key: "1:2",
+        productVariationId: "2",
+        vendorId: "1",
+        title: "Milk 1 L",
+        image: null,
+        vendorTitle: "Shop",
+        vendorCode: null,
+        categoryTitle: null,
+        priceRials: 100000,
+        discountRials: 50000,
+        finalPriceRials: 50000,
+        discountRatio: 50,
+        stock: 2,
+        observedAt: "2026-10-10T08:00:00.000Z",
+      };
+      for (const unit of reversed ? [...units].reverse() : units) {
+        const campaign = unit.kind === "store_campaign";
+        const offers = campaign
+          ? [
+              {
+                ...offer,
+                ...(unit.id === "campaign-a"
+                  ? {
+                      priceRials: 200000,
+                      discountRials: 100000,
+                      finalPriceRials: 100000,
+                      stock: 7,
+                    }
+                  : {}),
+                provenance: [unit.id],
+              },
+              {
+                ...offer,
+                key: "1:3",
+                productVariationId: "3",
+                priceRials: 200000,
+                discountRials: 100000,
+                finalPriceRials: 100000,
+                stock: 7,
+                provenance: [unit.id],
+              },
+            ]
+          : [
+              {
+                ...offer,
+                key: "1:3",
+                productVariationId: "3",
+                provenance: [unit.id],
+              },
+            ];
+        await repo.stage(scan.id, unit, 0, {
+          offers,
+          products: offers.map((row) => row.key),
+          vendors: ["1"],
+          identities: offers.map((row) => row.key),
+          rowCount: offers.length,
+          reportedTotal: offers.length,
+          terminal: true,
+          terminalEvidence: "fixture_terminal",
+          fingerprint: unit.id,
+        });
+      }
+      await materializeProducts(db, "tenant", scan.id);
+      await repo.publish(scan.id);
+      const offers = await store.deals(scan.id);
+      expect(offers.find((row) => row.key === "1:2")).toMatchObject({
+        priceRials: 200000,
+        discountRials: 100000,
+        finalPriceRials: 100000,
+        stock: 7,
+        provenance: ["campaign-a", "campaign-z"],
+      });
+      expect(offers.find((row) => row.key === "1:3")).toMatchObject({
+        priceRials: 100000,
+        discountRials: 50000,
+        finalPriceRials: 50000,
+        stock: 2,
+        provenance: ["campaign-a", "campaign-z", "market-party"],
+      });
+    }
+  );
+  it("caps retained omission records while preserving complete reason totals", async () => {
+    const { db } = database(),
+      store = new Store(db, "tenant", "key"),
+      repo = new DurableRepository(db, "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const scan = await repo.reserve(
+      "tenant",
+      {
+        locationId: location!.id,
+        source: "snappmarket",
+        threshold: 40,
+        mode: "partial",
+      },
+      crypto.randomUUID(),
+      true
+    );
+    await repo.savePlanningAudit(
+      scan.id,
+      Array.from({ length: 205 }, (_, index) => ({
+        vendorCode: "store",
+        collectionId: index + 1,
+        sectionType: "category",
+        reason: "UNSUPPORTED_SECTION_TYPE",
+      }))
+    );
+    const audit = await readDurableComparison(db, "tenant", scan.id);
+    expect(audit).toMatchObject({
+      campaigns: [],
+      planning: {
+        complete: true,
+        omittedCount: 205,
+        truncatedCount: 105,
+        reasonCounts: { UNSUPPORTED_SECTION_TYPE: 205 },
+      },
+    });
+    expect(audit?.omitted).toHaveLength(100);
+  });
+  it("audits failed home discovery without inventing a zero-eligible campaign", async () => {
+    const { db } = database(),
+      store = new Store(db, "tenant", "key"),
+      repo = new DurableRepository(db, "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const scan = await repo.reserve(
+      "tenant",
+      {
+        locationId: location!.id,
+        source: "snappmarket",
+        threshold: 40,
+        mode: "partial",
+      },
+      crypto.randomUUID(),
+      true
+    );
+    await repo.started(scan.id);
+    const steps = {
+      do: async <T extends Rpc.Serializable<T>>(
+        _name: string,
+        action: () => Promise<T>
+      ) => action(),
+      sleep: async () => {},
+    };
+    const fetcher: typeof fetch = async (input) =>
+      String(input).includes("oauth2")
+        ? Response.json({
+            status: true,
+            data: { access_token: "fixture-secret", expires_in: 3600 },
+          })
+        : String(input).includes("vendors-list")
+          ? Response.json({
+              status: true,
+              data: {
+                count: 1,
+                finalResult: [{ type: "VENDOR", data: { code: "failedhome" } }],
+              },
+            })
+          : new Response("fixture-secret coordinates=35.7", { status: 403 });
+    await expect(
+      planUnits(
+        repo,
+        await repo.check(scan.id),
+        providerReader(repo, scan.id, steps, fetcher)
+      )
+    ).rejects.toMatchObject({ code: "UPSTREAM_FORBIDDEN" });
+    expect(await readDurableComparison(db, "tenant", scan.id)).toMatchObject({
+      complete: false,
+      campaigns: [],
+      planning: {
+        complete: false,
+        failureCode: "UPSTREAM_FORBIDDEN",
+        omittedCount: 1,
+        reasonCounts: { HOME_DISCOVERY_FAILED: 1 },
+      },
+      omitted: [{ vendorCode: "failedhome", reason: "HOME_DISCOVERY_FAILED" }],
+    });
+  });
+  it("retains concrete omitted discovery candidates privately across frozen-plan resume", async () => {
+    const { db } = database(),
+      store = new Store(db, "tenant", "key"),
+      repo = new DurableRepository(db, "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const scan = await repo.reserve(
+      "tenant",
+      {
+        locationId: location!.id,
+        source: "snappmarket",
+        threshold: 40,
+        mode: "partial",
+      },
+      crypto.randomUUID(),
+      true
+    );
+    await repo.started(scan.id);
+    const steps = {
+      do: async <T extends Rpc.Serializable<T>>(
+        _name: string,
+        action: () => Promise<T>
+      ) => action(),
+      sleep: async () => {},
+    };
+    const codes = [
+      "badhome",
+      "wrongowner",
+      "sections",
+      ...Array.from({ length: 17 }, (_, i) => `extra${i}`),
+    ];
+    const fetcher: typeof fetch = async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.includes("oauth2"))
+        return Response.json({
+          status: true,
+          data: { access_token: "fixture-secret", expires_in: 3600 },
+        });
+      if (url.pathname.endsWith("vendors-list"))
+        return Response.json({
+          status: true,
+          data: {
+            count: codes.length,
+            finalResult: codes.map((code) => ({
+              type: "VENDOR",
+              data: { code },
+            })),
+          },
+        });
+      const code = url.pathname.split("/").at(-1)!;
+      if (code === "badhome")
+        return Response.json({ vendorInfo: { secret: "fixture-secret" } });
+      const id = codes.indexOf(code) + 1;
+      return Response.json({
+        vendorInfo: {
+          id,
+          code,
+          title: "Store",
+          deliveryData: {
+            id: code === "wrongowner" ? 99 : id,
+            doesDeliver: true,
+            detail: { vendorId: id },
+          },
+        },
+        sections:
+          code === "sections"
+            ? [
+                { type: "category?token=fixture-secret&lat=35.7", value: 1 },
+                {
+                  type: "product-list",
+                  value: 3,
+                  collection_type: "default",
+                  is_pro: true,
+                },
+                {
+                  type: "product-list",
+                  value: 4,
+                  collection_type: "unsupported",
+                },
+              ]
+            : [],
+      });
+    };
+    const units = await planUnits(
+      repo,
+      await repo.check(scan.id),
+      providerReader(repo, scan.id, steps, fetcher)
+    );
+    const audit = await readDurableComparison(db, "tenant", scan.id);
+    expect(audit).toMatchObject({
+      complete: false,
+      campaigns: [],
+      omitted: expect.arrayContaining([
+        expect.objectContaining({
+          vendorCode: "badhome",
+          reason: "HOME_SCHEMA",
+        }),
+        { vendorCode: "wrongowner", reason: "HOME_DELIVERY_OWNER_MISMATCH" },
+        {
+          vendorCode: "sections",
+          collectionId: 3,
+          sectionType: "product-list",
+          reason: "CONDITIONAL_OR_UNVERIFIED_SECTION_CONFIG",
+        },
+        {
+          vendorCode: "sections",
+          collectionId: 4,
+          sectionType: "product-list",
+          reason: "UNSUPPORTED_COLLECTION_TYPE",
+        },
+        { vendorCode: "extra16", reason: "DISCOVERY_REQUEST_BUDGET" },
+      ]),
+    });
+    expect(JSON.stringify(audit)).not.toContain("fixture-secret");
+    expect(JSON.stringify(audit)).not.toContain("35.7");
+    expect(
+      await planUnits(repo, await repo.check(scan.id), async () => {
+        throw new Error("frozen plan must not rediscover");
+      })
+    ).toEqual(units);
+    expect(await readDurableComparison(db, "tenant", scan.id)).toEqual(audit);
+    expect(await readDurableComparison(db, "other-tenant", scan.id)).toBeNull();
+  });
+  it("reuses the original observed time when a cached provider response is normalized after resume", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-10T08:00:00.000Z"));
+    const { db } = database(),
+      store = new Store(db, "tenant", "key"),
+      repo = new DurableRepository(db, "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const scan = await repo.reserve(
+      "tenant",
+      {
+        locationId: location!.id,
+        source: "snappmarket",
+        threshold: 40,
+        mode: "partial",
+      },
+      crypto.randomUUID(),
+      false
+    );
+    await repo.started(scan.id);
+    const unit: Unit = { id: "market-party", kind: "market_party" };
+    await repo.freeze(scan.id, [unit], scan.context!.manifest);
+    const steps = {
+      do: async <T extends Rpc.Serializable<T>>(
+        _name: string,
+        action: () => Promise<T>
+      ) => action(),
+      sleep: async () => {},
+    };
+    let requests = 0;
+    const fetcher: typeof fetch = async (input) => {
+      requests++;
+      if (String(input).includes("oauth2"))
+        return Response.json({
+          status: true,
+          data: { access_token: "fixture", expires_in: 3600 },
+        });
+      vi.setSystemTime(new Date("2026-10-10T08:01:00.000Z"));
+      return Response.json({
+        status: true,
+        data: {
+          total_count: 1,
+          vendors: [
+            {
+              vendor_id: 1,
+              products: [
+                {
+                  productVariationId: 2,
+                  vendorId: 1,
+                  vendorTitle: "Shop",
+                  title: "Milk 1 L",
+                  price: 100000,
+                  discount: 50000,
+                  discountRatio: 50,
+                  stock: 2,
+                },
+              ],
+            },
+          ],
+        },
+      });
+    };
+    await providerReader(
+      repo,
+      scan.id,
+      steps,
+      fetcher
+    )(
+      new URL("https://svc.snapp.market/market-party/35.7/51.4"),
+      "market-party-0"
+    );
+    vi.setSystemTime(new Date("2026-10-10T08:03:00.000Z"));
+    const page = await collectPage(
+      await repo.check(scan.id),
+      unit,
+      0,
+      [],
+      providerReader(repo, scan.id, steps, fetcher)
+    );
+    await repo.stage(scan.id, unit, 0, page);
+    await materializeProducts(db, "tenant", scan.id);
+    await repo.publish(scan.id);
+    expect(await store.deals(scan.id)).toMatchObject([
+      { observedAt: "2026-10-10T08:01:00.000Z" },
+    ]);
+    expect(requests).toBe(2);
+  });
+  it("publishes the latest complete overlapping tuple and audits the conflict", async () => {
+    const { db } = database(),
+      store = new Store(db, "tenant", "key"),
+      repo = new DurableRepository(db, "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const scan = await repo.reserve(
+      "tenant",
+      {
+        locationId: location!.id,
+        source: "snappmarket",
+        threshold: 40,
+        mode: "partial",
+      },
+      crypto.randomUUID(),
+      true
+    );
+    await repo.started(scan.id);
+    const units: Unit[] = [
+      { id: "market-party", kind: "market_party" },
+      { id: "campaign-1-2", kind: "store_campaign" },
+    ];
+    await repo.freeze(scan.id, units, scan.context!.manifest);
+    const offer = {
+      key: "1:2",
+      productVariationId: "2",
+      vendorId: "1",
+      title: "Milk 1 L",
+      image: null,
+      vendorTitle: "Shop",
+      vendorCode: null,
+      categoryTitle: null,
+      priceRials: 100000,
+      discountRials: 50000,
+      finalPriceRials: 50000,
+      discountRatio: 50,
+      stock: 2,
+      observedAt: "2026-10-10T08:00:00.000Z",
+      provenance: ["snapp:market_party"],
+    };
+    const page: Page = {
+      offers: [offer],
+      products: ["1:2"],
+      vendors: ["1"],
+      identities: ["1:2"],
+      rowCount: 1,
+      reportedTotal: 1,
+      terminal: true,
+      terminalEvidence: "fixture_terminal",
+      fingerprint: "baseline",
+    };
+    await repo.stage(scan.id, units[0]!, 0, page);
+    await repo.stage(scan.id, units[1]!, 0, {
+      ...page,
+      fingerprint: "campaign",
+      offers: [
+        {
+          ...offer,
+          priceRials: 200000,
+          discountRials: 100000,
+          finalPriceRials: 100000,
+          stock: 7,
+          observedAt: "2026-10-10T08:01:00.000Z",
+          provenance: ["snapp:store_campaign:1:2"],
+        },
+      ],
+    });
+    await materializeProducts(db, "tenant", scan.id);
+    await repo.publish(scan.id);
+    expect(await store.deals(scan.id)).toMatchObject([
+      {
+        priceRials: 200000,
+        discountRials: 100000,
+        finalPriceRials: 100000,
+        discountRatio: 50,
+        stock: 7,
+        observedAt: "2026-10-10T08:01:00.000Z",
+        provenance: ["snapp:market_party", "snapp:store_campaign:1:2"],
+      },
+    ]);
+    expect(await readDurableComparison(db, "tenant", scan.id)).toMatchObject({
+      conflictingOfferCount: 1,
+      conflictingOfferIdentities: ["1:2"],
+    });
+  });
   it("cleanup progresses beyond its bounded first batch without erasing history or successful data", async () => {
     const { db, sqlite } = database(),
       store = new Store(db, "tenant", "key"),
@@ -140,6 +663,16 @@ describe("durable scan persistence", () => {
     await repo.freeze(scan.id, units, scan.context!.manifest);
     const eligible = { eligible: true, excludedReason: null };
     const excluded = { eligible: false, excludedReason: "BELOW_THRESHOLD" };
+    expect(await readDurableComparison(db, "tenant", scan.id)).toMatchObject({
+      complete: false,
+      planning: null,
+      omitted: null,
+      campaigns: [
+        { outcome: "incomplete" },
+        { outcome: "incomplete" },
+        { outcome: "incomplete" },
+      ],
+    });
     for (const [index, unit] of units.entries()) {
       const eligibility: NonNullable<Page["eligibility"]> =
         index === 0

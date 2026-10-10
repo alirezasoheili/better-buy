@@ -1,6 +1,21 @@
 import type { DealRecord, ScanContext, ScanRecord } from "@better-buy/shared";
 
 export type Offer = Omit<DealRecord, "scanId" | "state">;
+export const PLANNING_AUDIT_KEY = "audit:store-campaign-planning";
+export type CampaignPlanningAudit = {
+  complete: boolean;
+  failureCode: string | null;
+  omitted: {
+    vendorCode: string;
+    collectionId?: number;
+    sectionType?: string;
+    reason: string;
+    fields?: string[];
+  }[];
+  omittedCount: number;
+  truncatedCount: number;
+  reasonCounts: Record<string, number>;
+};
 export type WorkflowParams = { scanId: string; contractVersion: 1 };
 export class DurableError extends Error {
   constructor(

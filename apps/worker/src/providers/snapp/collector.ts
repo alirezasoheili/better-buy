@@ -61,6 +61,7 @@ export function collectDeals(input: CollectInput) {
         }
       : upstream;
     const vendors = new Map<string, z.infer<typeof vendorSchema>>(),
+      vendorObservedAt = new Map<string, string>(),
       pageFingerprints = new Set<string>();
     // A scan owns its guest session. Worker restarts simply acquire a new one.
     const deviceId = crypto.randomUUID();
@@ -159,7 +160,7 @@ export function collectDeals(input: CollectInput) {
               "اسنپ‌مارکت دسترسی خودکار اسکن را نپذیرفت؛ بعداً دوباره تلاش کنید"
             )
           );
-        return response;
+        return { ...response, observedAt: new Date().toISOString() };
       }).pipe(
         Effect.mapError((error) =>
           input.storeCampaigns && attempts >= SNAPP_SCAN_REQUEST_BUDGET
@@ -230,8 +231,10 @@ export function collectDeals(input: CollectInput) {
           )
         );
       pageFingerprints.add(fingerprint);
-      for (const vendor of pageVendors)
+      for (const vendor of pageVendors) {
         vendors.set(String(vendor.vendor_id), vendor);
+        vendorObservedAt.set(String(vendor.vendor_id), response.observedAt);
+      }
       const productKeys = new Set<string>();
       for (const vendor of vendors.values())
         for (const p of vendor.products)
@@ -254,6 +257,12 @@ export function collectDeals(input: CollectInput) {
       vendors.size,
       input.threshold
     );
+    baseline.deals = baseline.deals.map((deal) => ({
+      ...deal,
+      observedAt: vendorObservedAt.get(deal.vendorId),
+      provenance: ["snapp:market_party"],
+      observationPriority: 100,
+    }));
     if (!planned) return baseline;
     const productKeys = new Set<string>();
     const vendorIds = new Set<string>();
