@@ -15,12 +15,24 @@ import {
   type Runtime,
   type Unit,
   type Offer,
+  PLANNING_AUDIT_KEY,
+  type CampaignPlanningAudit,
 } from "./types";
 export { DurableError } from "./types";
 
 const iso = () => new Date().toISOString();
 const active =
   "EXISTS (SELECT 1 FROM scans s JOIN scan_execution e ON e.scan_id=s.id WHERE s.id=? AND s.user_id=? AND s.status IN ('queued','running') AND e.cancel_requested=0)";
+// Money, stock, and presentation stay together. Priority is only a time tie-break;
+// a stable feed identity makes equal-priority ties independent of stage order.
+const retainedObservation = `(
+  COALESCE(json_extract(deals.facts_json,'$.observedAt'),'') > COALESCE(json_extract(excluded.facts_json,'$.observedAt'),'')
+  OR (COALESCE(json_extract(deals.facts_json,'$.observedAt'),'') = COALESCE(json_extract(excluded.facts_json,'$.observedAt'),'') AND (
+    COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0) > COALESCE(json_extract(excluded.facts_json,'$.observationPriority'),0)
+    OR (COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0) = COALESCE(json_extract(excluded.facts_json,'$.observationPriority'),0)
+      AND COALESCE(json_extract(deals.facts_json,'$.observationFeed'),'') <= COALESCE(json_extract(excluded.facts_json,'$.observationFeed'),''))
+  ))
+)`;
 export class DurableRepository {
   constructor(
     readonly db: D1Database,
@@ -296,7 +308,77 @@ export class DurableRepository {
       .first<{ body_json: string }>();
     return row ? (JSON.parse(row.body_json) as unknown) : null;
   }
-  async saveDiscovery(id: string, key: string, body: unknown) {
+  async discoveryObservedAt(id: string, key: string) {
+    const row = await this.db
+      .prepare(
+        "SELECT observed_at FROM scan_discovery WHERE scan_id=? AND request_key=?"
+      )
+      .bind(id, key)
+      .first<{ observed_at: string | null }>();
+    return row?.observed_at ?? null;
+  }
+  async savePlanningAudit(
+    id: string,
+    omitted: CampaignPlanningAudit["omitted"],
+    failureCode: string | null = null
+  ) {
+    const reasonCounts: Record<string, number> = {};
+    const safe = omitted.map((entry) => {
+      const prefix = entry.reason.split(":")[0] ?? "";
+      const reason = /^[A-Z_]{1,80}$/.test(prefix)
+        ? prefix
+        : "UNKNOWN_CANDIDATE_OMISSION";
+      reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+      const fields =
+        reason === "HOME_SCHEMA"
+          ? (entry.reason.split(":")[1] ?? "")
+              .trim()
+              .split(",")
+              .filter(
+                (field) =>
+                  /^(vendorInfo|sections|data)(\.[A-Za-z0-9_]+)*$/.test(
+                    field
+                  ) && field.length <= 120
+              )
+              .slice(0, 8)
+          : [];
+      return {
+        vendorCode: /^[a-zA-Z0-9]{1,64}$/.test(entry.vendorCode)
+          ? entry.vendorCode
+          : "",
+        reason,
+        ...(Number.isSafeInteger(entry.collectionId) && entry.collectionId! > 0
+          ? { collectionId: entry.collectionId }
+          : {}),
+        ...(entry.sectionType &&
+        /^[a-z][a-z0-9_-]{0,47}$/.test(entry.sectionType)
+          ? { sectionType: entry.sectionType }
+          : {}),
+        ...(fields.length ? { fields } : {}),
+      };
+    });
+    const safeFailureCode =
+      failureCode === null
+        ? null
+        : /^[A-Z_]{1,80}$/.test(failureCode)
+          ? failureCode
+          : "UNKNOWN_DISCOVERY_FAILURE";
+    const audit: CampaignPlanningAudit = {
+      complete: safeFailureCode === null,
+      failureCode: safeFailureCode,
+      omitted: safe.slice(0, 100),
+      omittedCount: safe.length,
+      truncatedCount: Math.max(0, safe.length - 100),
+      reasonCounts,
+    };
+    await this.saveDiscovery(id, PLANNING_AUDIT_KEY, audit);
+  }
+  async saveDiscovery(
+    id: string,
+    key: string,
+    body: unknown,
+    observedAt = iso()
+  ) {
     const job = await this.check(id);
     const value = JSON.stringify(body);
     if (value.length > 1_500_000)
@@ -306,9 +388,9 @@ export class DurableRepository {
       );
     const r = await this.db
       .prepare(
-        `INSERT INTO scan_discovery(scan_id,request_key,body_json) SELECT ?,?,? WHERE ${active} ON CONFLICT(scan_id,request_key) DO NOTHING`
+        `INSERT INTO scan_discovery(scan_id,request_key,body_json,observed_at) SELECT ?,?,?,? WHERE ${active} ON CONFLICT(scan_id,request_key) DO NOTHING`
       )
-      .bind(id, key, value, id, job.runtime.user_id)
+      .bind(id, key, value, observedAt, id, job.runtime.user_id)
       .run();
     if (!r.meta.changes && !(await this.discovery(id, key)))
       throw new DurableError("CANCELLED", "Response commit rejected");
@@ -464,11 +546,12 @@ export class DurableRepository {
             observedAt: o.observedAt ?? iso(),
             provenance: o.provenance ?? [unit.kind],
             observationPriority: priority,
+            observationFeed: unit.id,
           });
           statements.push(
             this.db
               .prepare(
-                `INSERT INTO deals(id,scan_id,deal_key,product_variation_id,vendor_id,title,image,vendor_title,vendor_code,category_title,price_rials,discount_rials,final_price_rials,discount_ratio,stock,facts_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ${active} ON CONFLICT(scan_id,deal_key) DO UPDATE SET title=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.title ELSE excluded.title END,image=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.image ELSE excluded.image END,vendor_title=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.vendor_title ELSE excluded.vendor_title END,vendor_code=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.vendor_code ELSE excluded.vendor_code END,category_title=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.category_title ELSE excluded.category_title END,price_rials=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.price_rials ELSE excluded.price_rials END,discount_rials=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.discount_rials ELSE excluded.discount_rials END,final_price_rials=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.final_price_rials ELSE excluded.final_price_rials END,discount_ratio=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.discount_ratio ELSE excluded.discount_ratio END,stock=CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.stock ELSE excluded.stock END,facts_json=json_set(CASE WHEN COALESCE(json_extract(deals.facts_json,'$.observationPriority'),0)>=json_extract(excluded.facts_json,'$.observationPriority') THEN deals.facts_json ELSE excluded.facts_json END,'$.provenance',json((SELECT json_group_array(value) FROM (SELECT value FROM json_each(deals.facts_json,'$.provenance') UNION SELECT value FROM json_each(excluded.facts_json,'$.provenance')))))`
+                `INSERT INTO deals(id,scan_id,deal_key,product_variation_id,vendor_id,title,image,vendor_title,vendor_code,category_title,price_rials,discount_rials,final_price_rials,discount_ratio,stock,facts_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ${active} ON CONFLICT(scan_id,deal_key) DO UPDATE SET title=CASE WHEN ${retainedObservation} THEN deals.title ELSE excluded.title END,image=CASE WHEN ${retainedObservation} THEN deals.image ELSE excluded.image END,vendor_title=CASE WHEN ${retainedObservation} THEN deals.vendor_title ELSE excluded.vendor_title END,vendor_code=CASE WHEN ${retainedObservation} THEN deals.vendor_code ELSE excluded.vendor_code END,category_title=CASE WHEN ${retainedObservation} THEN deals.category_title ELSE excluded.category_title END,price_rials=CASE WHEN ${retainedObservation} THEN deals.price_rials ELSE excluded.price_rials END,discount_rials=CASE WHEN ${retainedObservation} THEN deals.discount_rials ELSE excluded.discount_rials END,final_price_rials=CASE WHEN ${retainedObservation} THEN deals.final_price_rials ELSE excluded.final_price_rials END,discount_ratio=CASE WHEN ${retainedObservation} THEN deals.discount_ratio ELSE excluded.discount_ratio END,stock=CASE WHEN ${retainedObservation} THEN deals.stock ELSE excluded.stock END,facts_json=json_set(CASE WHEN ${retainedObservation} THEN deals.facts_json ELSE excluded.facts_json END,'$.provenance',json((SELECT json_group_array(value) FROM (SELECT value FROM json_each(deals.facts_json,'$.provenance') UNION SELECT value FROM json_each(excluded.facts_json,'$.provenance') ORDER BY value))),'$.conflictingPriceTuple',json(CASE WHEN COALESCE(json_extract(deals.facts_json,'$.conflictingPriceTuple'),0)=1 OR deals.price_rials<>excluded.price_rials OR deals.discount_rials<>excluded.discount_rials OR deals.final_price_rials<>excluded.final_price_rials OR deals.discount_ratio<>excluded.discount_ratio THEN 'true' ELSE 'false' END))`
               )
               .bind(
                 crypto.randomUUID(),

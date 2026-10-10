@@ -6,7 +6,10 @@ import { isEligibleDeal } from "../../domain/eligibility";
 
 export type SnappRead = (
   url: URL
-) => Effect.Effect<{ status: number; body: unknown }, CollectorError>;
+) => Effect.Effect<
+  { status: number; body: unknown; observedAt?: string },
+  CollectorError
+>;
 export type CampaignScope = {
   vendorId: number;
   vendorCode: string;
@@ -76,7 +79,11 @@ const productSchema = z
   })
   .passthrough();
 type Page = z.infer<typeof pageSchema>["data"];
-export type Plan = CampaignScope & { title: string; first: Page };
+export type Plan = CampaignScope & {
+  title: string;
+  first: Page;
+  firstObservedAt?: string;
+};
 export type CampaignReport = CampaignScope & {
   reportedCount: number;
   rawCount: number;
@@ -177,11 +184,12 @@ export function campaignExclusionReason(
 export function planStoreCampaigns(
   read: SnappRead,
   location: { latitude: number; longitude: number },
-  remainingRequests: () => number
+  remainingRequests: () => number,
+  onOmitted?: (omitted: CampaignDiagnostics["omitted"]) => void
 ) {
+  const omitted: CampaignDiagnostics["omitted"] = [];
   return Effect.gen(function* () {
     const plans: Plan[] = [];
-    const omitted: CampaignDiagnostics["omitted"] = [];
     const nearbyUrl = new URL(
       "https://svc.snapp.market/express-vendor/general/vendors-list"
     );
@@ -195,11 +203,21 @@ export function planStoreCampaigns(
       page_type: "vendor_list",
       "extra-filter[vendor_collection]": "-1",
     }).forEach(([key, value]) => nearbyUrl.searchParams.set(key, value));
-    const nearby = nearbySchema.safeParse((yield* read(nearbyUrl)).body);
-    if (!nearby.success)
+    const nearby = nearbySchema.safeParse(
+      (yield* read(nearbyUrl).pipe(
+        Effect.tapError(() =>
+          Effect.sync(() => {
+            omitted.push({ vendorCode: "", reason: "NEARBY_DISCOVERY_FAILED" });
+          })
+        )
+      )).body
+    );
+    if (!nearby.success) {
+      omitted.push({ vendorCode: "", reason: "NEARBY_SCHEMA" });
       return yield* Effect.fail(
         changed("nearby data.count / data.finalResult")
       );
+    }
     const codes = new Set<string>();
     for (const entry of nearby.data.data.finalResult) {
       if (entry.type !== "VENDOR") {
@@ -244,7 +262,15 @@ export function planStoreCampaigns(
         lat: String(location.latitude),
         long: String(location.longitude),
       }).forEach(([key, value]) => homeUrl.searchParams.set(key, value));
-      const home = homeSchema.safeParse((yield* read(homeUrl)).body);
+      const home = homeSchema.safeParse(
+        (yield* read(homeUrl).pipe(
+          Effect.tapError(() =>
+            Effect.sync(() => {
+              omitted.push({ vendorCode, reason: "HOME_DISCOVERY_FAILED" });
+            })
+          )
+        )).body
+      );
       if (!home.success) {
         omitted.push({
           vendorCode,
@@ -271,10 +297,15 @@ export function planStoreCampaigns(
         continue;
       }
       const priorCode = resolvedOwners.get(info.id);
-      if (priorCode && priorCode !== vendorCode)
+      if (priorCode && priorCode !== vendorCode) {
+        omitted.push({
+          vendorCode,
+          reason: "CONFLICTING_NUMERIC_VENDOR_IDENTITY",
+        });
         return yield* Effect.fail(
           changed("two store codes resolve to the same vendorInfo.id")
         );
+      }
       resolvedOwners.set(info.id, vendorCode);
       const candidates = new Set<number>();
       for (const section of home.data.sections) {
@@ -323,22 +354,27 @@ export function planStoreCampaigns(
         const probe = yield* read(collectionUrl(scope, 0, location)).pipe(
           Effect.flatMap((response) =>
             Effect.try({
-              try: () => parsePage(response.body, collectionId),
+              try: () => ({
+                first: parsePage(response.body, collectionId),
+                firstObservedAt:
+                  response.observedAt ?? new Date().toISOString(),
+                error: null as CollectorError | null,
+              }),
               catch: (error) =>
                 error instanceof CollectorError ? error : changed("page"),
             })
           ),
-          Effect.map((first) => ({
-            first,
-            error: null as CollectorError | null,
-          })),
           Effect.catch((error) =>
             [
               "UPSTREAM_CHANGED",
               "UPSTREAM_INVALID_JSON",
               "UPSTREAM_ERROR",
             ].includes(error.code)
-              ? Effect.succeed({ first: null, error })
+              ? Effect.succeed({
+                  first: null,
+                  firstObservedAt: undefined,
+                  error,
+                })
               : Effect.fail(error)
           )
         );
@@ -380,11 +416,19 @@ export function planStoreCampaigns(
           continue;
         }
         reservedPages += additionalPages;
-        plans.push({ ...scope, title: info.title, first });
+        plans.push({
+          ...scope,
+          title: info.title,
+          first,
+          firstObservedAt: probe.firstObservedAt,
+        });
       }
     }
     return { plans, omitted };
-  });
+  }).pipe(
+    Effect.tap(() => Effect.sync(() => onOmitted?.(omitted))),
+    Effect.tapError(() => Effect.sync(() => onOmitted?.(omitted)))
+  );
 }
 
 export function enrichStoreCampaigns(
@@ -397,19 +441,24 @@ export function enrichStoreCampaigns(
   omitted: CampaignDiagnostics["omitted"]
 ) {
   return Effect.gen(function* () {
-    const offers = new Map(
+    const offers = new Map<string, Offer>(
       baseline.deals.map((deal) => [
         deal.key,
         {
           ...deal,
-          provenance: ["snapp:market_party"],
-          observedAt: new Date().toISOString(),
+          provenance: deal.provenance ?? ["snapp:market_party"],
+          observedAt: deal.observedAt ?? new Date().toISOString(),
+          observationPriority: 100,
         },
       ])
+    );
+    const selectedFeeds = new Map(
+      baseline.deals.map((deal) => [deal.key, "snapp:market_party"])
     );
     const productKeys = new Set(baselineProductKeys);
     const vendorIds = new Set(baselineVendorIds);
     const reports: CampaignReport[] = [];
+    const conflictingOffers = new Set<string>();
     for (const plan of plans) {
       const report: CampaignReport = {
         vendorId: plan.vendorId,
@@ -432,17 +481,19 @@ export function enrichStoreCampaigns(
       >();
       const fingerprints = new Set<string>();
       for (let page = 0; page < 8; page++) {
+        let observedAt = plan.firstObservedAt ?? new Date().toISOString();
         const data =
           page === 0
             ? plan.first
             : yield* read(collectionUrl(plan, page, location)).pipe(
-                Effect.flatMap((response) =>
-                  Effect.try({
+                Effect.flatMap((response) => {
+                  observedAt = response.observedAt ?? new Date().toISOString();
+                  return Effect.try({
                     try: () => parsePage(response.body, plan.collectionId),
                     catch: (error) =>
                       error instanceof CollectorError ? error : changed("page"),
-                  })
-                )
+                  });
+                })
               );
         if (data.count !== report.reportedCount)
           return yield* Effect.fail(incomplete("data.count drift"));
@@ -569,7 +620,8 @@ export function enrichStoreCampaigns(
                   applicable: true,
                   terms: null,
                 },
-                observedAt: new Date().toISOString(),
+                observedAt,
+                observationPriority: 50,
                 provenance: [
                   `snapp:store_campaign:${plan.vendorId}:${plan.collectionId}`,
                 ],
@@ -592,16 +644,37 @@ export function enrichStoreCampaigns(
         if (baselineKeys.has(key)) report.overlap++;
         else if (!offers.has(key)) report.additional++;
         const prior = offers.get(key);
-        // Retain the complete baseline tuple on overlap, combining provenance.
-        // No cheap price / summed stock assembled from different observations.
+        if (
+          prior &&
+          (prior.priceRials !== offer.priceRials ||
+            prior.discountRials !== offer.discountRials ||
+            prior.finalPriceRials !== offer.finalPriceRials ||
+            prior.discountRatio !== offer.discountRatio)
+        )
+          conflictingOffers.add(key);
+        const sources = [
+          ...new Set([...(prior?.provenance ?? []), ...offer.provenance!]),
+        ].sort();
+        const order = prior
+          ? Date.parse(offer.observedAt!) -
+              (prior.observedAt ? Date.parse(prior.observedAt) : 0) ||
+            (offer.observationPriority ?? 0) -
+              (prior.observationPriority ?? 0) ||
+            ((selectedFeeds.get(key) ?? "") < offer.provenance![0]!
+              ? -1
+              : (selectedFeeds.get(key) ?? "") > offer.provenance![0]!
+                ? 1
+                : 0)
+          : 1;
+        if (order > 0) selectedFeeds.set(key, offer.provenance![0]!);
+        // All money/stock fields come from one latest observation; ties are
+        // settled by stable priority/feed identity, never stage iteration order.
         offers.set(
           key,
           prior
             ? {
-                ...prior,
-                provenance: [
-                  ...new Set([...prior.provenance, ...offer.provenance!]),
-                ].sort(),
+                ...(order > 0 ? offer : prior),
+                provenance: sources,
               }
             : {
                 ...offer,
@@ -622,6 +695,8 @@ export function enrichStoreCampaigns(
         enrichedEligible: offers.size,
         reports,
         omitted,
+        conflictingOfferCount: conflictingOffers.size,
+        conflictingOfferIdentities: [...conflictingOffers].sort().slice(0, 100),
       },
     };
   });

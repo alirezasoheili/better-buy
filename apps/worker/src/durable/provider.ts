@@ -153,7 +153,7 @@ export function providerReader(
       );
     return result;
   };
-  return async (url: URL, key: string): Promise<unknown> => {
+  const read = async (url: URL, key: string): Promise<unknown> => {
     const saved = await repo.discovery(id, key);
     if (saved !== null) return saved;
     for (let ordinal = 0; ordinal < 3; ordinal++) {
@@ -208,4 +208,7 @@ export function providerReader(
     }
     throw new DurableError("UNKNOWN_ERROR", "Provider request failed");
   };
+  return Object.assign(read, {
+    observedAt: (key: string) => repo.discoveryObservedAt(id, key),
+  });
 }

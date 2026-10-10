@@ -8,6 +8,7 @@ import {
   collectionUrl,
   parsePage,
   type Plan,
+  type CampaignDiagnostics,
 } from "../providers/snapp/storeCampaigns";
 import {
   campaignsResponse,
@@ -27,7 +28,9 @@ import {
 import { effectValue } from "./provider";
 import type { DurableRepository } from "./repository";
 
-type Read = (url: URL, key: string) => Promise<unknown>;
+type Read = ((url: URL, key: string) => Promise<unknown>) & {
+  observedAt?: (key: string) => Promise<string | null>;
+};
 const invalid = () =>
   new DurableError(
     "UPSTREAM_CHANGED",
@@ -58,19 +61,25 @@ export async function planUnits(repo: DurableRepository, job: Job, read: Read) {
     if (job.runtime.enrichment_enabled) {
       // Each actual discovery GET is its own persisted Workflow request checkpoint.
       let remaining = job.runtime.attempt_limit - job.runtime.attempt_count;
+      let omissions: CampaignDiagnostics["omitted"] = [];
       const plans = await effectValue(
         planStoreCampaigns(
           (url) =>
             Effect.tryPromise({
               try: async () => {
-                const body = await read(
-                  url,
-                  `plan-${await identityDigest(url.toString())}`
-                );
+                const key = `plan-${await identityDigest(url.toString())}`;
+                const body = await read(url, key);
                 remaining =
                   job.runtime.attempt_limit -
                   (await repo.load(id))!.runtime.attempt_count;
-                return { status: 200, body };
+                return {
+                  status: 200,
+                  body,
+                  observedAt:
+                    (await read.observedAt?.(key)) ??
+                    job.scan.startedAt ??
+                    job.scan.createdAt,
+                };
               },
               catch: (error) =>
                 error instanceof CollectorError
@@ -78,9 +87,20 @@ export async function planUnits(repo: DurableRepository, job: Job, read: Read) {
                   : new CollectorError("UPSTREAM_CHANGED", "Discovery failed"),
             }),
           loc,
-          () => Math.max(0, remaining)
+          () => Math.max(0, remaining),
+          (rows) => {
+            omissions = rows;
+          }
         )
-      );
+      ).catch(async (error: unknown) => {
+        const code =
+          error instanceof CollectorError || error instanceof DurableError
+            ? error.code
+            : "UNKNOWN_DISCOVERY_FAILURE";
+        await repo.savePlanningAudit(id, omissions, code);
+        throw error;
+      });
+      await repo.savePlanningAudit(id, plans.omitted);
       for (const plan of plans.plans) {
         const firstRequest = `plan-${await identityDigest(collectionUrl(plan, 0, loc).toString())}`;
         units.push({
@@ -213,11 +233,20 @@ export async function collectPage(
       throw incomplete("Baseline ended before total vendor count");
     if (seen.size > data.total_count)
       throw incomplete("Baseline vendor count exceeds total");
+    const observedAt =
+      (await read.observedAt?.(`${unit.id}-${page}`)) ??
+      job.scan.startedAt ??
+      job.scan.createdAt;
     const deals = normalizeSnappDeals(
       data.vendors,
       vendors.length,
       job.scan.threshold
-    ).deals;
+    ).deals.map((offer) => ({
+      ...offer,
+      observedAt,
+      provenance: ["snapp:market_party"],
+      observationPriority: 100,
+    }));
     const terminal = seen.size === data.total_count;
     return {
       offers: deals,
@@ -311,6 +340,14 @@ export async function collectPage(
       ...scope,
       title: unit.title!,
       first: { ...data, count: data.finalResult.length },
+      firstObservedAt:
+        (await read.observedAt?.(
+          page === 0 && unit.firstRequest
+            ? unit.firstRequest
+            : `${unit.id}-${page}`
+        )) ??
+        job.scan.startedAt ??
+        job.scan.createdAt,
     };
     const normalized = await effectValue(
       enrichStoreCampaigns(
@@ -398,7 +435,15 @@ export async function collectPage(
           Math.max(30, job.scan.threshold)
         )
       )
-        offers.push(normalizeOkalaOffer(p));
+        offers.push({
+          ...normalizeOkalaOffer(p),
+          observedAt:
+            (await read.observedAt?.(`${unit.id}-${page}`)) ??
+            job.scan.startedAt ??
+            job.scan.createdAt,
+          provenance: [`okala:campaign:${unit.collectionId}`],
+          observationPriority: 50,
+        });
     }
   }
   return {

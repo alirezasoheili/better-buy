@@ -1,4 +1,9 @@
-import type { PageCheckpoint, Unit } from "./types";
+import {
+  PLANNING_AUDIT_KEY,
+  type CampaignPlanningAudit,
+  type PageCheckpoint,
+  type Unit,
+} from "./types";
 
 /** Private audit facts. Never used to choose a campaign or mutate the feed. */
 export async function readDurableComparison(
@@ -13,6 +18,27 @@ export async function readDurableComparison(
     .bind(scanId, userId)
     .first<{ manifest_frozen: number; status: string; coverage: string }>();
   if (!owned) return null;
+  const auditRow = await db
+    .prepare(
+      "SELECT body_json FROM scan_discovery WHERE scan_id=? AND request_key=?"
+    )
+    .bind(scanId, PLANNING_AUDIT_KEY)
+    .first<{ body_json: string }>();
+  const planning = auditRow
+    ? (JSON.parse(auditRow.body_json) as CampaignPlanningAudit)
+    : null;
+  const conflicts = await db
+    .prepare(
+      "SELECT deal_key FROM deals WHERE scan_id=? AND json_extract(facts_json,'$.conflictingPriceTuple')=1 ORDER BY deal_key LIMIT 100"
+    )
+    .bind(scanId)
+    .all<{ deal_key: string }>();
+  const conflictCount = await db
+    .prepare(
+      "SELECT COUNT(*) AS count FROM deals WHERE scan_id=? AND json_extract(facts_json,'$.conflictingPriceTuple')=1"
+    )
+    .bind(scanId)
+    .first<{ count: number }>();
   const units = await db
     .prepare(
       "SELECT unit_id,descriptor_json,terminal FROM scan_units WHERE scan_id=? ORDER BY unit_id"
@@ -78,11 +104,13 @@ export async function readDurableComparison(
         additional,
         excluded,
         outcome:
-          eligible.length === 0
-            ? "zero_eligible"
-            : additional === 0
-              ? "all_duplicates"
-              : "net_new",
+          row.terminal !== 1
+            ? "incomplete"
+            : eligible.length === 0
+              ? "zero_eligible"
+              : additional === 0
+                ? "all_duplicates"
+                : "net_new",
       },
     ];
   });
@@ -102,5 +130,9 @@ export async function readDurableComparison(
     union: union.size,
     additional: union.size - baseline.size,
     campaigns,
+    planning,
+    omitted: planning?.omitted ?? null,
+    conflictingOfferCount: conflictCount?.count ?? 0,
+    conflictingOfferIdentities: conflicts.results.map((r) => r.deal_key),
   };
 }

@@ -15,6 +15,9 @@ import { Credentials } from "./infrastructure/credentials";
 import { ScanValidationError } from "./domain/failures";
 const now = () => new Date().toISOString();
 
+// Both scan reads use the same correlated execution projection.
+const executionProjection = `(SELECT json_object('kind','workflow','phase',e.phase,'completedUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id AND u.terminal=1),'totalUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id),'completedPages',(SELECT COUNT(*) FROM scan_pages p WHERE p.scan_id=s.id AND p.complete=1),'observedRows',s.product_count,'eligibleOffers',s.deal_count,'attemptCount',e.attempt_count,'heartbeatAt',e.heartbeat_at,'deadlineAt',e.deadline_at,'dispatchState',e.dispatch_state,'cancelRequested',json(CASE WHEN e.cancel_requested=1 THEN 'true' ELSE 'false' END)) FROM scan_execution e WHERE e.scan_id=s.id AND e.execution_kind='workflow') execution_json`;
+
 type LocationRow = {
   coordinate_revision: number;
   id: string;
@@ -289,7 +292,7 @@ export class Store {
   async scan(id: string) {
     const r = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name,(SELECT json_object('kind','workflow','phase',e.phase,'completedUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id AND u.terminal=1),'totalUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id),'completedPages',(SELECT COUNT(*) FROM scan_pages p WHERE p.scan_id=s.id AND p.complete=1),'observedRows',s.product_count,'eligibleOffers',s.deal_count,'attemptCount',e.attempt_count,'heartbeatAt',e.heartbeat_at,'deadlineAt',e.deadline_at,'dispatchState',e.dispatch_state,'cancelRequested',json(CASE WHEN e.cancel_requested=1 THEN 'true' ELSE 'false' END)) FROM scan_execution e WHERE e.scan_id=s.id AND e.execution_kind='workflow') execution_json FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? AND s.id=?"
+        `SELECT s.*,l.name location_name,${executionProjection} FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? AND s.id=?`
       )
       .bind(this.userId, id)
       .first<ScanRow>();
@@ -348,7 +351,7 @@ export class Store {
     parameters.push(Math.min(101, Math.max(1, options.limit ?? 100)));
     const { results } = await this.db
       .prepare(
-        `SELECT s.*,l.name location_name,(SELECT json_object('kind','workflow','phase',e.phase,'completedUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id AND u.terminal=1),'totalUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id),'completedPages',(SELECT COUNT(*) FROM scan_pages p WHERE p.scan_id=s.id AND p.complete=1),'observedRows',s.product_count,'eligibleOffers',s.deal_count,'attemptCount',e.attempt_count,'heartbeatAt',e.heartbeat_at,'deadlineAt',e.deadline_at,'dispatchState',e.dispatch_state,'cancelRequested',json(CASE WHEN e.cancel_requested=1 THEN 'true' ELSE 'false' END)) FROM scan_execution e WHERE e.scan_id=s.id AND e.execution_kind='workflow') execution_json FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE ${clauses.join(" AND ")} ORDER BY s.created_at DESC,s.id DESC LIMIT ?`
+        `SELECT s.*,l.name location_name,${executionProjection} FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE ${clauses.join(" AND ")} ORDER BY s.created_at DESC,s.id DESC LIMIT ?`
       )
       .bind(...parameters)
       .all<ScanRow>();
