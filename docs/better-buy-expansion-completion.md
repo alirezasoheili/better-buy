@@ -30,33 +30,36 @@ Persisted attempts include authentication and retries. Each provider operation p
 
 Pages publish only after every bounded chunk is committed. All frozen units must have terminal evidence, the product projection must be ready, and cancellation must not have committed first. Running, failed and cancelled staging cannot become published results. Durable engine reconciliation replaces the legacy stale timer for workflow records. Pending dispatch/queue wait is bounded at ten minutes.
 
+Both collection paths select the latest coherent price/stock/benefit tuple for overlapping ordinary offers, using stable priority and feed identity only for equal-time ties. They union provenance and retain private conflict diagnostics. Cached responses keep their first successful observation time through resume. Durable planning preserves bounded sanitized omission reasons and complete reason totals; failed discovery and nonterminal scopes remain incomplete, distinct from verified zero-eligible collections.
+
 Migration 0008 builds a materialized saved-product index before durable publication. Default product pages contain 50 summaries, maximum 100; expanded store pages default to 20, maximum 50. Tenant/scan/search/sort/group-bound cursors paginate saved D1 data only. The client retains at most twenty loaded pages per window and keeps the previous window if another read fails. Old array/raw/group routes and legacy/Jet history remain readable.
 
 Authenticated quotas are stored atomically in D1: 120 reads, five starts and ten cancellations per account per minute, with separate buckets and Retry-After responses. The five-minute cron reconciles a bounded set of active workflow records, removes failed/cancelled staging older than seven days, and bounds expired quota cleanup. Completed history is retained.
 
 ## Checks and measurements
 
-Integrated workspace verification passed: **254 tests** (205 Worker, 14 shared, 35 web), all workspace typechecks, the actual Workflow/D1 fixture, both actual D1 compatibility scripts and Worker deployment dry-run. The local database was backed up to `.data/backups/better-buy-before-durable-expansion.sql`, and local migration metadata confirms 0001 through 0010. No remote migration was run. Final code review is recorded below.
+Final main-checkout verification passed: **262 tests** (213 Worker, 14 shared, 35 web), all workspace typechecks, the actual Workflow/D1 fixture, both actual D1 compatibility scripts, the review-fix D1 script and Worker deployment dry-run. The checked implementer branch passed 260 tests; the main checkout also retains two additional existing development-auth tests, which pass and remain outside the feature commits. Local database backups are retained at `.data/backups/better-buy-before-durable-expansion.sql` and `.data/backups/better-buy-before-observation-time.sql`. Local migration metadata and the timestamp schema are checked through 0011. No remote migration was run. Final code review is recorded below.
 
 - Production static build passed: home first-load JavaScript **189 KB**, route contribution **86.4 KB**. These are build sizes, not measured mobile Core Web Vitals.
 - **86 browser checks passed** against the newly built static export. Coverage includes location/context switching, stale reads, ambiguous start, cancellation, failed product/offer pages, paging beyond twenty pages, read-only search/sort/compare, themes, keyboard focus, reduced motion, touch targets and responsive layouts.
-- Screenshots were generated at **360, 390, 768, 1280 and 1440 px**, with light/dark and expanded comparison/error states. Mobile/desktop and dark-dialog images were visually inspected. Tested action contrast was **7.31:1**, body contrast **15.72:1**, and dark contrast **8.60:1**; inspected touch targets had zero failures.
-- Actual local D1 benchmark: 30/500/3,000 groups and 90/2,000/24,000 raw offers. Default product envelopes were **25,312 / 42,534 / 42,603 bytes**, below the 250 KB target. Warm page p95 was **351 / 374 / 319 ms**. Cold projection was **0.81 / 3.81 / 32.55 seconds**; the large case requires prepublication durable execution and cannot be claimed to fit the old HTTP timeout.
+- Screenshots were generated at **360, 390, 768, 1280 and 1440 px**, with light/dark and expanded comparison/error states. Images at all five widths, expanded mobile store comparison, the dark feed and dark location dialog were visually inspected. Tested action contrast was **7.31:1**, body contrast **15.72:1**, and dark contrast **8.60:1**; inspected touch targets had zero failures.
+- Actual integrated local D1 benchmark: 30/500/3,000 groups and 90/2,000/24,000 raw offers. Default product envelopes were **25,312 / 42,534 / 42,603 bytes**, below the 250 KB target. Warm page p95 was **329 / 314 / 320 ms**. Cold projection was **0.757 / 3.684 / 29.249 seconds**; the large case requires prepublication durable execution and cannot be claimed to fit the old HTTP timeout. These final integration measurements supersede the earlier isolated S08 measurements for this branch.
 - The fresh S09 invocation used **23/40 requests** and **2.18/20 seconds**. Both admitted scopes reached empty terminal pages; no identity conflict occurred. Omitted scopes are unmeasured, not zero eligible.
 
-The initial browser attempt served a stale `out` export and failed 46 assertions. Serving the newly built export corrected the harness and all 86 checks passed. This failure is retained in the logs rather than described as a product pass. Repository-wide formatting also reports existing files; applicable changed-file formatting is checked separately without an unrelated cleanup.
+The initial browser attempt served a stale `out` export and failed 46 assertions. Serving the newly built export corrected the harness and all 86 checks passed. This failure is retained in the logs rather than described as a product pass. Final applicable formatting passed, including a separate check of the committed entrypoint to preserve unrelated working edits. Repository-wide formatting reports 63 files: 62 were independently checked against the starting backup and already failed; the remaining entrypoint warning concerns its preserved working edits/checkout line endings. No unrelated formatting cleanup was performed.
 
 ## Migrations, flags and local run
 
 Apply additive migrations in order; keep migrations and history when rolling back flags:
 
-| Migration                         | Purpose                                                                                                  |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 0006_scan_context.sql             | Existing location revisions and scan/offer context.                                                      |
-| 0007_durable_scans.sql            | Execution, intents, frozen units, pages/chunks, private observations/discovery and attempt reservations. |
-| 0008_saved_product_projection.sql | Ranked summaries, expanded offers and projection checkpoints.                                            |
-| 0009_api_rate_limits.sql          | Atomic authenticated quotas.                                                                             |
-| 0010_scan_history_index.sql       | Tenant-first stable history traversal.                                                                   |
+| Migration                           | Purpose                                                                                                  |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 0006_scan_context.sql               | Existing location revisions and scan/offer context.                                                      |
+| 0007_durable_scans.sql              | Execution, intents, frozen units, pages/chunks, private observations/discovery and attempt reservations. |
+| 0008_saved_product_projection.sql   | Ranked summaries, expanded offers and projection checkpoints.                                            |
+| 0009_api_rate_limits.sql            | Atomic authenticated quotas.                                                                             |
+| 0010_scan_history_index.sql         | Tenant-first stable history traversal.                                                                   |
+| 0011_discovery_observation_time.sql | Private provider checkpoint observation time, retained through resume.                                   |
 
 Current configuration: `SNAPP_STORE_CAMPAIGNS_ENABLED=true`, `SCAN_WORKFLOW_ENABLED=false`, `SCAN_WORKFLOW_CONCURRENCY=1`, `API_RATE_LIMITS_ENABLED=true`. The runtime entrypoint exports `ScanWorkflow`, its `SCAN_WORKFLOW` binding and the scheduled reconciler. Turning off enrichment returns to Market Party without deleting history. Turning off durable dispatch returns new starts to the bounded collector while existing durable history/status remains readable.
 
@@ -74,6 +77,7 @@ pnpm --filter @better-buy/shared build
 node apps/worker/scripts/check-durable-workflow.mjs
 node apps/worker/scripts/check-expansion-d1.mjs
 node apps/worker/scripts/check-store-campaign-d1.mjs
+node apps/worker/scripts/check-review-fixes-d1.mjs
 ```
 
 Reproduce a normal static export and browser verification:
@@ -84,7 +88,7 @@ $env:PLAYWRIGHT_PORT = '3118'
 pnpm --filter @better-buy/web exec playwright test --config playwright.export.config.ts
 ```
 
-The export server defaults to `apps/web/out`; `BETTER_BUY_EXPORT_DIR` selects a different saved export directory. An isolated release export can use that variable where the preserved local Next configuration supports it. The verified export was retained privately at `.data/spec-completion-start/static-export`.
+The export server defaults to `apps/web/out`; `BETTER_BUY_EXPORT_DIR` selects a different saved export directory. An isolated release export can use that variable where the preserved local Next configuration supports it. The final tested export is retained privately at `.data/spec-completion-start/static-export-final` and copied to `apps/web/out` for the Worker assets binding. Earlier exports remain backed up separately.
 
 ## Remaining production gate and deployment steps
 
@@ -103,4 +107,6 @@ Check authentication, existing saved history, the automatic feed and the small m
 
 The starting 149 changed/untracked files, status, binary patch and SHA-256 hashes were recorded in `.data/spec-completion-start`. Feature work was isolated on managed implementer branches and merged locally through the required merger. Unrelated development authentication, environment, README, lockfile, package-manager and ignore changes are excluded from feature commits. Generated local artifacts are restored or retained privately as appropriate.
 
-Final Standards and Spec reviews, findings and resolutions are recorded here after integration.
+All three managed implementer worktrees were archived with recoverable snapshots. The archive cleanup followed linked dependencies and removed the main checkout's shared-package files and generated dependency artifacts; the final status check caught this. Tracked shared files were restored from the verified commit, and all 305 dependency packages were restored from the frozen lockfile and offline cache without downloads or lockfile changes. Local dev servers were briefly stopped to release native-binary locks after confirming zero active scans, then restored on ports 3000 and 8787. The database, credentials, evidence and tested export remained intact. The shared build, actual D1 review fixture, actual Workflow fixture and full workspace hooks were rechecked after recovery. Original unrelated-file checksums still match the starting backup; private recovery/server logs are retained in `.data/spec-completion-start`.
+
+Independent Standards and Spec reviews of `8b72deb…4887827` are recorded in [the final review](better-buy-expansion-review.md). Standards found one optional SQL-duplication heuristic and no documented violations. Spec found two correctness gaps: latest-observation overlap selection and retention of durable discovery omissions. One implementer fixed all findings in `c498056`, integrated in `569797e`; both reviewers independently verified the resolution. No review finding remains unresolved. [Fix evidence](better-buy-final-review-fixes.md) records the added regressions and actual-runtime checks.
