@@ -1,7 +1,7 @@
-import type { DealGroupRecord, ScanRecord } from "@better-buy/shared";
+import type { ProductSummary, ScanRecord } from "@better-buy/shared";
 import type { DealSource } from "../dashboard/types";
 import { faDate, faNumber, sourceLabel } from "../dashboard/format";
-import { DealRow } from "./DealRow";
+import { ProductRow } from "./ProductRow";
 import type { useDealFilters } from "./useDealFilters";
 import type { useScanLedger } from "../scans/useScanLedger";
 export function DealShelf({
@@ -14,6 +14,10 @@ export function DealShelf({
   hasResults,
   dealGroups,
   historical,
+  nextCursor,
+  onLoadMore,
+  hasPreviousPages,
+  onFirstPage,
 }: {
   filters: ReturnType<typeof useDealFilters>;
   scan: ScanRecord | null;
@@ -22,10 +26,15 @@ export function DealShelf({
   busy: boolean;
   results: ReturnType<typeof useScanLedger>["results"];
   hasResults: boolean;
-  dealGroups: DealGroupRecord[];
+  dealGroups: ProductSummary[];
   historical: boolean;
+  nextCursor: string | null;
+  onLoadMore: () => void;
+  hasPreviousPages: boolean;
+  onFirstPage: () => void;
 }) {
-  const { query, setQuery, sort, setSort, visible, reset } = filters;
+  const { query, setQuery, sort, setSort, reset } = filters;
+  const visible = dealGroups;
   return (
     <section className="deal-section" aria-labelledby="offers-title">
       <header className="section-heading">
@@ -53,10 +62,7 @@ export function DealShelf({
             <p>{faNumber.format(scan?.vendorCount ?? 0)} فروشگاه بررسی‌شده</p>
             <p>
               {faNumber.format(scan?.productCount ?? 0)} رکورد کالا ·{" "}
-              {faNumber.format(
-                dealGroups.reduce((n, g) => n + g.vendors.length, 0)
-              )}{" "}
-              پیشنهاد فروشگاهی
+              {faNumber.format(scan?.dealCount ?? 0)} پیشنهاد فروشگاهی
             </p>
             <p>نتیجه‌ها متعلق به زمان اسکن نمایش‌داده‌شده‌اند.</p>
             {scan?.context == null && scan && (
@@ -78,7 +84,7 @@ export function DealShelf({
             </strong>
             <p>
               {hasResults
-                ? "نتیجه ذخیره‌شده همین اسکن قابل مشاهده است."
+                ? "نتیجه ذخیره‌شده با زمان اسکن نمایش‌داده‌شده قابل مشاهده است."
                 : "به‌روزرسانی انجام شد و نتیجه ذخیره شده است؛ برای دیدن پیشنهادها، نتیجه همین اسکن را دوباره دریافت کنید."}
             </p>
           </div>
@@ -96,6 +102,28 @@ export function DealShelf({
           را پوشش نمی‌دهند.
         </p>
       )}
+      {scan && (
+        <div className="results-toolbar">
+          <label className="search">
+            جست‌وجو
+            <input
+              type="search"
+              aria-label="جست‌وجوی کالا یا فروشگاه"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="نام کالا یا فروشگاه"
+            />
+          </label>
+          <label className="sort-control">
+            مرتب‌سازی
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="price">کمترین قیمت</option>
+              <option value="discount">بیشترین تخفیف</option>
+            </select>
+          </label>
+          {query && <button onClick={reset}>پاک‌کردن جست‌وجو</button>}
+        </div>
+      )}
       {busy || (!!scan && !hasResults && results.isPending) ? (
         <div className="result-loading" role="status">
           <p>
@@ -110,7 +138,7 @@ export function DealShelf({
           <h2>هنوز نتیجه‌ای برای این انتخاب ندارید</h2>
           <p>با «پیدا کردن تخفیف‌ها» پیشنهادهای این موقعیت را دریافت کنید.</p>
         </div>
-      ) : !hasResults ? null : !dealGroups.length ? (
+      ) : !hasResults ? null : !dealGroups.length && !query ? (
         <div className="empty">
           <h2>پیشنهادی با این حداقل تخفیف پیدا نشد</h2>
           <p>
@@ -120,37 +148,18 @@ export function DealShelf({
         </div>
       ) : (
         <>
-          <div className="results-toolbar">
-            <label className="search">
-              جست‌وجو
-              <input
-                type="search"
-                aria-label="جست‌وجوی کالا یا فروشگاه"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="نام کالا یا فروشگاه"
-              />
-            </label>
-            <label className="sort-control">
-              مرتب‌سازی
-              <select value={sort} onChange={(e) => setSort(e.target.value)}>
-                <option value="price">کمترین قیمت</option>
-                <option value="discount">بیشترین تخفیف</option>
-              </select>
-            </label>
-            {query && <button onClick={reset}>پاک‌کردن جست‌وجو</button>}
-          </div>
           <p className="result-count" role="status">
-            {faNumber.format(visible.length)} محصول
+            {faNumber.format(visible.length)} محصول نمایش‌داده‌شده
             {results.isFetching && " · در حال تازه‌سازی"}
           </p>
           {visible.length ? (
             <div className="deal-list">
               {visible.map((group) => (
-                <DealRow
+                <ProductRow
                   key={`${scan.id}:${group.key}`}
                   group={group}
                   source={scan.source}
+                  scanId={scan.id}
                 />
               ))}
             </div>
@@ -160,6 +169,14 @@ export function DealShelf({
               <p>عبارت جست‌وجو را پاک کنید یا تغییر دهید.</p>
               <button onClick={reset}>پاک‌کردن جست‌وجو</button>
             </div>
+          )}
+          {nextCursor && (
+            <button disabled={results.isFetching} onClick={onLoadMore}>
+              نمایش محصولات بیشتر
+            </button>
+          )}
+          {hasPreviousPages && (
+            <button onClick={onFirstPage}>بازگشت به صفحه نخست</button>
           )}
           <p className="observation-note">
             قیمت و موجودی، مشاهده زمان اسکن است. پیش از خرید در فروشگاه بررسی

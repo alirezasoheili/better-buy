@@ -36,6 +36,23 @@ it.each([401, 403, 400, 404, 409, 422])(
       retryApplicationRead(0, new RequestFailure("http", "", status))
     ).toBe(false)
 );
+it("retries an explicitly pending saved projection while keeping ordinary conflicts permanent", () => {
+  expect(
+    retryApplicationRead(
+      0,
+      new RequestFailure("http", "", 409, "PROJECTION_PENDING", 1000)
+    )
+  ).toBe(true);
+  expect(
+    retryApplicationRead(
+      2,
+      new RequestFailure("http", "", 409, "PROJECTION_PENDING", 1000)
+    )
+  ).toBe(false);
+  expect(
+    retryApplicationRead(0, new RequestFailure("http", "", 409, "ACTIVE_SCAN"))
+  ).toBe(false);
+});
 it.each(["cancelled", "invalid-response"] as const)(
   "does not retry %s",
   (kind) =>

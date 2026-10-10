@@ -14,75 +14,69 @@ export type ScanSelection = {
   threshold: number;
   mode: "partial" | "full";
 };
-type UncertainAttempt = {
-  target: ScanSelection;
-  previousIds: string[];
-  failedAt: number;
-};
+type StartIntent = { target: ScanSelection; key: string; failedAt: number };
 export function useStartScan(selection: ScanSelection) {
   const client = useQueryClient();
   const locked = useRef(false);
-  const [uncertain, setUncertain] = useState<UncertainAttempt | null>(null);
+  const [uncertain, setUncertain] = useState<StartIntent | null>(null);
+  const remember = (run: ScanRecord) => {
+    client.setQueryData(["scan", run.id], run);
+    client.setQueryData<ScanRecord[]>(["scans"], (previous) => [
+      run,
+      ...(previous ?? []).filter((item) => item.id !== run.id),
+    ]);
+  };
   const reconciliation = useQuery({
-    queryKey: ["scans"],
+    queryKey: ["start-intent", uncertain?.key ?? null],
     enabled: !!uncertain,
     staleTime: 0,
-    queryFn: ({ signal }) =>
-      api("/api/scans", { signal }, scansReadSchema.parse),
-    refetchInterval: (q) =>
-      uncertain &&
-      !q.state.data?.some(
-        (r) =>
-          !uncertain.previousIds.includes(r.id) &&
-          r.locationId === uncertain.target.locationId &&
-          r.source === uncertain.target.source &&
-          r.threshold === uncertain.target.threshold
-      )
-        ? q.state.error
-          ? recoveryInterval(q.state.error)
+    queryFn: async ({ signal }) => {
+      const runs = await api(
+        `/api/scans?intent=${encodeURIComponent(uncertain!.key)}`,
+        { signal },
+        scansReadSchema.parse
+      );
+      if (runs.length > 1)
+        throw new RequestFailure(
+          "invalid-response",
+          "پاسخ بررسی شروع اسکن معتبر نیست."
+        );
+      if (runs[0]) remember(runs[0]);
+      return runs;
+    },
+    refetchInterval: (query) =>
+      uncertain && !query.state.data?.length
+        ? query.state.error
+          ? recoveryInterval(query.state.error)
           : 15_000
         : false,
   });
-  const recovered = uncertain
-    ? reconciliation.data?.find(
-        (r) =>
-          !uncertain.previousIds.includes(r.id) &&
-          r.locationId === uncertain.target.locationId &&
-          r.source === uncertain.target.source &&
-          r.threshold === uncertain.target.threshold
-      )
-    : undefined;
+  const recovered = uncertain ? reconciliation.data?.[0] : undefined;
   const unresolved = !!uncertain && !recovered;
   const checked =
-    reconciliation.isSuccess &&
     !!uncertain &&
+    reconciliation.isSuccess &&
     reconciliation.dataUpdatedAt >= uncertain.failedAt &&
     !reconciliation.isFetching;
   const mutation = useMutation({
     retry: false,
-    mutationFn: async ({
-      target,
-    }: {
-      target: ScanSelection;
-      previousIds: string[];
-    }) => {
+    mutationFn: async (intent: StartIntent) => {
       await client.cancelQueries({ queryKey: ["scans"] });
-      const started = await api(
+      return api(
         "/api/scans",
-        { method: "POST", body: JSON.stringify(target) },
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": intent.key },
+          body: JSON.stringify(intent.target),
+        },
         scanStartedSchema.parse
       );
-      return started;
     },
     onSuccess: (run) => {
-      client.setQueryData(["scan", run.id], run);
-      client.setQueryData<ScanRecord[]>(["scans"], (old) => [
-        run,
-        ...(old ?? []).filter((r) => r.id !== run.id),
-      ]);
+      remember(run);
       setUncertain(null);
     },
-    onError: (error, { target, previousIds }) => {
+    onError: (error, intent) => {
       if (
         error instanceof RequestFailure &&
         error.kind === "http" &&
@@ -93,8 +87,10 @@ export function useStartScan(selection: ScanSelection) {
         error instanceof RequestFailure &&
         (error.kind !== "http" || (error.status ?? 0) >= 500)
       ) {
-        setUncertain({ target, previousIds, failedAt: Date.now() });
-        void client.invalidateQueries({ queryKey: ["scans"] });
+        setUncertain({ ...intent, failedAt: Date.now() });
+        void client.invalidateQueries({
+          queryKey: ["start-intent", intent.key],
+        });
       }
     },
     onSettled: () => {
@@ -108,12 +104,13 @@ export function useStartScan(selection: ScanSelection) {
     if (target.source === "okala")
       target.threshold = Math.max(30, target.threshold);
     locked.current = true;
-    mutation.mutate({
-      target,
-      previousIds: (client.getQueryData<ScanRecord[]>(["scans"]) ?? []).map(
-        (r) => r.id
-      ),
-    });
+    mutation.mutate({ target, key: crypto.randomUUID(), failedAt: Date.now() });
+  };
+  const retryIntent = () => {
+    if (!uncertain || !unresolved || locked.current || mutation.isPending)
+      return;
+    locked.current = true;
+    mutation.mutate(uncertain);
   };
   return {
     start,
@@ -124,20 +121,11 @@ export function useStartScan(selection: ScanSelection) {
     reconciliation,
     checked,
     error: unresolved || recovered ? null : mutation.error,
+    retryIntent,
     reset: () => {
-      mutation.reset();
-      setUncertain(null);
-    },
-    // Explicit acknowledgement after an authenticated fresh list, never a second automatic POST.
-    allowNewAttempt: () => {
-      if (
-        checked &&
-        !reconciliation.data?.some(
-          (r) => r.status === "queued" || r.status === "running"
-        )
-      ) {
-        setUncertain(null);
+      if (!unresolved) {
         mutation.reset();
+        setUncertain(null);
       }
     },
   };

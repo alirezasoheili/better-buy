@@ -3,6 +3,7 @@ import { ReadNotice } from "../dashboard/Primitives";
 import { faNumber, sourceLabel } from "../dashboard/format";
 import type { useScanPolling } from "./useScanPolling";
 import type { useStartScan } from "./useStartScan";
+import { useCancelScan } from "./useCancelScan";
 export function ScanFeedback({
   active,
   polling,
@@ -16,6 +17,7 @@ export function ScanFeedback({
   locations: LocationRecord[];
   onOpenContext: (run: ScanRecord) => void;
 }) {
+  const cancel = useCancelScan();
   return (
     <>
       {active && (
@@ -44,8 +46,33 @@ export function ScanFeedback({
                 اسکن نیست.
               </p>
             )}
+            {active.execution && (
+              <details>
+                <summary>جزئیات به‌روزرسانی</summary>
+                <p>
+                  {faNumber.format(active.execution.completedPages)} صفحه
+                  دریافت‌شده · {faNumber.format(active.execution.observedRows)}{" "}
+                  رکورد مشاهده‌شده
+                </p>
+                <p>
+                  {faNumber.format(active.execution.completedUnits)} از{" "}
+                  {faNumber.format(active.execution.totalUnits)} بخش تکمیل شده
+                </p>
+              </details>
+            )}
+            {cancel.error && (
+              <p className="form-error">
+                لغو تأیید نشد؛ وضعیت اسکن را بررسی کنید. {cancel.error.message}
+              </p>
+            )}
           </div>
           <div>
+            <button
+              disabled={cancel.isPending}
+              onClick={() => cancel.mutate(active.id)}
+            >
+              {cancel.isPending ? "در حال لغو…" : "لغو به‌روزرسانی"}
+            </button>
             {polling.error && (
               <button
                 disabled={polling.isFetching}
@@ -76,8 +103,8 @@ export function ScanFeedback({
             <>
               در آخرین بررسی اسکن تازه‌ای پیدا نشد؛ نتیجه درخواست قبلی همچنان
               نامشخص است.{" "}
-              <button onClick={start.allowNewAttempt}>
-                ادامه با امکان اسکن تازه
+              <button disabled={start.submitting} onClick={start.retryIntent}>
+                بررسی دوباره درخواست قبلی
               </button>
             </>
           )}

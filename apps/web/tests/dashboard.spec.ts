@@ -103,33 +103,57 @@ const representative = [
   },
 ];
 // Fixture projection models the saved v2 contract, including differing prices.
-function products(groups: DealGroupRecord[]): DealGroupRecord[] {
-  return groups.map((group) => {
-    const current = group.vendors
-      .filter((offer) => offer.state !== "no_longer_present")
-      .sort(
-        (a, b) =>
-          a.finalPriceRials - b.finalPriceRials ||
-          a.vendorId.localeCompare(b.vendorId)
-      );
-    const best = current[0] ?? null;
-    return {
-      ...group,
-      groupKeyVersion: 2,
-      bestCurrentOffer: best,
-      currentStoreOfferCount: current.length,
-      conditionalOffers: [],
-      diagnostics: [],
-      ...(best
-        ? {
-            priceRials: best.priceRials,
-            discountRials: best.discountRials,
-            finalPriceRials: best.finalPriceRials,
-            discountRatio: best.discountRatio,
-          }
-        : {}),
-    };
-  });
+function products(groups: DealGroupRecord[], query = "", sort = "discount") {
+  const items = groups
+    .filter((group) =>
+      `${group.title} ${group.vendors.map((offer) => offer.vendorTitle).join(" ")}`.includes(
+        query
+      )
+    )
+    .map((group) => {
+      const current = group.vendors
+        .filter((offer) => offer.state !== "no_longer_present")
+        .sort(
+          (a, b) =>
+            a.finalPriceRials - b.finalPriceRials ||
+            a.vendorId.localeCompare(b.vendorId)
+        );
+      const best = current[0] ?? null;
+      return {
+        ...group,
+        groupKeyVersion: 2,
+        bestCurrentOffer: best,
+        currentStoreOfferCount: current.length,
+        conditionalOffers: [],
+        diagnostics: [],
+        conditionalOfferCount: 0,
+        ...(best
+          ? {
+              priceRials: best.priceRials,
+              discountRials: best.discountRials,
+              finalPriceRials: best.finalPriceRials,
+              discountRatio: best.discountRatio,
+            }
+          : {}),
+      };
+    })
+    .sort((a, b) =>
+      sort === "price"
+        ? a.finalPriceRials - b.finalPriceRials
+        : b.discountRatio - a.discountRatio ||
+          a.finalPriceRials - b.finalPriceRials
+    );
+  return {
+    items: items.map(({ vendors, conditionalOffers, ...item }) => {
+      void vendors;
+      void conditionalOffers;
+      return item;
+    }),
+    nextCursor: null,
+    observedAt: date,
+    coverageSummary: "complete",
+    baseline: { scanId: null, reason: "first_snapshot" },
+  };
 }
 async function mock(
   page: Page,
@@ -218,8 +242,26 @@ async function mock(
         data = state.scans[0];
       } else data = state.scans;
     } else if (url.pathname.endsWith("/products"))
-      data = products(state.groups);
-    else if (url.pathname.endsWith("/deals")) data = [];
+      data = products(
+        state.groups,
+        url.searchParams.get("q") ?? "",
+        url.searchParams.get("sort") ?? "discount"
+      );
+    else if (url.pathname.endsWith("/offers")) {
+      const key = decodeURIComponent(url.pathname.split("/").at(-2)!);
+      data = {
+        items: [
+          ...(state.groups.find((group) => group.key === key)?.vendors ?? []),
+        ].sort(
+          (a, b) =>
+            Number(a.state === "no_longer_present") -
+              Number(b.state === "no_longer_present") ||
+            a.finalPriceRials - b.finalPriceRials ||
+            a.vendorTitle.localeCompare(b.vendorTitle, "fa")
+        ),
+        nextCursor: null,
+      };
+    } else if (url.pathname.endsWith("/deals")) data = [];
     else if (url.pathname.startsWith("/api/scans/")) {
       state.statusReads++;
       data =
@@ -296,7 +338,7 @@ test("first visit creates a location using address search and manual coordinates
     releaseHistory = resolve;
   });
   let delayedHistoryStarted = false;
-  await page.route("**/api/scans", async (route) => {
+  await page.route(/\/api\/scans(?:\?.*)?$/, async (route) => {
     if (route.request().method() === "GET" && state.locations.length) {
       delayedHistoryStarted = true;
       await historyRead;
@@ -400,7 +442,7 @@ test("new scans use the 40 percent default with no mode choice, credential route
   const waiting = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/api/scans", async (route) => {
+  await page.route(/\/api\/scans(?:\?.*)?$/, async (route) => {
     if (route.request().method() === "POST") await waiting;
     await route.fallback();
   });
@@ -505,7 +547,7 @@ test("transient result GET recovers within the bounded retry count", async ({
 }) => {
   const state = await mock(page, { scans: [run()], groups: representative });
   let calls = 0;
-  await page.route("**/api/scans/saved/products", (r) => {
+  await page.route("**/api/scans/saved/products*", (r) => {
     calls++;
     return calls === 1
       ? r.abort("connectionfailed")
@@ -522,7 +564,7 @@ test("persistent result failures show recovery after success and retry the same 
   const state = await mock(page, { scans: [run()], groups: representative });
   let fail = true;
   let calls = 0;
-  await page.route("**/api/scans/saved/products", (r) => {
+  await page.route("**/api/scans/saved/products*", (r) => {
     calls++;
     return fail
       ? r.abort("connectionfailed")
@@ -564,7 +606,7 @@ test("background result failures preserve this context's cached snapshot and cle
 }) => {
   const state = await success(page);
   let fail = true;
-  await page.route("**/api/scans/saved/products", (r) =>
+  await page.route("**/api/scans/saved/products*", (r) =>
     fail
       ? r.abort("connectionfailed")
       : r.fulfill({ json: { data: products(representative) } })
@@ -590,7 +632,7 @@ for (const status of [401, 403, 404, 422, 200])
   }) => {
     await mock(page, { scans: [run()] });
     let calls = 0;
-    await page.route("**/api/scans/saved/products", (r) => {
+    await page.route("**/api/scans/saved/products*", (r) => {
       calls++;
       return r.fulfill({
         status,
@@ -608,7 +650,7 @@ for (const status of [401, 403, 404, 422, 200])
 test("long Retry-After prevents rapid repeated requests", async ({ page }) => {
   await mock(page, { scans: [run()] });
   let calls = 0;
-  await page.route("**/api/scans/saved/products", (r) => {
+  await page.route("**/api/scans/saved/products*", (r) => {
     calls++;
     return r.fulfill({
       status: 429,
@@ -627,7 +669,7 @@ test("a lost start response reconciles a known scan with one POST", async ({
   page,
 }) => {
   const state = await mock(page);
-  await page.route("**/api/scans", (r) => {
+  await page.route(/\/api\/scans(?:\?.*)?$/, (r) => {
     if (r.request().method() === "POST") {
       const input = r.request().postDataJSON();
       state.posts.push(input);
@@ -651,12 +693,12 @@ test("a lost start response reconciles a known scan with one POST", async ({
   await page.waitForTimeout(1000);
   expect(state.posts).toHaveLength(1);
 });
-test("an unknown start stays uncertain until fresh reads and an explicit new-attempt acknowledgement", async ({
+test("an unknown start retains its intent after fresh reads and an explicit resend", async ({
   page,
 }) => {
   const state = await mock(page);
   let posts = 0;
-  await page.route("**/api/scans", (r) => {
+  await page.route(/\/api\/scans(?:\?.*)?$/, (r) => {
     if (r.request().method() === "POST") {
       posts++;
       return r.abort("connectionfailed");
@@ -670,13 +712,13 @@ test("an unknown start stays uncertain until fresh reads and an explicit new-att
   ).toBeVisible();
   await expect(scanButton(page)).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "ادامه با امکان اسکن تازه" })
+    page.getByRole("button", { name: "بررسی دوباره درخواست قبلی" })
   ).toBeVisible();
   await page.waitForTimeout(1000);
   expect(posts).toBe(1);
-  await page.getByRole("button", { name: "ادامه با امکان اسکن تازه" }).click();
-  await expect(scanButton(page)).toBeEnabled();
-  expect(posts).toBe(1);
+  await page.getByRole("button", { name: "بررسی دوباره درخواست قبلی" }).click();
+  await expect(scanButton(page)).toBeDisabled();
+  expect(posts).toBe(2);
 });
 test("reconciliation failure keeps duplicate start blocked until the authenticated read recovers", async ({
   page,
@@ -684,7 +726,7 @@ test("reconciliation failure keeps duplicate start blocked until the authenticat
   await mock(page);
   let failReads = false;
   let posts = 0;
-  await page.route("**/api/scans", (r) => {
+  await page.route(/\/api\/scans(?:\?.*)?$/, (r) => {
     if (r.request().method() === "POST") {
       posts++;
       failReads = true;
@@ -703,7 +745,7 @@ test("reconciliation failure keeps duplicate start blocked until the authenticat
   ).toBeVisible();
   await expect(scanButton(page)).toBeDisabled();
   await expect(
-    page.getByRole("button", { name: "ادامه با امکان اسکن تازه" })
+    page.getByRole("button", { name: "بررسی دوباره درخواست قبلی" })
   ).toHaveCount(0);
   failReads = false;
   await page
@@ -712,7 +754,7 @@ test("reconciliation failure keeps duplicate start blocked until the authenticat
     .getByRole("button", { name: "دریافت دوباره", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "ادامه با امکان اسکن تازه" })
+    page.getByRole("button", { name: "بررسی دوباره درخواست قبلی" })
   ).toBeVisible();
   expect(posts).toBe(1);
 });
@@ -727,7 +769,7 @@ for (const boundary of ["location", "source", "scan"])
     const waiting = new Promise<void>((r) => {
       release = r;
     });
-    await page.route("**/api/scans/saved/products", async (r) => {
+    await page.route("**/api/scans/saved/products*", async (r) => {
       started = true;
       await waiting;
       await r
@@ -772,7 +814,7 @@ test("sign-out retires reads and another account cannot see late private results
   const waiting = new Promise<void>((r) => {
     release = r;
   });
-  await page.route("**/api/scans/saved/products", async (r) => {
+  await page.route("**/api/scans/saved/products*", async (r) => {
     requested = true;
     await waiting;
     await r
@@ -807,7 +849,9 @@ test("sign-out retires reads and another account cannot see late private results
       },
     })
   );
-  await page.route("**/api/scans", (r) => r.fulfill({ json: { data: [] } }));
+  await page.route(/\/api\/scans(?:\?.*)?$/, (r) =>
+    r.fulfill({ json: { data: [] } })
+  );
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "هنوز نتیجه‌ای برای این انتخاب ندارید" })
@@ -821,7 +865,7 @@ test("reconnect refreshes stale failed reads without another scan submission", a
 }) => {
   const state = await mock(page, { scans: [run()] });
   let fail = true;
-  await page.route("**/api/scans/saved/products", (r) =>
+  await page.route("**/api/scans/saved/products*", (r) =>
     fail
       ? r.abort("connectionfailed")
       : r.fulfill({ json: { data: products(representative) } })
@@ -846,9 +890,9 @@ test("successful empty results, filter-empty results, and loading have distinct 
   const waiting = new Promise<void>((r) => {
     release = r;
   });
-  await page.route("**/api/scans/saved/products", async (r) => {
+  await page.route("**/api/scans/saved/products*", async (r) => {
     await waiting;
-    await r.fulfill({ json: { data: [] } });
+    await r.fulfill({ json: { data: products([]) } });
   });
   await page.goto("/");
   await expect(page.getByText("در حال دریافت نتیجه ذخیره‌شده…")).toBeVisible();
@@ -857,7 +901,7 @@ test("successful empty results, filter-empty results, and loading have distinct 
     page.getByRole("heading", { name: "پیشنهادی با این حداقل تخفیف پیدا نشد" })
   ).toBeVisible();
   state.groups = representative;
-  await page.unroute("**/api/scans/saved/products");
+  await page.unroute("**/api/scans/saved/products*");
   await page.reload();
   await expect(offerHeading(page)).toBeVisible();
   await page.getByLabel("جست‌وجوی کالا یا فروشگاه").fill("هیچ نتیجه");
@@ -1205,7 +1249,7 @@ test("layouts, theme preference, long content, broken images and reduced motion 
       finalPriceRials: 1234567890,
     })),
   };
-  await page.route("**/api/scans/saved/products", (r) =>
+  await page.route("**/api/scans/saved/products*", (r) =>
     r.fulfill({ json: { data: products([long]) } })
   );
   await page.route("https://images.example.test/**", (r) => r.abort());
@@ -1290,7 +1334,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
   const waiting = new Promise<void>((r) => {
     release = r;
   });
-  await page.route("**/api/scans/saved/products", async (r) => {
+  await page.route("**/api/scans/saved/products*", async (r) => {
     await waiting;
     await r.fulfill({ status: 503, json: { error: "TEMPORARY" } });
   });
@@ -1302,7 +1346,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
     page.getByText("نتیجه اسکن دریافت نشد", { exact: true })
   ).toBeVisible();
   await capture("error-results");
-  await page.unroute("**/api/scans/saved/products");
+  await page.unroute("**/api/scans/saved/products*");
   // URLs observed from Okala's public campaign feed on 2026-10-08. All prices here remain fixtures.
   state.groups = [
     {
@@ -1387,7 +1431,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
   expect(metrics.badTargets).toBe(0);
   expect(metrics.focusOutline).not.toBe("none");
   expect(metrics.firstOfferTop).toBeLessThan(760);
-  await page.route("**/api/scans/saved/products", (r) =>
+  await page.route("**/api/scans/saved/products*", (r) =>
     r.abort("connectionfailed")
   );
   await page.getByRole("button", { name: "تازه‌سازی نتیجه" }).click();
@@ -1395,7 +1439,7 @@ test("capture state views, real retailer images, touch targets, focus and token 
     page.getByText("تازه‌سازی نتیجه انجام نشد", { exact: true })
   ).toBeVisible();
   await capture("cached-error");
-  await page.unroute("**/api/scans/saved/products");
+  await page.unroute("**/api/scans/saved/products*");
   state.scans = [run({ id: "active", status: "queued", finishedAt: null })];
   await page.reload();
   await expect(page.locator(".active-scan")).toBeVisible();
