@@ -76,7 +76,7 @@ const productSchema = z
   })
   .passthrough();
 type Page = z.infer<typeof pageSchema>["data"];
-type Plan = CampaignScope & { title: string; first: Page };
+export type Plan = CampaignScope & { title: string; first: Page };
 export type CampaignReport = CampaignScope & {
   reportedCount: number;
   rawCount: number;
@@ -109,7 +109,7 @@ const incomplete = (field: string) =>
     `Snapp campaign coverage incomplete: ${field}`
   );
 
-function collectionUrl(
+export function collectionUrl(
   scope: CampaignScope,
   page: number,
   location: { latitude: number; longitude: number }
@@ -128,7 +128,7 @@ function collectionUrl(
   }).forEach(([key, value]) => url.searchParams.set(key, value));
   return url;
 }
-function parsePage(body: unknown, collectionId: number): Page {
+export function parsePage(body: unknown, collectionId: number): Page {
   const parsed = pageSchema.safeParse(body);
   if (!parsed.success)
     throw changed("data.count / data.finalResult[].type/data");
@@ -153,6 +153,26 @@ const conditionalMetadata = (value: Record<string, unknown>) =>
   value.conditions != null ||
   value.terms != null ||
   value.benefit != null;
+
+export function campaignExclusionReason(
+  p: Record<string, unknown>,
+  threshold: number
+): string | null {
+  if (p.stock === undefined) return "UNKNOWN_STOCK";
+  if (p.no_stock === true || p.is_out_of_stock === true || Number(p.stock) <= 0)
+    return "OUT_OF_STOCK";
+  if (conditionalMetadata(p)) return "UNVERIFIED_CONDITIONAL_BENEFIT";
+  if (
+    !isEligibleDeal(
+      Number(p.discountRatio ?? 0),
+      true,
+      Number(p.stock),
+      threshold
+    )
+  )
+    return "BELOW_THRESHOLD";
+  return null;
+}
 
 export function planStoreCampaigns(
   read: SnappRead,
@@ -526,29 +546,7 @@ export function enrichStoreCampaigns(
             report.duplicateCount++;
             continue;
           }
-          let reason: string | undefined;
-          if (p.stock === undefined) reason = "UNKNOWN_STOCK";
-          else if (
-            p.no_stock === true ||
-            p.is_out_of_stock === true ||
-            p.stock <= 0
-          )
-            reason = "OUT_OF_STOCK";
-          // Retain the existing ordinary inline-discount rule. Explicit benefit
-          // restrictions must not be promoted into applicable ordinary offers.
-          else if (
-            p.is_pro === true ||
-            p.requires_pro === true ||
-            p.isPro === true ||
-            p.conditions != null ||
-            p.terms != null ||
-            p.benefit != null
-          )
-            reason = "UNVERIFIED_CONDITIONAL_BENEFIT";
-          else if (
-            !isEligibleDeal(p.discountRatio, true, p.stock, location.threshold)
-          )
-            reason = "BELOW_THRESHOLD";
+          const reason = campaignExclusionReason(p, location.threshold);
           const offer: Offer | null = reason
             ? null
             : {
