@@ -30,15 +30,17 @@ Unusually dense product-ID cohorts exceeding 5,000 current/prior source rows in 
 
 Public HTTP/D1 integration regressions cover coherent best-offer ranking, Persian search before slicing, keyset tie traversal, default/maximum sizes, tenant/scan/search/sort/group cursor rejection, missing results, staged/cancelled invisibility, explicit benefit/provenance details, compatible versus changed-scope history, historical-only groups and resumable legacy backfill. Cancellation regression first reproduced the defect (the projector continued after cancellation) before status-guarded writes and loop checks fixed it.
 
-The isolated local workerd D1 benchmark uses actual D1 bindings and all additive migrations, not a Node SQLite substitute. It seeds synthetic saved scans, builds the projection, reads twenty warm pages, expands offers and checks the SQLite query plan uses `saved_products_discount`. Initial measured results:
+The isolated local workerd D1 benchmark uses actual D1 bindings and all additive migrations, not a Node SQLite substitute. It seeds synthetic saved scans, builds the projection, reads twenty warm pages, expands offers and checks the SQLite query plan uses `saved_products_discount`. Final measured results after cancellation guards were added:
 
 | Dataset | Product groups | Raw offers | Cold projection | Warm page p50 / p95 | Default envelope bytes |
 | ------- | -------------- | ---------- | --------------- | ------------------- | ---------------------- |
-| Small   | 30             | 90         | 688 ms          | 298 / 337 ms        | 25,312                 |
-| Medium  | 500            | 2,000      | 3,563 ms        | 325 / 380 ms        | 42,534                 |
-| Large   | 3,000          | 24,000     | 26,439 ms       | 313 / 327 ms        | 42,603                 |
+| Small   | 30             | 90         | 810 ms          | 298 / 351 ms        | 25,312                 |
+| Medium  | 500            | 2,000      | 3,808 ms        | 319 / 374 ms        | 42,534                 |
+| Large   | 3,000          | 24,000     | 32,546 ms       | 314 / 319 ms        | 42,603                 |
 
-All default pages stay below the **250 KB** target. These are local fixture measurements, not production latency or actual account capacity guarantees. Cold materialization belongs before durable publication; it is not repeated by warm saved-page reads. Larger legacy data may require several safe read retries.
+All default pages stay below the **250 KB** target. These are local fixture measurements, not production latency or actual account capacity guarantees. Cold materialization belongs before durable publication; the large fixture's 32.5-second projection does not fit the old HTTP collection timeout. It is not repeated by warm saved-page reads. Larger legacy data may require several safe read retries.
+
+Before integration, **232 workspace tests passed** (14 shared, 34 web, 184 Worker, including ten new saved-result regressions), all workspace typechecks passed, changed-file formatting passed and `git diff --check` passed through the repository's normal commit hooks. Durable/UI integration checks are repeated on the integration branch rather than claimed by the isolated module tests.
 
 Reproduce with `pnpm --filter @better-buy/shared build`, `pnpm --filter @better-buy/worker exec vitest run src/http/products.test.ts`, both Worker TypeScript checks, and `node apps/worker/scripts/benchmark-saved-products.mjs`. The benchmark creates and removes an isolated temporary runtime and never touches the Wrangler development database or a remote database.
 

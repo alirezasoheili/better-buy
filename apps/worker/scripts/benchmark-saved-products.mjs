@@ -150,6 +150,8 @@ try {
   );
 } finally {
   await runtime.dispose();
+  assert.equal(path.dirname(path.resolve(directory)), path.resolve(tmpdir()));
+  assert.ok(path.basename(directory).startsWith("better-buy-products-"));
   await rm(directory, { recursive: true, force: true });
 }
 async function insert(db, scan, rows) {

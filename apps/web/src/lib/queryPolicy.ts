@@ -13,6 +13,7 @@ export function retryApplicationRead(
     (error.kind === "http" &&
       (error.status === 408 ||
         error.status === 429 ||
+        (error.status === 409 && error.code === "PROJECTION_PENDING") ||
         (error.status !== undefined &&
           error.status >= 500 &&
           error.status <= 599)))

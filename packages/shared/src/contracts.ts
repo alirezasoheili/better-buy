@@ -3,7 +3,8 @@ import { locationInputSchema } from "./validation";
 export type LocationInput = z.infer<typeof locationInputSchema>;
 export type DealState =
   "current" | "new" | "still_available" | "no_longer_present";
-export type ScanStatus = "queued" | "running" | "succeeded" | "failed";
+export type ScanStatus =
+  "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export interface LocationRecord extends LocationInput {
   coordinateRevision?: number;
@@ -22,6 +23,20 @@ export interface ProviderCapabilities {
   coverage: "campaign-feed";
 }
 export interface ScanRecord {
+  execution?: {
+    kind: "workflow";
+    phase: string;
+    completedUnits: number;
+    totalUnits: number;
+    completedPages: number;
+    observedRows: number;
+    eligibleOffers: number;
+    attemptCount: number;
+    heartbeatAt: string | null;
+    deadlineAt: string | null;
+    dispatchState: string;
+    cancelRequested: boolean;
+  };
   context?: import("./scanContext").ScanContext | null;
   id: string;
   locationId: string;

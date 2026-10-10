@@ -42,17 +42,19 @@ export function Dashboard() {
     threshold,
     mode: "partial",
   });
+  const filters = useDealFilters();
   const ledger = useScanLedger({
     busy: data.busy,
     selected: data.selected,
     scans: data.scans,
     source,
     selectedRunId: selection.runId,
+    query: filters.query,
+    sort: filters.sort,
     coordinateRevision:
       data.locations.find((l) => l.id === data.selected)?.coordinateRevision ??
       1,
   });
-  const filters = useDealFilters(ledger.dealGroups);
   const valid = data.locations.some(
     (l) =>
       l.id === data.selected && isWithinTehranBoundary(l.latitude, l.longitude)
@@ -204,6 +206,13 @@ export function Dashboard() {
                 {ledger.scan && "نتیجه موفق قبلی همچنان نمایش داده می‌شود."}
               </ReadNotice>
             )}
+            {latestAttempt?.status === "cancelled" && !selection.runId && (
+              <ReadNotice title="به‌روزرسانی لغو شد">
+                {ledger.scan
+                  ? "نتیجه موفق قبلی همچنان نمایش داده می‌شود."
+                  : "نتیجه‌ای از این به‌روزرسانی منتشر نشده است."}
+              </ReadNotice>
+            )}
             <DealShelf
               filters={filters}
               scan={ledger.scan}
@@ -216,7 +225,19 @@ export function Dashboard() {
               historical={
                 !!selection.runId && ledger.scan?.id === selection.runId
               }
+              nextCursor={ledger.nextCursor}
+              onLoadMore={ledger.loadMore}
+              hasPreviousPages={ledger.hasPreviousPages}
+              onFirstPage={ledger.firstPage}
             />
+            {ledger.results.error &&
+              ledger.requestedScan?.status === "succeeded" &&
+              ledger.requestedScan.id !== ledger.scan?.id && (
+                <p role="status">
+                  به‌روزرسانی تازه با موفقیت ذخیره شد؛ دریافت آن انجام نشد.
+                  نتیجه موفق قبلی با زمان خودش نمایش داده می‌شود.
+                </p>
+              )}
           </>
         )}
       </div>
