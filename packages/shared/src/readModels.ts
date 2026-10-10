@@ -52,6 +52,22 @@ export const locationRecordSchema = locationInputSchema.extend({
   coordinateRevision: count.positive().optional(),
 });
 export const scanRecordSchema = z.object({
+  execution: z
+    .object({
+      kind: z.literal("workflow"),
+      phase: z.string(),
+      completedUnits: count,
+      totalUnits: count,
+      completedPages: count,
+      observedRows: count,
+      eligibleOffers: count,
+      attemptCount: count,
+      heartbeatAt: date.nullable(),
+      deadlineAt: date.nullable(),
+      dispatchState: z.string(),
+      cancelRequested: z.boolean(),
+    })
+    .optional(),
   context: scanContextSchema.nullable().optional(),
   id: z.string().min(1),
   locationId: z.string().min(1),
@@ -59,7 +75,7 @@ export const scanRecordSchema = z.object({
   threshold: z.number(),
   source: z.enum(["snappmarket", "okala", "digikalajet"]),
   mode: z.enum(["partial", "full"]),
-  status: z.enum(["queued", "running", "succeeded", "failed"]),
+  status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
   createdAt: date,
   startedAt: date.nullable(),
   finishedAt: date.nullable(),
@@ -129,6 +145,23 @@ export const productGroupSchema = dealGroupSchema.extend({
   diagnostics: z.array(z.string()),
 });
 export const productsReadSchema = z.array(productGroupSchema);
+export const productSummarySchema = productGroupSchema
+  .omit({ vendors: true, conditionalOffers: true })
+  .extend({ conditionalOfferCount: count });
+export const productPageSchema = z.object({
+  items: z.array(productSummarySchema),
+  nextCursor: z.string().nullable(),
+  observedAt: date,
+  coverageSummary: z.string(),
+  baseline: z.object({ scanId: z.string().nullable(), reason: z.string() }),
+});
+export const offerPageSchema = z.object({
+  items: z.array(vendorOfferSchema),
+  nextCursor: z.string().nullable(),
+});
+export type ProductSummary = z.infer<typeof productSummarySchema>;
+export type ProductPage = z.infer<typeof productPageSchema>;
+export type OfferPage = z.infer<typeof offerPageSchema>;
 export const scanStartedSchema = scanRecordSchema;
 export const locationSearchReadSchema = z.array(
   z.object({
