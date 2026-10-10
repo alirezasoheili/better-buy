@@ -1,15 +1,39 @@
-import { Cause, Effect, Exit, Option } from "effect";
+import { Effect, Exit } from "effect";
 import {
   groupDeals,
   groupDealsV2,
   scanInputSchema,
   type DealRecord,
 } from "@better-buy/shared";
-import { executeScan, prepareScan } from "../application/scans";
+import { executeScan } from "../application/scans";
 import { scanServices } from "../composition";
-import { ScanValidationError } from "../domain/failures";
+import {
+  beginDurableScan,
+  beginLegacyScan,
+  findStartIntent,
+  cancelDurableScan,
+  reconcileDurableScan,
+} from "../durable/service";
+import { DurableError } from "../durable/repository";
+import { readScanHistory, HistoryInputError } from "./history";
 import { Store } from "../store";
-import type { Api } from "./types";
+import type { Api, WorkerEnv } from "./types";
+async function startErrorBody(
+  env: Pick<WorkerEnv, "DB" | "BOX_KEY">,
+  userId: string,
+  error: DurableError
+) {
+  const store = new Store(env.DB, userId, env.BOX_KEY);
+  const active =
+    error.code === "ACTIVE_SCAN_EXISTS" || error.code === "SCAN_IN_PROGRESS"
+      ? await store.activeScan()
+      : null;
+  return {
+    error: error.code,
+    message: error.message,
+    ...(active ? { activeScan: await store.scan(active.id) } : {}),
+  };
+}
 // V1 clients retain their original three-state vocabulary.
 const legacyDeals = (deals: DealRecord[]) =>
   deals.map((deal) =>
@@ -18,16 +42,80 @@ const legacyDeals = (deals: DealRecord[]) =>
       : deal
   );
 export function registerScans(api: Api) {
-  api.get("/api/scans", async (c) =>
-    c.json({
+  api.get("/api/scans", async (c) => {
+    const intent = c.req.query("intent");
+    if (intent !== undefined) {
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          intent
+        )
+      )
+        return c.json({ error: "INVALID_IDEMPOTENCY_KEY" }, 400);
+      const record = await findStartIntent(c.env, c.get("userId"), intent);
+      return c.json({ data: record ? [record] : [] });
+    }
+    if (
+      ["locationId", "source", "cursor", "limit"].some(
+        (key) => c.req.query(key) !== undefined
+      )
+    ) {
+      try {
+        const page = await readScanHistory(
+          c.env.DB,
+          c.get("userId"),
+          c.env.BOX_KEY,
+          c.req.query()
+        );
+        return c.json({
+          data: page.items,
+          meta: { nextCursor: page.nextCursor, activeScan: page.activeScan },
+        });
+      } catch (error) {
+        if (error instanceof HistoryInputError)
+          return c.json({ error: error.message }, 400);
+        return c.json({ error: "RESULT_READ_ERROR" }, 503);
+      }
+    }
+    return c.json({
       data: await new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY).scans(),
-    })
-  );
+    });
+  });
   api.get("/api/scans/:id", async (c) => {
-    const v = await new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY).scan(
+    const v = c.env.SCAN_WORKFLOW
+      ? await reconcileDurableScan(
+          { ...c.env, SCAN_WORKFLOW: c.env.SCAN_WORKFLOW },
+          c.get("userId"),
+          c.req.param("id")
+        )
+      : await new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY).scan(
+          c.req.param("id")
+        );
+    return v ? c.json({ data: v }) : c.json({ error: "NOT_FOUND" }, 404);
+  });
+  api.post("/api/scans/:id/cancel", async (c) => {
+    const scan = await new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY).scan(
       c.req.param("id")
     );
-    return v ? c.json({ data: v }) : c.json({ error: "NOT_FOUND" }, 404);
+    if (!scan) return c.json({ error: "NOT_FOUND" }, 404);
+    if (!c.env.SCAN_WORKFLOW)
+      return c.json({ error: "CANCELLATION_UNAVAILABLE" }, 409);
+    try {
+      const record = await cancelDurableScan(
+        { ...c.env, SCAN_WORKFLOW: c.env.SCAN_WORKFLOW },
+        c.get("userId"),
+        scan.id
+      );
+      return record
+        ? c.json({ data: record })
+        : c.json({ error: "NOT_FOUND" }, 404);
+    } catch (error) {
+      if (error instanceof DurableError)
+        return c.json(
+          { error: error.code, message: error.message },
+          error.status
+        );
+      return c.json({ error: "PERSISTENCE_ERROR" }, 500);
+    }
   });
   api.get("/api/scans/:id/deals", async (c) => {
     const store = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
@@ -50,7 +138,7 @@ export function registerScans(api: Api) {
       },
     });
   });
-  // S03 projection only. Server pagination/materialization belongs to S08.
+  // Retain the original v2 array contract for clients without page=1.
   api.get("/api/scans/:id/products", async (c) => {
     const store = new Store(c.env.DB, c.get("userId"), c.env.BOX_KEY);
     const scan = await store.scan(c.req.param("id"));
@@ -76,40 +164,68 @@ export function registerScans(api: Api) {
       await c.req.json().catch(() => null)
     );
     if (!parsed.success) return c.json({ error: "INVALID_INPUT" }, 400);
+    const key = c.req.header("Idempotency-Key");
+    if (
+      key !== undefined &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        key
+      )
+    )
+      return c.json({ error: "INVALID_IDEMPOTENCY_KEY" }, 400);
+    if (c.env.SCAN_WORKFLOW_ENABLED === "true") {
+      if (!c.env.SCAN_WORKFLOW)
+        return c.json({ error: "DURABLE_EXECUTION_UNAVAILABLE" }, 503);
+      try {
+        const record = await beginDurableScan(
+          { ...c.env, SCAN_WORKFLOW: c.env.SCAN_WORKFLOW },
+          c.get("userId"),
+          parsed.data,
+          key
+        );
+        return c.json({ data: record }, 202);
+      } catch (error) {
+        if (error instanceof DurableError) {
+          if (error.status === 429) c.header("Retry-After", "10");
+          return c.json(
+            await startErrorBody(c.env, c.get("userId"), error),
+            error.status
+          );
+        }
+        console.error("Durable start reservation failed");
+        return c.json({ error: "PERSISTENCE_ERROR" }, 500);
+      }
+    }
     const services = scanServices(
       c.env.DB,
       c.get("userId"),
       c.env.BOX_KEY,
       c.env.SNAPP_STORE_CAMPAIGNS_ENABLED === "true"
     );
-    const prepared = await Effect.runPromiseExit(
-      prepareScan(parsed.data).pipe(Effect.provide(services))
-    );
-    if (Exit.isFailure(prepared)) {
-      const failure = Cause.findErrorOption(prepared.cause);
-      if (Option.isSome(failure) && !Cause.hasDies(prepared.cause)) {
-        const error = failure.value;
+    let reserved: Awaited<ReturnType<typeof beginLegacyScan>>;
+    try {
+      reserved = await beginLegacyScan(
+        c.env,
+        c.get("userId"),
+        parsed.data,
+        key
+      );
+    } catch (error) {
+      if (error instanceof DurableError)
         return c.json(
-          { error: error.code, message: error.message },
-          error instanceof ScanValidationError ? error.status : 502
+          await startErrorBody(c.env, c.get("userId"), error),
+          error.status
         );
-      }
       console.error("Scan preparation defect");
       return c.json(
         {
-          error: "UNKNOWN_ERROR",
+          error: "PERSISTENCE_ERROR",
           message: "شروع اسکن ممکن نشد؛ دوباره تلاش کنید.",
         },
         500
       );
     }
-    const job = prepared.value;
-    const record = await new Store(
-      c.env.DB,
-      c.get("userId"),
-      c.env.BOX_KEY
-    ).scan(job.id);
-    if (!record) return c.json({ error: "NOT_FOUND" }, 404);
+    const { job, scan: record } = reserved;
+    if (!job) return c.json({ data: record }, 202);
     // waitUntil owns this one Promise. A fiber does not extend the Worker's lifetime.
     const running = Effect.runPromiseExit(
       executeScan(job).pipe(Effect.provide(services))

@@ -75,7 +75,7 @@ export class DurableRepository {
       throw new DurableError(
         "PROVIDER_UNAVAILABLE",
         "Provider is unavailable",
-        422
+        409
       );
     const location = await store.location(input.locationId);
     if (!location)
@@ -156,7 +156,10 @@ export class DurableRepository {
     } catch (error) {
       const raced = await existing();
       if (raced) return raced;
-      if (await store.activeScan())
+      const uniqueActiveConflict =
+        error instanceof Error &&
+        /UNIQUE constraint failed:\s*scans\.user_id/.test(error.message);
+      if (uniqueActiveConflict || (await store.activeScan()))
         throw new DurableError(
           "SCAN_IN_PROGRESS",
           "An update is already active",

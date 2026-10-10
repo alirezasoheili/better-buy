@@ -5,6 +5,8 @@ import { issueTestSession } from "./test-login";
 import { registerLocations } from "./http/locations";
 import { registerSettings } from "./http/settings";
 import { registerScans } from "./http/scans";
+import { consumeRateLimit } from "./http/rateLimit";
+import { registerPagedProducts } from "./http/products";
 import type { WorkerEnv, Variables } from "./http/types";
 export const api = new Hono<{ Bindings: WorkerEnv; Variables: Variables }>();
 api.post("/api/auth/test-login", async (c) => {
@@ -39,7 +41,10 @@ api.use("/api/*", async (c, next) => {
       c.header("Access-Control-Allow-Origin", origin);
       c.header("Vary", "Origin");
       c.header("Access-Control-Allow-Credentials", "true");
-      c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      c.header(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, Idempotency-Key"
+      );
       c.header(
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, PATCH, DELETE, OPTIONS"
@@ -65,6 +70,24 @@ api.use("/api/*", async (c, next) => {
       401
     );
   c.set("userId", session.user.id);
+  if (c.env.API_RATE_LIMITS_ENABLED === "true") {
+    const retryAfter = await consumeRateLimit(
+      c.env.DB,
+      session.user.id,
+      c.req.method,
+      c.req.path
+    );
+    if (retryAfter !== null) {
+      c.header("Retry-After", String(retryAfter));
+      return c.json(
+        {
+          error: "RATE_LIMITED",
+          message: "درخواست‌ها موقتاً محدود شده‌اند؛ کمی بعد دوباره تلاش کنید.",
+        },
+        429
+      );
+    }
+  }
   await new Store(c.env.DB, session.user.id, c.env.BOX_KEY).reconcileStale();
   await next();
 });
@@ -76,6 +99,7 @@ api.get("/api/me", (c) => c.json({ data: { id: c.get("userId") } }));
 
 registerLocations(api);
 registerSettings(api);
+registerPagedProducts(api);
 registerScans(api);
 api.notFound((c) =>
   c.json({ error: "NOT_FOUND", message: "مسیر پیدا نشد." }, 404)

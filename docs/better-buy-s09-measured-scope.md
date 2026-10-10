@@ -26,9 +26,9 @@ These are new **eligible offer identities** relative to the paired baseline, not
 
 ## Offer semantics and identity
 
-All seven additions had positive explicit stock, no asserted out-of-stock flag or conditional/Pro restriction, and agreeing `price`, discount amount and percentage. The collector retained its rials mapping and computed the final price by subtracting the discount once. The six 45% rows and one 40% boundary row were:
+All seven additions had positive explicit stock, no asserted out-of-stock flag or conditional/Pro restriction, and agreeing `price`, discount amount and percentage. Snapp amounts are toman; the legacy `*Rials` field names retain those numbers without dividing them by ten. Final price subtracts the discount once. The six 45% rows and one 40% boundary row were:
 
-| Product ID | Discount | Original rials | Discount rials | Final rials | Stock |
+| Product ID | Discount | Original toman | Discount toman | Final toman | Stock |
 | ---------- | -------: | -------------: | -------------: | ----------: | ----: |
 | 9631264    |      45% |        390,000 |        175,500 |     214,500 |    13 |
 | 5983470    |      45% |        690,000 |        310,500 |     379,500 |    35 |

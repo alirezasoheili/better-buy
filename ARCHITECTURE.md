@@ -2,6 +2,19 @@
 
 The current local Snapp guest implementation is the behavioral baseline. Active collection and scan workflows use exactly pinned `effect@4.0.1`; Hono, Better Auth, D1, Zod, and React retain their existing roles. The migration follows the [official v4 documentation](https://effect.website/docs/v4/) and the installed v4 types. No Effect companion or Node platform package is required.
 
+The approved expansion is integrated locally on `codex/complete-expansion`. The sections below describe the original bounded collector where applicable; the following expansion boundaries supersede its execution, start-recovery and result-read limitations. See [the completion report](docs/better-buy-expansion-completion.md) for checks, flags, migrations and remaining production gates.
+
+## Expansion boundaries
+
+- `http/scans.ts` reserves an account-owned UUID intent and normalized request once. `durable/service.ts` dispatches/reconciles its deterministic Workflow identity or claims the bounded legacy job once when `SCAN_WORKFLOW_ENABLED=false`. The browser reconciles an uncertain start by that exact intent, and explicitly resends the same key/body; it never uses a new key to evade uncertainty.
+- `workflows/scan.ts` and `durable/runner.ts` own frozen unit execution. `durable/provider.ts` owns physical attempt reservations and at most three transient attempts, with Effect making one HTTP attempt. Guest tokens are ephemeral; the private scan-owned device UUID is persisted so resumed access retains identity. Engine control interruptions propagate without falsely failing the D1 job.
+- `durable/repository.ts` owns bounded page/chunk receipts, atomic cancellation and publication guards. Offers stage in existing deals with provenance; public reads hide unpublished staging. Publication requires terminal evidence for every admitted unit, all chunks committed, no prior cancellation and a ready saved-product projection. Failed/incomplete runs preserve previous results.
+- `saved-products.ts` materializes v2 summaries and separate expanded offers before durable publication. `http/products.ts` performs tenant/context-bound keyset pagination and normalized server search/ranking before slicing. `page=1` opts into the bounded envelope; legacy array/raw/group routes and Jet history remain compatible. Large legacy projections backfill through resumable bounded safe reads.
+- The UI remains one automatic discount feed. Query owns reads, polling and AbortSignal cancellation; retained saved-page windows are bounded and a failed next page preserves loaded rows. Search, sorting, pagination and store disclosure never trigger provider collection. There are no application effects or custom polling timers.
+- `entry.ts` exports the runtime Workflow class and scheduled reconciliation separately from the Hono test seam. Reconciliation continues for existing jobs after dispatch rollback. The legacy stale timer excludes workflow executions. Account quotas and global workflow concurrency are enforced in D1; cleanup advances in bounded passes while retaining completed history.
+
+Default Snapp enrichment discovers nearby store codes, resolves numeric ownership and delivery from each home, and freezes supported ordinary campaign units. It retains two-collection and 40-physical-request limits, including authentication/retries. Rejected global campaigns and unverified category/store-category adapters remain gated. Durable production enablement remains off pending G05 account/runtime evidence; actual local Workflow/D1 fixtures are not production entitlement evidence.
+
 ## Responsibilities
 
 | Boundary       | Files                                                      | Responsibility                                                                                                                                                                             |

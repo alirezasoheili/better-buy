@@ -319,12 +319,38 @@ export class Store {
       errorMessage: r.error_message,
     };
   }
-  async scans() {
+  async scans(
+    options: {
+      locationId?: string;
+      source?: ScanRecord["source"];
+      before?: { createdAt: string; id: string };
+      limit?: number;
+    } = {}
+  ) {
+    const clauses = ["s.user_id=?"];
+    const parameters: (string | number)[] = [this.userId];
+    if (options.locationId) {
+      clauses.push("s.location_id=?");
+      parameters.push(options.locationId);
+    }
+    if (options.source) {
+      clauses.push("s.source=?");
+      parameters.push(options.source);
+    }
+    if (options.before) {
+      clauses.push("(s.created_at < ? OR (s.created_at=? AND s.id<?))");
+      parameters.push(
+        options.before.createdAt,
+        options.before.createdAt,
+        options.before.id
+      );
+    }
+    parameters.push(Math.min(101, Math.max(1, options.limit ?? 100)));
     const { results } = await this.db
       .prepare(
-        "SELECT s.*,l.name location_name,(SELECT json_object('kind','workflow','phase',e.phase,'completedUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id AND u.terminal=1),'totalUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id),'completedPages',(SELECT COUNT(*) FROM scan_pages p WHERE p.scan_id=s.id AND p.complete=1),'observedRows',s.product_count,'eligibleOffers',s.deal_count,'attemptCount',e.attempt_count,'heartbeatAt',e.heartbeat_at,'deadlineAt',e.deadline_at,'dispatchState',e.dispatch_state,'cancelRequested',json(CASE WHEN e.cancel_requested=1 THEN 'true' ELSE 'false' END)) FROM scan_execution e WHERE e.scan_id=s.id AND e.execution_kind='workflow') execution_json FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE s.user_id=? ORDER BY s.created_at DESC LIMIT 100"
+        `SELECT s.*,l.name location_name,(SELECT json_object('kind','workflow','phase',e.phase,'completedUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id AND u.terminal=1),'totalUnits',(SELECT COUNT(*) FROM scan_units u WHERE u.scan_id=s.id),'completedPages',(SELECT COUNT(*) FROM scan_pages p WHERE p.scan_id=s.id AND p.complete=1),'observedRows',s.product_count,'eligibleOffers',s.deal_count,'attemptCount',e.attempt_count,'heartbeatAt',e.heartbeat_at,'deadlineAt',e.deadline_at,'dispatchState',e.dispatch_state,'cancelRequested',json(CASE WHEN e.cancel_requested=1 THEN 'true' ELSE 'false' END)) FROM scan_execution e WHERE e.scan_id=s.id AND e.execution_kind='workflow') execution_json FROM scans s JOIN locations l ON l.id=s.location_id AND l.user_id=s.user_id WHERE ${clauses.join(" AND ")} ORDER BY s.created_at DESC,s.id DESC LIMIT ?`
       )
-      .bind(this.userId)
+      .bind(...parameters)
       .all<ScanRow>();
     return results.map(this.mapScan);
   }

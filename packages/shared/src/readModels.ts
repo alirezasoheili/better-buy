@@ -85,7 +85,7 @@ export const scanRecordSchema = z.object({
   errorCode: z.string().nullable(),
   errorMessage: z.string().nullable(),
 });
-const vendorOfferSchema = z.object({
+export const vendorOfferSchema = z.object({
   benefit: z
     .object({
       kind: z.enum(["standard_discount", "market_party", "conditional"]),
@@ -149,15 +149,15 @@ export const productSummarySchema = productGroupSchema
   .omit({ vendors: true, conditionalOffers: true })
   .extend({ conditionalOfferCount: count });
 export const productPageSchema = z.object({
-  items: z.array(productSummarySchema),
-  nextCursor: z.string().nullable(),
+  items: z.array(productSummarySchema).max(100),
+  nextCursor: z.string().min(1).max(8192).nullable(),
   observedAt: date,
   coverageSummary: z.string(),
   baseline: z.object({ scanId: z.string().nullable(), reason: z.string() }),
 });
 export const offerPageSchema = z.object({
-  items: z.array(vendorOfferSchema),
-  nextCursor: z.string().nullable(),
+  items: z.array(vendorOfferSchema).max(50),
+  nextCursor: z.string().min(1).max(8192).nullable(),
 });
 export type ProductSummary = z.infer<typeof productSummarySchema>;
 export type ProductPage = z.infer<typeof productPageSchema>;
