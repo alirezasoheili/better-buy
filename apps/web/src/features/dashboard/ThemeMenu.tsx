@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "radix-ui";
 import { useTheme } from "next-themes";
 
@@ -12,8 +13,10 @@ export function ThemeMenu() {
   const { theme, setTheme } = useTheme();
   return (
     <DropdownMenu.Root dir="rtl">
-      <DropdownMenu.Trigger aria-label="ظاهر" className="theme-button">
-        ظاهر
+      <DropdownMenu.Trigger asChild>
+        <Button variant="ghost" aria-label="ظاهر" className="theme-button">
+          ظاهر
+        </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content

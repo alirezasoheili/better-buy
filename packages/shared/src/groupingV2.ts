@@ -125,6 +125,7 @@ export async function groupDealsV2(
         if (order > 0) observations.set(offerId, row);
       }
       const offers = [...observations].map(([id, row]): VendorOfferRecord => ({
+        logoUrl: row.vendorLogoUrl ?? null,
         offerKey: row.key,
         productVariationId: row.productVariationId,
         vendorId: row.vendorId,

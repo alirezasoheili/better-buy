@@ -1,9 +1,20 @@
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ProductSummary, ScanRecord } from "@better-buy/shared";
 import type { DealSource } from "../dashboard/types";
 import { faDate, faNumber, sourceLabel } from "../dashboard/format";
 import { ProductRow } from "./ProductRow";
 import type { useDealFilters } from "./useDealFilters";
 import type { useScanLedger } from "../scans/useScanLedger";
+import type { useProviderCart } from "../carts/useProviderCart";
 export function DealShelf({
   filters,
   scan,
@@ -18,6 +29,8 @@ export function DealShelf({
   onLoadMore,
   hasPreviousPages,
   onFirstPage,
+  latestAvailableScan,
+  cart,
 }: {
   filters: ReturnType<typeof useDealFilters>;
   scan: ScanRecord | null;
@@ -32,9 +45,18 @@ export function DealShelf({
   onLoadMore: () => void;
   hasPreviousPages: boolean;
   onFirstPage: () => void;
+  latestAvailableScan: ScanRecord | null;
+  cart: ReturnType<typeof useProviderCart>;
 }) {
   const { query, setQuery, sort, setSort, reset } = filters;
   const visible = dealGroups;
+  const canAddFromScan =
+    source !== "digikalajet" &&
+    !historical &&
+    !!scan &&
+    scan.status === "succeeded" &&
+    scan.id === latestAvailableScan?.id &&
+    hasResults;
   return (
     <section className="deal-section" aria-labelledby="offers-title">
       <header className="section-heading">
@@ -88,12 +110,13 @@ export function DealShelf({
                 : "به‌روزرسانی انجام شد و نتیجه ذخیره شده است؛ برای دیدن پیشنهادها، نتیجه همین اسکن را دوباره دریافت کنید."}
             </p>
           </div>
-          <button
+          <Button
+            variant="outline"
             disabled={results.isFetching}
             onClick={() => void results.refetch()}
           >
             {results.isFetching ? "در حال دریافت…" : "دریافت دوباره نتیجه"}
-          </button>
+          </Button>
         </div>
       )}
       {scan && (
@@ -104,24 +127,33 @@ export function DealShelf({
       )}
       {scan && (
         <div className="results-toolbar">
-          <label className="search">
+          <Label className="search">
             جست‌وجو
-            <input
+            <Input
               type="search"
               aria-label="جست‌وجوی کالا یا فروشگاه"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="نام کالا یا فروشگاه"
             />
-          </label>
-          <label className="sort-control">
+          </Label>
+          <Label className="sort-control">
             مرتب‌سازی
-            <select value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="price">کمترین قیمت</option>
-              <option value="discount">بیشترین تخفیف</option>
-            </select>
-          </label>
-          {query && <button onClick={reset}>پاک‌کردن جست‌وجو</button>}
+            <Select value={sort} onValueChange={setSort}>
+              <SelectTrigger aria-label="مرتب‌سازی">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="price">کمترین قیمت</SelectItem>
+                <SelectItem value="discount">بیشترین تخفیف</SelectItem>
+              </SelectContent>
+            </Select>
+          </Label>
+          {query && (
+            <Button variant="outline" onClick={reset}>
+              پاک‌کردن جست‌وجو
+            </Button>
+          )}
         </div>
       )}
       {busy || (!!scan && !hasResults && results.isPending) ? (
@@ -160,6 +192,17 @@ export function DealShelf({
                   group={group}
                   source={scan.source}
                   scanId={scan.id}
+                  canAddToCart={
+                    canAddFromScan &&
+                    group.state !== "no_longer_present" &&
+                    !!group.bestCurrentOffer
+                  }
+                  inCart={cart.byKey.has(group.key)}
+                  addPending={
+                    cart.writePending && cart.writingKey === group.key
+                  }
+                  cartWritePending={cart.writePending}
+                  onAddToCart={cart.add}
                 />
               ))}
             </div>
@@ -167,28 +210,37 @@ export function DealShelf({
             <div className="empty">
               <h2>چیزی با این جست‌وجو پیدا نشد</h2>
               <p>عبارت جست‌وجو را پاک کنید یا تغییر دهید.</p>
-              <button onClick={reset}>پاک‌کردن جست‌وجو</button>
+              <Button variant="outline" onClick={reset}>
+                پاک‌کردن جست‌وجو
+              </Button>
             </div>
           )}
           {nextCursor && (
-            <button disabled={results.isFetching} onClick={onLoadMore}>
+            <Button
+              variant="outline"
+              disabled={results.isFetching}
+              onClick={onLoadMore}
+            >
               نمایش محصولات بیشتر
-            </button>
+            </Button>
           )}
           {hasPreviousPages && (
-            <button onClick={onFirstPage}>بازگشت به صفحه نخست</button>
+            <Button variant="outline" onClick={onFirstPage}>
+              بازگشت به صفحه نخست
+            </Button>
           )}
           <p className="observation-note">
             قیمت و موجودی، مشاهده زمان اسکن است. پیش از خرید در فروشگاه بررسی
             کنید.
           </p>
-          <button
+          <Button
+            variant="outline"
             className="refresh-result"
             disabled={results.isFetching}
             onClick={() => void results.refetch()}
           >
             تازه‌سازی نتیجه
-          </button>
+          </Button>
         </>
       )}
     </section>

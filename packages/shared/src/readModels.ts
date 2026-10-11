@@ -30,6 +30,10 @@ export const scanContextSchema = z.object({
           vendorId: count.positive(),
           vendorCode: z.string().min(1),
           collectionId: count.positive(),
+          source: z.literal("discounted_category").optional(),
+          expectedPageSize: count.positive().max(100).optional(),
+          maxPages: count.positive().max(40).optional(),
+          bounded: z.boolean().optional(),
         })
       )
       .optional(),
@@ -86,6 +90,24 @@ export const scanRecordSchema = z.object({
   errorMessage: z.string().nullable(),
 });
 export const vendorOfferSchema = z.object({
+  logoUrl: z
+    .string()
+    .url()
+    .refine((value) => {
+      const protocol = new URL(value).protocol;
+      return protocol === "http:" || protocol === "https:";
+    })
+    .nullable()
+    .optional(),
+  vendorLogoUrl: z
+    .string()
+    .url()
+    .refine((value) => {
+      const protocol = new URL(value).protocol;
+      return protocol === "http:" || protocol === "https:";
+    })
+    .nullable()
+    .optional(),
   benefit: z
     .object({
       kind: z.enum(["standard_discount", "market_party", "conditional"]),
@@ -119,7 +141,12 @@ export const dealRecordSchema = vendorOfferSchema
     categoryTitle: z.string().nullable(),
   });
 export const offerFactsSchema = vendorOfferSchema
-  .pick({ benefit: true, observedAt: true, provenance: true })
+  .pick({
+    benefit: true,
+    observedAt: true,
+    provenance: true,
+    vendorLogoUrl: true,
+  })
   .extend({ observationPriority: z.number().int().optional() });
 export const dealGroupSchema = z.object({
   key: z.string(),

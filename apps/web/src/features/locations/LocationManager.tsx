@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 import { useCallback, useState } from "react";
 import { Dialog } from "radix-ui";
 import type { LocationRecord } from "@better-buy/shared";
@@ -64,8 +65,15 @@ export function LocationManager({
             <Dialog.Title key={view.kind} tabIndex={-1} ref={focusListTitle}>
               {title}
             </Dialog.Title>
-            <Dialog.Close className="icon-button" aria-label="بستن پنجره مکان">
-              ×
+            <Dialog.Close asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="icon-button"
+                aria-label="بستن پنجره مکان"
+              >
+                ×
+              </Button>
             </Dialog.Close>
           </header>
           {view.kind === "list" ? (
@@ -86,27 +94,33 @@ export function LocationManager({
                         {location.isDefault && " · پیش‌فرض"}
                       </small>
                     </div>
-                    <button
+                    <Button
+                      variant="outline"
                       onClick={() => setView({ kind: "edit", location })}
                       aria-label={`ویرایش ${location.name}`}
                     >
                       ویرایش
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
-              <button
-                className="primary"
+              <Button
+                variant="default"
                 onClick={() => setView({ kind: "create" })}
               >
                 افزودن موقعیت تحویل
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <button type="button" className="back-button" onClick={showList}>
+              <Button
+                variant="outline"
+                type="button"
+                className="back-button"
+                onClick={showList}
+              >
                 بازگشت به موقعیت‌ها
-              </button>
+              </Button>
               <LocationEditor
                 key={view.kind === "edit" ? view.location.id : "create"}
                 location={view.kind === "edit" ? view.location : null}

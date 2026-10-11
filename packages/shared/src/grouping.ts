@@ -8,6 +8,7 @@ import type { DealRecord, DealState } from "./contracts";
  */
 export const DEAL_GROUP_KEY_VERSION = 1 as const;
 export interface VendorOfferRecord {
+  logoUrl?: string | null;
   benefit?: DealRecord["benefit"];
   observedAt?: string;
   provenance?: string[];

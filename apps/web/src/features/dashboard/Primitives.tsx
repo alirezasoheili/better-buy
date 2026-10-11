@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { ReactNode } from "react";
 import { Dialog } from "radix-ui";
 export function Panel({
@@ -17,8 +19,15 @@ export function Panel({
         <Dialog.Content className="panel" aria-describedby={undefined}>
           <header className="panel-heading">
             <Dialog.Title>{title}</Dialog.Title>
-            <Dialog.Close className="icon-button" aria-label="بستن پنجره">
-              ×
+            <Dialog.Close asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="icon-button"
+                aria-label="بستن پنجره"
+              >
+                ×
+              </Button>
             </Dialog.Close>
           </header>
           {children}
@@ -39,16 +48,23 @@ export function ReadNotice({
   busy?: boolean;
 }) {
   return (
-    <section className="read-notice" role="status">
-      <div>
-        <strong>{title}</strong>
-        {children && <p>{children}</p>}
-      </div>
-      {retry && (
-        <button type="button" onClick={retry} disabled={busy}>
-          {busy ? "در حال دریافت…" : "دریافت دوباره"}
-        </button>
-      )}
-    </section>
+    <Card asChild>
+      <section className="read-notice" role="status">
+        <div>
+          <strong>{title}</strong>
+          {children && <p>{children}</p>}
+        </div>
+        {retry && (
+          <Button
+            variant="outline"
+            type="button"
+            onClick={retry}
+            disabled={busy}
+          >
+            {busy ? "در حال دریافت…" : "دریافت دوباره"}
+          </Button>
+        )}
+      </section>
+    </Card>
   );
 }

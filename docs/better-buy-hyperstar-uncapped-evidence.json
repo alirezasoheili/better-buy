@@ -1,0 +1,4215 @@
+{
+  "description": "Separate Hyperstar caps removed; shared scan limits remain. Live counts are partial dated observations, never test expectations.",
+  "baselineRef": "c812cd4",
+  "records": [
+    {
+      "label": "selected-local-default",
+      "startedAt": "2026-10-11T09:29:59.670Z",
+      "finishedAt": "2026-10-11T09:30:06.407Z",
+      "threshold": 40,
+      "availability": "verified-response",
+      "baselineError": null,
+      "originalError": null,
+      "error": null,
+      "comparison": {
+        "eligible": 80,
+        "baselineEligible": 70,
+        "actualAdditions": 10,
+        "overlap": 70,
+        "prechangeEligible": 76,
+        "prechangeOverlap": 76,
+        "additionsBeyondExpansion": 4,
+        "missingFromExpansion": 0,
+        "diagnostics": {
+          "baselineEligible": 70,
+          "enrichedEligible": 80,
+          "reports": [
+            {
+              "vendorId": 114458,
+              "vendorCode": "pz91qe",
+              "collectionId": 2192,
+              "reportedCount": 670,
+              "rawCount": 670,
+              "uniqueCount": 662,
+              "duplicateCount": 8,
+              "pageSizes": [100, 100, 100, 100, 100, 100, 70, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 6,
+              "overlap": 0,
+              "additional": 6,
+              "excluded": {
+                "BELOW_THRESHOLD": 656
+              }
+            },
+            {
+              "vendorId": 114458,
+              "vendorCode": "pz91qe",
+              "collectionId": 20171,
+              "reportedCount": 6,
+              "rawCount": 6,
+              "uniqueCount": 6,
+              "duplicateCount": 0,
+              "pageSizes": [6, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 6
+              }
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 1618,
+              "reportedCount": 120,
+              "rawCount": 120,
+              "uniqueCount": 119,
+              "duplicateCount": 1,
+              "pageSizes": [100, 20, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 119
+              }
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 1855,
+              "reportedCount": 237,
+              "rawCount": 237,
+              "uniqueCount": 224,
+              "duplicateCount": 13,
+              "pageSizes": [100, 100, 37, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 224
+              }
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 20086,
+              "reportedCount": 105,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 100
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 20531,
+              "reportedCount": 867,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 4,
+              "overlap": 0,
+              "additional": 4,
+              "excluded": {
+                "BELOW_THRESHOLD": 96
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 21032,
+              "reportedCount": 7,
+              "rawCount": 7,
+              "uniqueCount": 7,
+              "duplicateCount": 0,
+              "pageSizes": [7],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 7
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 21075,
+              "reportedCount": 29,
+              "rawCount": 29,
+              "uniqueCount": 29,
+              "duplicateCount": 0,
+              "pageSizes": [29],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 29
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 21115,
+              "reportedCount": 33,
+              "rawCount": 33,
+              "uniqueCount": 33,
+              "duplicateCount": 0,
+              "pageSizes": [33],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 33
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 21181,
+              "reportedCount": 20,
+              "rawCount": 20,
+              "uniqueCount": 20,
+              "duplicateCount": 0,
+              "pageSizes": [20],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 20
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117174,
+              "vendorCode": "09egqy",
+              "collectionId": 21188,
+              "reportedCount": 317,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 100
+              },
+              "partialReason": "REQUEST_BUDGET"
+            }
+          ],
+          "omitted": [
+            {
+              "vendorCode": "",
+              "reason": "NEARBY_DISCOVERY_PAGE_LIMIT: first 20 returned stores only"
+            },
+            {
+              "vendorCode": "3deww7",
+              "reason": "NEARBY_CANDIDATE_LIMIT"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "favorites",
+              "collectionId": 104941,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "banner-list",
+              "collectionId": 9334,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "product-list",
+              "collectionId": 20552,
+              "reason": "UNSUPPORTED_COLLECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egqy",
+              "sectionType": "banner",
+              "collectionId": 29720,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "favorites",
+              "collectionId": 3504,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "collectionId": 20853,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "collectionId": 21186,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "collectionId": 21187,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "37xw1x",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "favorites",
+              "collectionId": 5255,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 2216,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 20853,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 21184,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 21186,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0my6xz",
+              "collectionId": 21187,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wwljv",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32zrw5",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "favorites",
+              "collectionId": 105770,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 20173,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 20273,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 21186,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3deezn",
+              "collectionId": 21187,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6rege",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "3ee8wm",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0wqq4z",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0ygv4n",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0m1eor",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "p6zg8w",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "31x2q4",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0q1lox",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "32q8kd",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "p55kxv",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 21189,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 21190,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731205,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731206,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731207,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731208,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731209,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731210,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731211,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731212,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731213,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731214,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731215,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731216,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731217,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731218,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731219,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 731221,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "09egqy",
+              "collectionId": 99999999,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            }
+          ],
+          "conflictingOfferCount": 0,
+          "conflictingOfferIdentities": [],
+          "discoveredCandidates": [
+            {
+              "vendorCode": "09egqy",
+              "sources": ["single_super_mall"],
+              "hintTitle": "هایپراستار ارم ۲ (همواره تخفیف)"
+            },
+            {
+              "vendorCode": "pz91qe",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "37xw1x",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0my6xz",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0wqqvv",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "pzd6z1",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0wwljv",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3kjwqk",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "32zrw5",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3deezn",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "p6rege",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3ee8wm",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0wqq4z",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0ygv4n",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0m1eor",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "p6zg8w",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "31x2q4",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0q1lox",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "32q8kd",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "p55kxv",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3deww7",
+              "sources": ["finalResult"]
+            }
+          ],
+          "requests": 38,
+          "elapsedMs": 4075,
+          "requestBudget": 40,
+          "omittedReasonCounts": {
+            "NEARBY_DISCOVERY_PAGE_LIMIT": 1,
+            "NEARBY_CANDIDATE_LIMIT": 1,
+            "UNSUPPORTED_SECTION_TYPE": 88,
+            "UNSUPPORTED_COLLECTION_TYPE": 1,
+            "SUPPLEMENTARY_COLLECTION_LIMIT": 65,
+            "DISCOVERY_REQUEST_BUDGET": 10,
+            "PLANNING_REQUEST_BUDGET": 19
+          }
+        }
+      },
+      "discovery": [
+        {
+          "kind": "nearby",
+          "hint": {
+            "code": "09egqy",
+            "title": "هایپراستار ارم ۲ (همواره تخفیف)"
+          },
+          "ordinaryCodes": [
+            "pz91qe",
+            "37xw1x",
+            "0my6xz",
+            "0wqqvv",
+            "pzd6z1",
+            "0wwljv",
+            "3kjwqk",
+            "32zrw5",
+            "3deezn",
+            "p6rege",
+            "3ee8wm",
+            "0wqq4z",
+            "0ygv4n",
+            "0m1eor",
+            "p6zg8w",
+            "31x2q4",
+            "0q1lox",
+            "32q8kd",
+            "p55kxv",
+            "3deww7"
+          ]
+        },
+        {
+          "kind": "home",
+          "requestedCode": "pz91qe",
+          "id": 114458,
+          "code": "pz91qe",
+          "title": "اسمارت ارم (سوپرمارکت زنجیره ای اسنپ)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114458,
+            "detailVendorId": 114458,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "37xw1x",
+          "id": 30890,
+          "code": "37xw1x",
+          "title": "سوپرمارکت آراز - یاران دریان (فردوس غرب)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 30890,
+            "detailVendorId": 30890,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0my6xz",
+          "id": 109755,
+          "code": "0my6xz",
+          "title": "جانبو سازمان برنامه (همواره تخفیف)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 109755,
+            "detailVendorId": 109755,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0wqqvv",
+          "id": 115600,
+          "code": "0wqqvv",
+          "title": "سوپرمارکت هایپر مقدم(کاشانی)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 115600,
+            "detailVendorId": 115600,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "pzd6z1",
+          "id": 97134,
+          "code": "pzd6z1",
+          "title": "سوپرمارکت سبز - یاران دریان (بلوار فردوس)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 97134,
+            "detailVendorId": 97134,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0wwljv",
+          "id": 110248,
+          "code": "0wwljv",
+          "title": "سوپرمارکت توت فرنگی(بلوار فردوس)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 110248,
+            "detailVendorId": 110248,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3kjwqk",
+          "id": 114444,
+          "code": "3kjwqk",
+          "title": "سوپرمارکت سازمان برنامه شمالی - یاران دریان (سازمان برنامه شمالی)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114444,
+            "detailVendorId": 114444,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "32zrw5",
+          "id": 113295,
+          "code": "32zrw5",
+          "title": "سوپرمارکت شاهین (شهرزیبا)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 113295,
+            "detailVendorId": 113295,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3deezn",
+          "id": 115651,
+          "code": "3deezn",
+          "title": "سوپرمارکت مهرحامی (فردوس)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 115651,
+            "detailVendorId": 115651,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "p6rege",
+          "id": 109606,
+          "code": "p6rege",
+          "title": "سوپرمارکت مهر(سازمان برنامه شمالی)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 109606,
+            "detailVendorId": 109606,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "nearby",
+          "hint": {
+            "code": "09egqy",
+            "title": "هایپراستار ارم ۲ (همواره تخفیف)"
+          },
+          "ordinaryCodes": [
+            "pz91qe",
+            "37xw1x",
+            "0my6xz",
+            "0wqqvv",
+            "pzd6z1",
+            "0wwljv",
+            "3kjwqk",
+            "32zrw5",
+            "3deezn",
+            "p6rege",
+            "3ee8wm",
+            "0wqq4z",
+            "0ygv4n",
+            "0m1eor",
+            "p6zg8w",
+            "31x2q4",
+            "0q1lox",
+            "32q8kd",
+            "p55kxv",
+            "3deww7"
+          ]
+        },
+        {
+          "kind": "home",
+          "requestedCode": "09egqy",
+          "id": 117174,
+          "code": "09egqy",
+          "title": "هایپراستار ارم ۲ (همواره تخفیف)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 117174,
+            "detailVendorId": 117174,
+            "isExpress": false,
+            "scheduleOption": {
+              "id": 829,
+              "start": "15:00",
+              "end": "18:00",
+              "date": "2026-10-11",
+              "fee": 37000
+            },
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "pz91qe",
+          "id": 114458,
+          "code": "pz91qe",
+          "title": "اسمارت ارم (سوپرمارکت زنجیره ای اسنپ)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114458,
+            "detailVendorId": 114458,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "37xw1x",
+          "id": 30890,
+          "code": "37xw1x",
+          "title": "سوپرمارکت آراز - یاران دریان (فردوس غرب)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 30890,
+            "detailVendorId": 30890,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0my6xz",
+          "id": 109755,
+          "code": "0my6xz",
+          "title": "جانبو سازمان برنامه (همواره تخفیف)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 109755,
+            "detailVendorId": 109755,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0wqqvv",
+          "id": 115600,
+          "code": "0wqqvv",
+          "title": "سوپرمارکت هایپر مقدم(کاشانی)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 115600,
+            "detailVendorId": 115600,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "pzd6z1",
+          "id": 97134,
+          "code": "pzd6z1",
+          "title": "سوپرمارکت سبز - یاران دریان (بلوار فردوس)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 97134,
+            "detailVendorId": 97134,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0wwljv",
+          "id": 110248,
+          "code": "0wwljv",
+          "title": "سوپرمارکت توت فرنگی(بلوار فردوس)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 110248,
+            "detailVendorId": 110248,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3kjwqk",
+          "id": 114444,
+          "code": "3kjwqk",
+          "title": "سوپرمارکت سازمان برنامه شمالی - یاران دریان (سازمان برنامه شمالی)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114444,
+            "detailVendorId": 114444,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "32zrw5",
+          "id": 113295,
+          "code": "32zrw5",
+          "title": "سوپرمارکت شاهین (شهرزیبا)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 113295,
+            "detailVendorId": 113295,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3deezn",
+          "id": 115651,
+          "code": "3deezn",
+          "title": "سوپرمارکت مهرحامی (فردوس)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 115651,
+            "detailVendorId": 115651,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        }
+      ],
+      "requests": [
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 112,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 292,
+          "status": 200
+        },
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 25,
+          "status": 200
+        },
+        {
+          "path": "/express-vendor/general/vendors-list",
+          "page": "0",
+          "ms": 84,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/pz91qe",
+          "page": null,
+          "ms": 62,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "0",
+          "ms": 75,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20171/vendor/pz91qe",
+          "page": "0",
+          "ms": 47,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/37xw1x",
+          "page": null,
+          "ms": 69,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0my6xz",
+          "page": null,
+          "ms": 59,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0wqqvv",
+          "page": null,
+          "ms": 87,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/pzd6z1",
+          "page": null,
+          "ms": 70,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0wwljv",
+          "page": null,
+          "ms": 66,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3kjwqk",
+          "page": null,
+          "ms": 85,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/32zrw5",
+          "page": null,
+          "ms": 72,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3deezn",
+          "page": null,
+          "ms": 82,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/p6rege",
+          "page": null,
+          "ms": 75,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 279,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "1",
+          "ms": 73,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "2",
+          "ms": 88,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "3",
+          "ms": 81,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "4",
+          "ms": 72,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "5",
+          "ms": 139,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "6",
+          "ms": 68,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "7",
+          "ms": 85,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20171/vendor/pz91qe",
+          "page": "1",
+          "ms": 293,
+          "status": 200
+        },
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 31,
+          "status": 200
+        },
+        {
+          "path": "/express-vendor/general/vendors-list",
+          "page": "0",
+          "ms": 124,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/09egqy",
+          "page": null,
+          "ms": 76,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/pz91qe",
+          "page": null,
+          "ms": 73,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "0",
+          "ms": 103,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20171/vendor/pz91qe",
+          "page": "0",
+          "ms": 50,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/37xw1x",
+          "page": null,
+          "ms": 111,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0my6xz",
+          "page": null,
+          "ms": 97,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0wqqvv",
+          "page": null,
+          "ms": 79,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/pzd6z1",
+          "page": null,
+          "ms": 95,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0wwljv",
+          "page": null,
+          "ms": 98,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3kjwqk",
+          "page": null,
+          "ms": 78,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/32zrw5",
+          "page": null,
+          "ms": 107,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3deezn",
+          "page": null,
+          "ms": 82,
+          "status": 200
+        },
+        {
+          "path": "/mobile/search/categories",
+          "page": null,
+          "ms": 33,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1618/vendor/09egqy",
+          "page": "0",
+          "ms": 94,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/09egqy",
+          "page": "0",
+          "ms": 108,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20086/vendor/09egqy",
+          "page": "0",
+          "ms": 108,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20531/vendor/09egqy",
+          "page": "0",
+          "ms": 307,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21032/vendor/09egqy",
+          "page": "0",
+          "ms": 150,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21075/vendor/09egqy",
+          "page": "0",
+          "ms": 82,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21115/vendor/09egqy",
+          "page": "0",
+          "ms": 88,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21181/vendor/09egqy",
+          "page": "0",
+          "ms": 206,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21188/vendor/09egqy",
+          "page": "0",
+          "ms": 116,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 343,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "1",
+          "ms": 68,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "2",
+          "ms": 69,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "3",
+          "ms": 73,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "4",
+          "ms": 66,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "5",
+          "ms": 177,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "6",
+          "ms": 102,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/2192/vendor/pz91qe",
+          "page": "7",
+          "ms": 91,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20171/vendor/pz91qe",
+          "page": "1",
+          "ms": 55,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1618/vendor/09egqy",
+          "page": "1",
+          "ms": 62,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1618/vendor/09egqy",
+          "page": "2",
+          "ms": 98,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/09egqy",
+          "page": "1",
+          "ms": 146,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/09egqy",
+          "page": "2",
+          "ms": 80,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/09egqy",
+          "page": "3",
+          "ms": 48,
+          "status": 200
+        }
+      ],
+      "enrichmentRequests": 38,
+      "elapsedMs": 6736
+    },
+    {
+      "label": "second-location-research-control",
+      "startedAt": "2026-10-11T09:30:06.408Z",
+      "finishedAt": "2026-10-11T09:30:13.137Z",
+      "threshold": 40,
+      "availability": "verified-response",
+      "baselineError": null,
+      "originalError": null,
+      "error": null,
+      "comparison": {
+        "eligible": 33,
+        "baselineEligible": 24,
+        "actualAdditions": 9,
+        "overlap": 24,
+        "prechangeEligible": 24,
+        "prechangeOverlap": 24,
+        "additionsBeyondExpansion": 9,
+        "missingFromExpansion": 0,
+        "diagnostics": {
+          "baselineEligible": 24,
+          "enrichedEligible": 33,
+          "reports": [
+            {
+              "vendorId": 65226,
+              "vendorCode": "097o9d",
+              "collectionId": 20064,
+              "reportedCount": 43,
+              "rawCount": 43,
+              "uniqueCount": 43,
+              "duplicateCount": 0,
+              "pageSizes": [43, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 43
+              }
+            },
+            {
+              "vendorId": 65226,
+              "vendorCode": "097o9d",
+              "collectionId": 20174,
+              "reportedCount": 38,
+              "rawCount": 38,
+              "uniqueCount": 38,
+              "duplicateCount": 0,
+              "pageSizes": [38, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 38
+              }
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 1618,
+              "reportedCount": 121,
+              "rawCount": 121,
+              "uniqueCount": 121,
+              "duplicateCount": 0,
+              "pageSizes": [100, 21, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 121
+              }
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 1855,
+              "reportedCount": 209,
+              "rawCount": 209,
+              "uniqueCount": 207,
+              "duplicateCount": 2,
+              "pageSizes": [100, 100, 9, 0],
+              "terminal": true,
+              "coverage": "complete",
+              "qualifying": 1,
+              "overlap": 0,
+              "additional": 1,
+              "excluded": {
+                "BELOW_THRESHOLD": 206
+              }
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 20086,
+              "reportedCount": 78,
+              "rawCount": 78,
+              "uniqueCount": 78,
+              "duplicateCount": 0,
+              "pageSizes": [78],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 78
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 20531,
+              "reportedCount": 806,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 3,
+              "overlap": 0,
+              "additional": 3,
+              "excluded": {
+                "BELOW_THRESHOLD": 97
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 21032,
+              "reportedCount": 9,
+              "rawCount": 9,
+              "uniqueCount": 9,
+              "duplicateCount": 0,
+              "pageSizes": [9],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 9
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 21075,
+              "reportedCount": 32,
+              "rawCount": 32,
+              "uniqueCount": 32,
+              "duplicateCount": 0,
+              "pageSizes": [32],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 32
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 21115,
+              "reportedCount": 24,
+              "rawCount": 24,
+              "uniqueCount": 24,
+              "duplicateCount": 0,
+              "pageSizes": [24],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 24
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 21181,
+              "reportedCount": 19,
+              "rawCount": 19,
+              "uniqueCount": 19,
+              "duplicateCount": 0,
+              "pageSizes": [19],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 19
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 21188,
+              "reportedCount": 344,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 100
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 21189,
+              "reportedCount": 193,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 1,
+              "overlap": 0,
+              "additional": 1,
+              "excluded": {
+                "BELOW_THRESHOLD": 99
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 21190,
+              "reportedCount": 239,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 1,
+              "overlap": 0,
+              "additional": 1,
+              "excluded": {
+                "BELOW_THRESHOLD": 99
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 731205,
+              "reportedCount": 122,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 2,
+              "overlap": 0,
+              "additional": 1,
+              "excluded": {
+                "BELOW_THRESHOLD": 98
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 731206,
+              "reportedCount": 221,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 2,
+              "overlap": 0,
+              "additional": 2,
+              "excluded": {
+                "BELOW_THRESHOLD": 98
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 731207,
+              "reportedCount": 100,
+              "rawCount": 100,
+              "uniqueCount": 100,
+              "duplicateCount": 0,
+              "pageSizes": [100],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 100
+              },
+              "partialReason": "REQUEST_BUDGET"
+            },
+            {
+              "vendorId": 117173,
+              "vendorCode": "0gkdjr",
+              "collectionId": 731208,
+              "reportedCount": 45,
+              "rawCount": 45,
+              "uniqueCount": 45,
+              "duplicateCount": 0,
+              "pageSizes": [45],
+              "terminal": false,
+              "coverage": "incomplete",
+              "qualifying": 0,
+              "overlap": 0,
+              "additional": 0,
+              "excluded": {
+                "BELOW_THRESHOLD": 45
+              },
+              "partialReason": "REQUEST_BUDGET"
+            }
+          ],
+          "omitted": [
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "favorites",
+              "collectionId": 104941,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "banner-list",
+              "collectionId": 9334,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "product-list",
+              "collectionId": 20552,
+              "reason": "UNSUPPORTED_COLLECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "sectionType": "banner",
+              "collectionId": 29720,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "097o9d",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "097o9d",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "097o9d",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "097o9d",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "097o9d",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0njw2v",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "favorites",
+              "collectionId": 3504,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 2192,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 20171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 20853,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 21186,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "32xxwe",
+              "collectionId": 21187,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "favorites",
+              "collectionId": 105770,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 20173,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 20273,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 21186,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eze12",
+              "collectionId": 21187,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "09egly",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "09egly",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "09egly",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "09egly",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "09egly",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "09egly",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "09egly",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "favorites",
+              "collectionId": 105770,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 20173,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 20273,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 21186,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "p6z66n",
+              "collectionId": 21187,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "favorites",
+              "collectionId": 3502,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "bought_together",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "collectionId": 20064,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "collectionId": 21000,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "3eewdo",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "coupon",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "favorites",
+              "collectionId": 105770,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "basket_last_added",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "market-party",
+              "collectionId": 14,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "previous-purchase",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "bundle-list",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "banner-list",
+              "collectionId": 121,
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sectionType": "category",
+              "reason": "UNSUPPORTED_SECTION_TYPE"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 20173,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 20174,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 20273,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 20645,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 21115,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 21171,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 21172,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 21186,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "po9qzk",
+              "collectionId": 21187,
+              "reason": "SUPPLEMENTARY_COLLECTION_LIMIT"
+            },
+            {
+              "vendorCode": "0wqke8",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "3eezkj",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0wq22z",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0yjr2d",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "3de2vg",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "3dq827",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "3de7kd",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0mjm5v",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0ygv5n",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "p5zzyw",
+              "reason": "DISCOVERY_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731209,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731210,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731211,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731212,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731213,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731214,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731215,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731216,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731217,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731218,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 731219,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            },
+            {
+              "vendorCode": "0gkdjr",
+              "collectionId": 99999999,
+              "reason": "PLANNING_REQUEST_BUDGET"
+            }
+          ],
+          "conflictingOfferCount": 0,
+          "conflictingOfferIdentities": [],
+          "discoveredCandidates": [
+            {
+              "vendorCode": "0gkdjr",
+              "sources": ["single_super_mall", "finalResult"],
+              "hintTitle": "هایپراستار باکری ۲ (همواره تخفیف)"
+            },
+            {
+              "vendorCode": "097o9d",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0njw2v",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "32xxwe",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3eze12",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0gkzz2",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "09egly",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "p6z66n",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3eewdo",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "po9qzk",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0wqke8",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3eezkj",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0wq22z",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0yjr2d",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3de2vg",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3dq827",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "3de7kd",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0mjm5v",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "0ygv5n",
+              "sources": ["finalResult"]
+            },
+            {
+              "vendorCode": "p5zzyw",
+              "sources": ["finalResult"]
+            }
+          ],
+          "requests": 38,
+          "elapsedMs": 4876,
+          "requestBudget": 40,
+          "omittedReasonCounts": {
+            "UNSUPPORTED_SECTION_TYPE": 86,
+            "UNSUPPORTED_COLLECTION_TYPE": 1,
+            "SUPPLEMENTARY_COLLECTION_LIMIT": 68,
+            "DISCOVERY_REQUEST_BUDGET": 10,
+            "PLANNING_REQUEST_BUDGET": 12
+          }
+        }
+      },
+      "discovery": [
+        {
+          "kind": "nearby",
+          "hint": {
+            "code": "0gkdjr",
+            "title": "هایپراستار باکری ۲ (همواره تخفیف)"
+          },
+          "ordinaryCodes": [
+            "097o9d",
+            "0njw2v",
+            "32xxwe",
+            "3eze12",
+            "0gkzz2",
+            "09egly",
+            "p6z66n",
+            "3eewdo",
+            "0gkdjr",
+            "po9qzk",
+            "0wqke8",
+            "3eezkj",
+            "0wq22z",
+            "0yjr2d",
+            "3de2vg",
+            "3dq827",
+            "3de7kd",
+            "0mjm5v",
+            "0ygv5n",
+            "p5zzyw"
+          ]
+        },
+        {
+          "kind": "home",
+          "requestedCode": "097o9d",
+          "id": 65226,
+          "code": "097o9d",
+          "title": "سوپرمارکت صبا - یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 65226,
+            "detailVendorId": 65226,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0njw2v",
+          "id": 113839,
+          "code": "0njw2v",
+          "title": "سوپرمارکت دیدمارکت (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 113839,
+            "detailVendorId": 113839,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "32xxwe",
+          "id": 72395,
+          "code": "32xxwe",
+          "title": "اسمارت جردن (سوپرمارکت زنجیره ای اسنپ)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 72395,
+            "detailVendorId": 72395,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3eze12",
+          "id": 101717,
+          "code": "3eze12",
+          "title": "سوپرمارکت سایه (پارک ملت)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 101717,
+            "detailVendorId": 101717,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0gkzz2",
+          "id": 114801,
+          "code": "0gkzz2",
+          "title": "سوپرمارکت هایپر نفس - یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114801,
+            "detailVendorId": 114801,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "09egly",
+          "id": 117150,
+          "code": "09egly",
+          "title": "سوپرمارکت لوکس-یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 117150,
+            "detailVendorId": 117150,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "p6z66n",
+          "id": 116606,
+          "code": "p6z66n",
+          "title": "سوپرمارکت آندیا مارکت شعبه پناه (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 116606,
+            "detailVendorId": 116606,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3eewdo",
+          "id": 114441,
+          "code": "3eewdo",
+          "title": "سوپرمارکت ایثار - یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114441,
+            "detailVendorId": 114441,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0gkdjr",
+          "id": 117173,
+          "code": "0gkdjr",
+          "title": "هایپراستار باکری ۲ (همواره تخفیف)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 117173,
+            "detailVendorId": 117173,
+            "isExpress": false,
+            "scheduleOption": {
+              "id": 1307,
+              "start": "15:00",
+              "end": "18:00",
+              "date": "2026-10-11",
+              "fee": 37000
+            },
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "po9qzk",
+          "id": 13884,
+          "code": "po9qzk",
+          "title": "سوپرمارکت روژان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 13884,
+            "detailVendorId": 13884,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "nearby",
+          "hint": {
+            "code": "0gkdjr",
+            "title": "هایپراستار باکری ۲ (همواره تخفیف)"
+          },
+          "ordinaryCodes": [
+            "097o9d",
+            "0njw2v",
+            "32xxwe",
+            "3eze12",
+            "0gkzz2",
+            "09egly",
+            "p6z66n",
+            "3eewdo",
+            "0gkdjr",
+            "po9qzk",
+            "0wqke8",
+            "3eezkj",
+            "0wq22z",
+            "0yjr2d",
+            "3de2vg",
+            "3dq827",
+            "3de7kd",
+            "0mjm5v",
+            "0ygv5n",
+            "p5zzyw"
+          ]
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0gkdjr",
+          "id": 117173,
+          "code": "0gkdjr",
+          "title": "هایپراستار باکری ۲ (همواره تخفیف)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 117173,
+            "detailVendorId": 117173,
+            "isExpress": false,
+            "scheduleOption": {
+              "id": 1307,
+              "start": "15:00",
+              "end": "18:00",
+              "date": "2026-10-11",
+              "fee": 37000
+            },
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "097o9d",
+          "id": 65226,
+          "code": "097o9d",
+          "title": "سوپرمارکت صبا - یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 65226,
+            "detailVendorId": 65226,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0njw2v",
+          "id": 113839,
+          "code": "0njw2v",
+          "title": "سوپرمارکت دیدمارکت (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 113839,
+            "detailVendorId": 113839,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "32xxwe",
+          "id": 72395,
+          "code": "32xxwe",
+          "title": "اسمارت جردن (سوپرمارکت زنجیره ای اسنپ)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 72395,
+            "detailVendorId": 72395,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3eze12",
+          "id": 101717,
+          "code": "3eze12",
+          "title": "سوپرمارکت سایه (پارک ملت)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 101717,
+            "detailVendorId": 101717,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "0gkzz2",
+          "id": 114801,
+          "code": "0gkzz2",
+          "title": "سوپرمارکت هایپر نفس - یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114801,
+            "detailVendorId": 114801,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "09egly",
+          "id": 117150,
+          "code": "09egly",
+          "title": "سوپرمارکت لوکس-یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 117150,
+            "detailVendorId": 117150,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "p6z66n",
+          "id": 116606,
+          "code": "p6z66n",
+          "title": "سوپرمارکت آندیا مارکت شعبه پناه (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 116606,
+            "detailVendorId": 116606,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "3eewdo",
+          "id": 114441,
+          "code": "3eewdo",
+          "title": "سوپرمارکت ایثار - یاران دریان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 114441,
+            "detailVendorId": 114441,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        },
+        {
+          "kind": "home",
+          "requestedCode": "po9qzk",
+          "id": 13884,
+          "code": "po9qzk",
+          "title": "سوپرمارکت روژان (جردن)",
+          "isOutOfArea": false,
+          "delivery": {
+            "doesDeliver": true,
+            "id": 13884,
+            "detailVendorId": 13884,
+            "isExpress": true,
+            "scheduleOption": null,
+            "deliveryStatus": "OPEN"
+          }
+        }
+      ],
+      "requests": [
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 33,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 222,
+          "status": 200
+        },
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 61,
+          "status": 200
+        },
+        {
+          "path": "/express-vendor/general/vendors-list",
+          "page": "0",
+          "ms": 88,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/097o9d",
+          "page": null,
+          "ms": 72,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20064/vendor/097o9d",
+          "page": "0",
+          "ms": 81,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20174/vendor/097o9d",
+          "page": "0",
+          "ms": 100,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0njw2v",
+          "page": null,
+          "ms": 89,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/32xxwe",
+          "page": null,
+          "ms": 63,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3eze12",
+          "page": null,
+          "ms": 74,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0gkzz2",
+          "page": null,
+          "ms": 59,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/09egly",
+          "page": null,
+          "ms": 65,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/p6z66n",
+          "page": null,
+          "ms": 107,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3eewdo",
+          "page": null,
+          "ms": 80,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0gkdjr",
+          "page": null,
+          "ms": 101,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/po9qzk",
+          "page": null,
+          "ms": 116,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 234,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20064/vendor/097o9d",
+          "page": "1",
+          "ms": 122,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20174/vendor/097o9d",
+          "page": "1",
+          "ms": 57,
+          "status": 200
+        },
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 22,
+          "status": 200
+        },
+        {
+          "path": "/express-vendor/general/vendors-list",
+          "page": "0",
+          "ms": 127,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0gkdjr",
+          "page": null,
+          "ms": 62,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/097o9d",
+          "page": null,
+          "ms": 59,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20064/vendor/097o9d",
+          "page": "0",
+          "ms": 58,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20174/vendor/097o9d",
+          "page": "0",
+          "ms": 68,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0njw2v",
+          "page": null,
+          "ms": 72,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/32xxwe",
+          "page": null,
+          "ms": 74,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3eze12",
+          "page": null,
+          "ms": 71,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/0gkzz2",
+          "page": null,
+          "ms": 92,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/09egly",
+          "page": null,
+          "ms": 71,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/p6z66n",
+          "page": null,
+          "ms": 66,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/3eewdo",
+          "page": null,
+          "ms": 65,
+          "status": 200
+        },
+        {
+          "path": "/express-home/vendor/po9qzk",
+          "page": null,
+          "ms": 74,
+          "status": 200
+        },
+        {
+          "path": "/mobile/search/categories",
+          "page": null,
+          "ms": 28,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1618/vendor/0gkdjr",
+          "page": "0",
+          "ms": 129,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/0gkdjr",
+          "page": "0",
+          "ms": 979,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20086/vendor/0gkdjr",
+          "page": "0",
+          "ms": 113,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20531/vendor/0gkdjr",
+          "page": "0",
+          "ms": 215,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21032/vendor/0gkdjr",
+          "page": "0",
+          "ms": 62,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21075/vendor/0gkdjr",
+          "page": "0",
+          "ms": 85,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21115/vendor/0gkdjr",
+          "page": "0",
+          "ms": 92,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21181/vendor/0gkdjr",
+          "page": "0",
+          "ms": 287,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21188/vendor/0gkdjr",
+          "page": "0",
+          "ms": 353,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21189/vendor/0gkdjr",
+          "page": "0",
+          "ms": 127,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/21190/vendor/0gkdjr",
+          "page": "0",
+          "ms": 100,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/vendor",
+          "page": "0",
+          "ms": 211,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/vendor",
+          "page": "0",
+          "ms": 73,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/vendor",
+          "page": "0",
+          "ms": 61,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/vendor",
+          "page": "0",
+          "ms": 48,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 210,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20064/vendor/097o9d",
+          "page": "1",
+          "ms": 52,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/20174/vendor/097o9d",
+          "page": "1",
+          "ms": 68,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1618/vendor/0gkdjr",
+          "page": "1",
+          "ms": 110,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1618/vendor/0gkdjr",
+          "page": "2",
+          "ms": 67,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/0gkdjr",
+          "page": "1",
+          "ms": 91,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/0gkdjr",
+          "page": "2",
+          "ms": 67,
+          "status": 200
+        },
+        {
+          "path": "/express-search/product-list/1855/vendor/0gkdjr",
+          "page": "3",
+          "ms": 103,
+          "status": 200
+        }
+      ],
+      "enrichmentRequests": 38,
+      "elapsedMs": 6728
+    },
+    {
+      "label": "out-of-area-control",
+      "startedAt": "2026-10-11T09:30:13.141Z",
+      "finishedAt": "2026-10-11T09:30:13.569Z",
+      "threshold": 40,
+      "availability": "unknown",
+      "baselineError": "BASELINE_UNAVAILABLE",
+      "originalError": "PRECHANGE_ENRICHMENT_UNAVAILABLE",
+      "error": "ENRICHED_SCAN_UNAVAILABLE",
+      "comparison": null,
+      "discovery": [
+        {
+          "kind": "nearby",
+          "hint": null,
+          "ordinaryCodes": []
+        },
+        {
+          "kind": "nearby",
+          "hint": null,
+          "ordinaryCodes": []
+        }
+      ],
+      "requests": [
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 37,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 60,
+          "status": 204
+        },
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 49,
+          "status": 200
+        },
+        {
+          "path": "/express-vendor/general/vendors-list",
+          "page": "0",
+          "ms": 40,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 69,
+          "status": 204
+        },
+        {
+          "path": "/oauth2/default/token",
+          "page": null,
+          "ms": 35,
+          "status": 200
+        },
+        {
+          "path": "/express-vendor/general/vendors-list",
+          "page": "0",
+          "ms": 51,
+          "status": 200
+        },
+        {
+          "path": "/market-party/{coordinates}",
+          "page": "0",
+          "ms": 67,
+          "status": 204
+        }
+      ],
+      "enrichmentRequests": 3,
+      "elapsedMs": 429
+    }
+  ]
+}

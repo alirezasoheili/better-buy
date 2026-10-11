@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { z } from "zod";
-import type { DealRecord } from "@better-buy/shared";
+import type { DealRecord, ScanContext } from "@better-buy/shared";
 import { CollectorError } from "../../domain/failures";
 import { isEligibleDeal } from "../../domain/eligibility";
 
@@ -10,11 +10,9 @@ export type SnappRead = (
   { status: number; body: unknown; observedAt?: string },
   CollectorError
 >;
-export type CampaignScope = {
-  vendorId: number;
-  vendorCode: string;
-  collectionId: number;
-};
+export type CampaignScope = NonNullable<
+  ScanContext["manifest"]["storeCampaigns"]
+>[number];
 type Offer = Omit<DealRecord, "scanId" | "state">;
 // Discovery is location scoped; no store, title or collection allowlist.
 export const SNAPP_SCAN_REQUEST_BUDGET = 40;
@@ -28,23 +26,29 @@ const homeSchema = z.object({
     id: owner,
     code: z.string().regex(/^[a-zA-Z0-9]+$/),
     title: z.string().min(1),
+    isOutOfArea: z.boolean().optional(),
     deliveryData: z.object({
       doesDeliver: z.boolean(),
-      id: owner,
-      detail: z.object({ vendorId: owner }),
+      id: owner.optional(),
+      detail: z.object({ vendorId: owner.optional() }).nullish(),
+      isExpress: z.boolean().optional(),
+      scheduleOption: z.unknown().optional(),
+      deliveryStatus: z.string().optional(),
     }),
   }),
-  sections: z.array(
-    z
-      .object({
-        type: z.string(),
-        value: z.unknown().optional(),
-        title: z.string().nullable().optional(),
-        collection_type: z.string().nullable().optional(),
-        config: z.unknown().optional(),
-      })
-      .passthrough()
-  ),
+  sections: z
+    .array(
+      z
+        .object({
+          type: z.string(),
+          value: z.unknown().optional(),
+          title: z.string().nullable().optional(),
+          collection_type: z.string().nullable().optional(),
+          config: z.unknown().optional(),
+        })
+        .passthrough()
+    )
+    .default([]),
 });
 const pageSchema = z.object({
   status: z.literal(true).optional(),
@@ -85,6 +89,8 @@ export type Plan = CampaignScope & {
   firstObservedAt?: string;
 };
 export type CampaignReport = CampaignScope & {
+  coverage: "complete" | "incomplete";
+  partialReason?: "PAGE_LIMIT" | "REQUEST_BUDGET";
   reportedCount: number;
   rawCount: number;
   uniqueCount: number;
@@ -121,6 +127,21 @@ export function collectionUrl(
   page: number,
   location: { latitude: number; longitude: number }
 ) {
+  if (scope.source === "discounted_category") {
+    const url = new URL(
+      "https://svc.snapp.market/express-search/product-list/vendor"
+    );
+    Object.entries({
+      vendor_code: scope.vendorCode,
+      category_id: String(scope.collectionId),
+      lat: String(location.latitude),
+      long: String(location.longitude),
+      filters: '["has_discount"]',
+      page: String(page),
+      pageSize: "100",
+    }).forEach(([key, value]) => url.searchParams.set(key, value));
+    return url;
+  }
   const url = new URL(
     `https://svc.snapp.market/express-search/product-list/${scope.collectionId}/vendor/${scope.vendorCode}`
   );
@@ -148,11 +169,61 @@ const nearbySchema = z.object({
   data: z.object({
     count: z.number().int().nonnegative(),
     finalResult: z.array(z.object({ type: z.string(), data: z.unknown() })),
+    single_super_mall: z.unknown().optional(),
   }),
 });
 const nearbyStoreSchema = z.object({
   code: z.string().regex(/^[a-zA-Z0-9]+$/),
+  title: z.unknown().optional(),
 });
+const categorySchema = z.object({
+  status: z.literal(true),
+  items: z.array(z.object({ id: owner })),
+});
+const categoryPageSchema = z.object({
+  status: z.literal(true),
+  vendor_id: z.array(owner).optional(),
+  data: z.object({
+    count: z.number().int().nonnegative(),
+    finalResult: pageSchema.shape.data.shape.finalResult,
+  }),
+});
+// Categories have no collection id/type. Validate any returned owner as well
+// as every product's owner in the shared normalizer; never synthesize identity.
+export function parseScopePage(
+  body: unknown,
+  scope: CampaignScope,
+  terminalCount?: number
+): Page {
+  if (scope.source !== "discounted_category")
+    return parsePage(body, scope.collectionId);
+  // Live category pages return 204 after exhaustion. This is terminal only
+  // after a prior count exists; callers still require rawCount === that count.
+  if (
+    (body === null ||
+      z
+        .object({ status: z.literal(204) })
+        .strict()
+        .safeParse(body).success) &&
+    terminalCount !== undefined
+  )
+    return {
+      id: scope.collectionId,
+      type: "default",
+      count: terminalCount,
+      finalResult: [],
+    };
+  const parsed = categoryPageSchema.safeParse(body);
+  if (!parsed.success)
+    throw changed("discounted category data.count / finalResult");
+  if (parsed.data.vendor_id?.some((id) => id !== scope.vendorId))
+    throw changed("category vendor_id ownership");
+  if (
+    parsed.data.data.finalResult.some((row) => !(Number(row.data.discount) > 0))
+  )
+    throw changed("DISCOUNT_FILTER_NOT_HONORED");
+  return { id: scope.collectionId, type: "default", ...parsed.data.data };
+}
 const conditionalMetadata = (value: Record<string, unknown>) =>
   value.is_pro === true ||
   value.requires_pro === true ||
@@ -219,6 +290,27 @@ export function planStoreCampaigns(
       );
     }
     const codes = new Set<string>();
+    const discoveredCandidates = new Map<
+      string,
+      { vendorCode: string; sources: string[]; hintTitle?: string }
+    >();
+    // Prioritize the separate hint before applying the existing store/page cap.
+    // It often isn't present in finalResult and has no numeric identity yet.
+    const hint = nearbyStoreSchema.safeParse(
+      nearby.data.data.single_super_mall
+    );
+    if (hint.success) {
+      codes.add(hint.data.code);
+      discoveredCandidates.set(hint.data.code, {
+        vendorCode: hint.data.code,
+        sources: ["single_super_mall"],
+        ...(typeof hint.data.title === "string"
+          ? { hintTitle: hint.data.title }
+          : {}),
+      });
+    } else if (nearby.data.data.single_super_mall != null)
+      omitted.push({ vendorCode: "", reason: "INVALID_SUPER_MALL_HINT" });
+    let ordinaryCount = 0;
     for (const entry of nearby.data.data.finalResult) {
       if (entry.type !== "VENDOR") {
         omitted.push({
@@ -234,21 +326,212 @@ export function planStoreCampaigns(
         continue;
       }
       codes.add(store.data.code);
+      const candidate = discoveredCandidates.get(store.data.code) ?? {
+        vendorCode: store.data.code,
+        sources: [],
+      };
+      if (!candidate.sources.includes("finalResult"))
+        candidate.sources.push("finalResult");
+      discoveredCandidates.set(store.data.code, candidate);
+      ordinaryCount++;
     }
     if (
-      nearby.data.data.count > codes.size ||
+      nearby.data.data.count > ordinaryCount ||
       codes.size > MAX_DISCOVERED_STORES
     )
       omitted.push({
         vendorCode: "",
         reason: "NEARBY_DISCOVERY_PAGE_LIMIT: first 20 returned stores only",
       });
+    for (const vendorCode of [...codes].slice(MAX_DISCOVERED_STORES))
+      omitted.push({ vendorCode, reason: "NEARBY_CANDIDATE_LIMIT" });
     const planningStart = remainingRequests();
     const resolvedOwners = new Map<number, string>();
+    const stores: {
+      info: z.infer<typeof homeSchema>["vendorInfo"];
+      candidates: Set<number>;
+    }[] = [];
     let reservedPages = 0;
-    const canProbe = () =>
-      planningStart - remainingRequests() < MAX_PLANNING_REQUESTS &&
+    const canProbe = (hinted = false) =>
+      (hinted || planningStart - remainingRequests() < MAX_PLANNING_REQUESTS) &&
       remainingRequests() > reservedPages + BASELINE_AND_RETRY_RESERVE;
+    const isHint = (code: string) => hint.success && hint.data.code === code;
+    const planScopes = (
+      info: z.infer<typeof homeSchema>["vendorInfo"],
+      candidates: Set<number>
+    ) =>
+      Effect.gen(function* () {
+        const vendorCode = info.code;
+        const hinted = isHint(vendorCode);
+        const scopes: CampaignScope[] = [...candidates]
+          .sort((a, b) => a - b)
+          .map((collectionId) => ({
+            vendorId: info.id,
+            vendorCode,
+            collectionId,
+          }));
+        // Only the corroborated super-mall gets category supplements. Campaigns
+        // precede categories so ordinary catalog traversal cannot hide campaigns.
+        if (hinted) {
+          if (!canProbe(true))
+            omitted.push({
+              vendorCode,
+              reason: "CATEGORY_DISCOVERY_REQUEST_BUDGET",
+            });
+          else {
+            const url = new URL(
+              "https://svc.snapp.market/mobile/search/categories"
+            );
+            Object.entries({
+              vendorCode,
+              lat: String(location.latitude),
+              long: String(location.longitude),
+            }).forEach(([k, v]) => url.searchParams.set(k, v));
+            const response = yield* read(url).pipe(
+              Effect.catch((error) =>
+                [
+                  "UPSTREAM_CHANGED",
+                  "UPSTREAM_INVALID_JSON",
+                  "UPSTREAM_ERROR",
+                ].includes(error.code)
+                  ? Effect.succeed({ status: 0, body: null })
+                  : Effect.fail(error)
+              )
+            );
+            const categories = categorySchema.safeParse(response.body);
+            if (!categories.success)
+              omitted.push({
+                vendorCode,
+                reason: "CATEGORY_DISCOVERY_UNKNOWN",
+              });
+            else {
+              const categoryScopes: CampaignScope[] = [
+                ...new Set(categories.data.items.map((item) => item.id)),
+              ]
+                .sort((a, b) => a - b)
+                .map((collectionId) => ({
+                  vendorId: info.id,
+                  vendorCode,
+                  collectionId,
+                  source: "discounted_category",
+                }));
+              scopes.push(...categoryScopes);
+            }
+          }
+        }
+        for (const scope of scopes) {
+          const { collectionId } = scope;
+          const ordinaryPlans = plans.filter(
+            (plan) => !hint.success || plan.vendorCode !== hint.data.code
+          ).length;
+          if (!hinted && ordinaryPlans >= MAX_COLLECTIONS) {
+            omitted.push({
+              vendorCode,
+              collectionId,
+              reason: "SUPPLEMENTARY_COLLECTION_LIMIT",
+            });
+            continue;
+          }
+          if (!canProbe(hinted)) {
+            omitted.push({
+              vendorCode,
+              collectionId,
+              reason: "PLANNING_REQUEST_BUDGET",
+            });
+            continue;
+          }
+          // Count is absent from home. Cache one planning page, then freeze all
+          // admitted units before baseline collection and remaining enumeration.
+          const probe = yield* read(collectionUrl(scope, 0, location)).pipe(
+            Effect.flatMap((response) =>
+              Effect.try({
+                try: () => ({
+                  first: parseScopePage(response.body, scope),
+                  firstObservedAt:
+                    response.observedAt ?? new Date().toISOString(),
+                  error: null as CollectorError | null,
+                }),
+                catch: (error) =>
+                  error instanceof CollectorError ? error : changed("page"),
+              })
+            ),
+            Effect.catch((error) =>
+              [
+                "UPSTREAM_CHANGED",
+                "UPSTREAM_INVALID_JSON",
+                "UPSTREAM_ERROR",
+              ].includes(error.code)
+                ? Effect.succeed({
+                    first: null,
+                    firstObservedAt: undefined,
+                    error,
+                  })
+                : Effect.fail(error)
+            )
+          );
+          if (!probe.first) {
+            omitted.push({
+              vendorCode,
+              collectionId,
+              reason: "UNSUPPORTED_PLANNING_RESPONSE: " + probe.error?.message,
+            });
+            continue;
+          }
+          const first = probe.first;
+          if (
+            first.finalResult.length > 100 ||
+            (first.count > first.finalResult.length &&
+              (first.finalResult.length === 0 ||
+                (scope.source !== "discounted_category" &&
+                  first.finalResult.length !== 100))) ||
+            (first.count === 0 && first.finalResult.length !== 0) ||
+            first.finalResult.length > first.count
+          ) {
+            omitted.push({
+              vendorCode,
+              collectionId,
+              reason:
+                "UNVERIFIED_OR_OVERSIZED_PAGINATION: invalid count or page size",
+            });
+            continue;
+          }
+          const expectedPageSize =
+            scope.source === "discounted_category"
+              ? first.finalResult.length || 100
+              : 100;
+          const fullPages =
+            first.count === 0
+              ? 1
+              : Math.ceil(first.count / expectedPageSize) + 1;
+          const maxPages = Math.min(
+            fullPages,
+            hinted ? SNAPP_SCAN_REQUEST_BUDGET : 8,
+            hinted
+              ? SNAPP_SCAN_REQUEST_BUDGET
+              : Math.max(
+                  1,
+                  remainingRequests() -
+                    reservedPages -
+                    BASELINE_AND_RETRY_RESERVE +
+                    1
+                )
+          );
+          const additionalPages = maxPages - 1;
+          if (!hinted) reservedPages += additionalPages;
+          plans.push({
+            ...scope,
+            ...(scope.source === "discounted_category"
+              ? { expectedPageSize }
+              : {}),
+            ...(hinted || maxPages < fullPages
+              ? { maxPages, bounded: true }
+              : {}),
+            title: info.title,
+            first,
+            firstObservedAt: probe.firstObservedAt,
+          });
+        }
+      });
     for (const vendorCode of [...codes].slice(0, MAX_DISCOVERED_STORES)) {
       if (!canProbe()) {
         omitted.push({ vendorCode, reason: "DISCOVERY_REQUEST_BUDGET" });
@@ -286,14 +569,28 @@ export function planStoreCampaigns(
         continue;
       }
       if (
-        info.deliveryData.id !== info.id ||
-        info.deliveryData.detail.vendorId !== info.id
+        (info.deliveryData.id !== undefined &&
+          info.deliveryData.id !== info.id) ||
+        (info.deliveryData.detail?.vendorId !== undefined &&
+          info.deliveryData.detail.vendorId !== info.id)
       ) {
         omitted.push({ vendorCode, reason: "HOME_DELIVERY_OWNER_MISMATCH" });
         continue;
       }
-      if (!info.deliveryData.doesDeliver) {
-        omitted.push({ vendorCode, reason: "DOES_NOT_DELIVER" });
+      if (info.isOutOfArea === true || !info.deliveryData.doesDeliver) {
+        omitted.push({
+          vendorCode,
+          reason:
+            info.isOutOfArea === true ? "OUT_OF_AREA" : "DOES_NOT_DELIVER",
+        });
+        continue;
+      }
+      if (
+        info.deliveryData.deliveryStatus === "NOT_OPEN" ||
+        (info.deliveryData.isExpress === false &&
+          info.deliveryData.scheduleOption === null)
+      ) {
+        omitted.push({ vendorCode, reason: "NO_AVAILABLE_DELIVERY_SLOT" });
         continue;
       }
       const priorCode = resolvedOwners.get(info.id);
@@ -331,100 +628,18 @@ export function planStoreCampaigns(
           vendorCode,
           reason: "NO_SUPPORTED_ORDINARY_COLLECTION",
         });
-      for (const collectionId of [...candidates].sort((a, b) => a - b)) {
-        if (plans.length >= MAX_COLLECTIONS) {
-          omitted.push({
-            vendorCode,
-            collectionId,
-            reason: "SUPPLEMENTARY_COLLECTION_LIMIT",
-          });
-          continue;
-        }
-        if (!canProbe()) {
-          omitted.push({
-            vendorCode,
-            collectionId,
-            reason: "PLANNING_REQUEST_BUDGET",
-          });
-          continue;
-        }
-        const scope = { vendorId: info.id, vendorCode, collectionId };
-        // Count is absent from home. Cache one planning page, then freeze all
-        // admitted units before baseline collection and remaining enumeration.
-        const probe = yield* read(collectionUrl(scope, 0, location)).pipe(
-          Effect.flatMap((response) =>
-            Effect.try({
-              try: () => ({
-                first: parsePage(response.body, collectionId),
-                firstObservedAt:
-                  response.observedAt ?? new Date().toISOString(),
-                error: null as CollectorError | null,
-              }),
-              catch: (error) =>
-                error instanceof CollectorError ? error : changed("page"),
-            })
-          ),
-          Effect.catch((error) =>
-            [
-              "UPSTREAM_CHANGED",
-              "UPSTREAM_INVALID_JSON",
-              "UPSTREAM_ERROR",
-            ].includes(error.code)
-              ? Effect.succeed({
-                  first: null,
-                  firstObservedAt: undefined,
-                  error,
-                })
-              : Effect.fail(error)
-          )
-        );
-        if (!probe.first) {
-          omitted.push({
-            vendorCode,
-            collectionId,
-            reason: "UNSUPPORTED_PLANNING_RESPONSE: " + probe.error?.message,
-          });
-          continue;
-        }
-        const first = probe.first;
-        if (
-          first.count > 700 ||
-          first.finalResult.length > 100 ||
-          (first.count > first.finalResult.length &&
-            first.finalResult.length !== 100) ||
-          (first.count === 0 && first.finalResult.length !== 0) ||
-          first.finalResult.length > first.count
-        ) {
-          omitted.push({
-            vendorCode,
-            collectionId,
-            reason:
-              "UNVERIFIED_OR_OVERSIZED_PAGINATION: maximum 700 rows / eight pages",
-          });
-          continue;
-        }
-        const additionalPages = Math.ceil(first.count / 100);
-        if (
-          remainingRequests() <
-          reservedPages + additionalPages + BASELINE_AND_RETRY_RESERVE
-        ) {
-          omitted.push({
-            vendorCode,
-            collectionId,
-            reason: "EXPECTED_COLLECTION_WORK_EXCEEDS_REMAINING_BUDGET",
-          });
-          continue;
-        }
-        reservedPages += additionalPages;
-        plans.push({
-          ...scope,
-          title: info.title,
-          first,
-          firstObservedAt: probe.firstObservedAt,
-        });
-      }
+      if (isHint(vendorCode)) stores.push({ info, candidates });
+      else yield* planScopes(info, candidates);
     }
-    return { plans, omitted };
+    // The hint has no separate scope/planning cap; use the remaining shared
+    // budget after retaining the existing ordinary store collection work.
+    for (const { info, candidates } of stores)
+      yield* planScopes(info, candidates);
+    return {
+      plans,
+      omitted,
+      discoveredCandidates: [...discoveredCandidates.values()],
+    };
   }).pipe(
     Effect.tap(() => Effect.sync(() => onOmitted?.(omitted))),
     Effect.tapError(() => Effect.sync(() => onOmitted?.(omitted)))
@@ -438,7 +653,8 @@ export function enrichStoreCampaigns(
   baseline: { vendorCount: number; productCount: number; deals: Offer[] },
   baselineProductKeys: Set<string>,
   baselineVendorIds: Set<string>,
-  omitted: CampaignDiagnostics["omitted"]
+  omitted: CampaignDiagnostics["omitted"],
+  remainingRequests?: () => number
 ) {
   return Effect.gen(function* () {
     const offers = new Map<string, Offer>(
@@ -464,12 +680,14 @@ export function enrichStoreCampaigns(
         vendorId: plan.vendorId,
         vendorCode: plan.vendorCode,
         collectionId: plan.collectionId,
+        ...(plan.source ? { source: plan.source } : {}),
         reportedCount: plan.first.count,
         rawCount: 0,
         uniqueCount: 0,
         duplicateCount: 0,
         pageSizes: [],
         terminal: false,
+        coverage: "incomplete",
         qualifying: 0,
         overlap: 0,
         additional: 0,
@@ -480,7 +698,12 @@ export function enrichStoreCampaigns(
         { signature: string; offer: Offer | null }
       >();
       const fingerprints = new Set<string>();
-      for (let page = 0; page < 8; page++) {
+      const maxPages = plan.maxPages ?? 8;
+      for (let page = 0; page < maxPages; page++) {
+        if (page > 0 && remainingRequests && remainingRequests() < 3) {
+          report.partialReason = "REQUEST_BUDGET";
+          break;
+        }
         let observedAt = plan.firstObservedAt ?? new Date().toISOString();
         const data =
           page === 0
@@ -489,7 +712,8 @@ export function enrichStoreCampaigns(
                 Effect.flatMap((response) => {
                   observedAt = response.observedAt ?? new Date().toISOString();
                   return Effect.try({
-                    try: () => parsePage(response.body, plan.collectionId),
+                    try: () =>
+                      parseScopePage(response.body, plan, plan.first.count),
                     catch: (error) =>
                       error instanceof CollectorError ? error : changed("page"),
                   });
@@ -505,10 +729,13 @@ export function enrichStoreCampaigns(
               incomplete("empty terminal before reported count")
             );
           report.terminal = true;
+          report.coverage = "complete";
           break;
         }
         if (count > 100)
           return yield* Effect.fail(incomplete("page_size=100 not honored"));
+        if (plan.expectedPageSize && count > plan.expectedPageSize)
+          return yield* Effect.fail(incomplete("category page size changed"));
         const fingerprint = JSON.stringify(
           data.finalResult
             .map((row) => [row.data.id, row.data.vendor_id])
@@ -544,7 +771,10 @@ export function enrichStoreCampaigns(
           };
           if (
             p.vendor_id !== plan.vendorId ||
-            p.document_id !== `${p.id}-${plan.vendorId}`
+            p.document_id !== `${p.id}-${plan.vendorId}` ||
+            (p.vendor_code !== undefined &&
+              p.vendor_code !== plan.vendorCode) ||
+            (p.vendorCode !== undefined && p.vendorCode !== plan.vendorCode)
           )
             return yield* Effect.fail(
               changed("vendor_id / document_id ownership")
@@ -555,12 +785,18 @@ export function enrichStoreCampaigns(
             { id?: unknown; code?: unknown } | undefined;
           if (
             nested &&
-            (nested.id !== plan.vendorId ||
+            ((nested.id !== undefined && nested.id !== plan.vendorId) ||
               (nested.code !== undefined && nested.code !== plan.vendorCode))
           )
             return yield* Effect.fail(
               changed("vendor.id / vendor.code ownership")
             );
+          if (
+            plan.source === "discounted_category" &&
+            p.root_category_id !== undefined &&
+            p.root_category_id !== plan.collectionId
+          )
+            return yield* Effect.fail(changed("category product ownership"));
           if (p.sub_vendor_id != null)
             return yield* Effect.fail(
               changed("sub_vendor_id ownership is unverified")
@@ -623,7 +859,7 @@ export function enrichStoreCampaigns(
                 observedAt,
                 observationPriority: 50,
                 provenance: [
-                  `snapp:store_campaign:${plan.vendorId}:${plan.collectionId}`,
+                  `snapp:${plan.source ?? "store_campaign"}:${plan.vendorId}:${plan.collectionId}`,
                 ],
               };
           if (reason)
@@ -632,10 +868,11 @@ export function enrichStoreCampaigns(
           productKeys.add(key);
         }
       }
-      if (!report.terminal)
+      if (!report.terminal && !plan.bounded && !report.partialReason)
         return yield* Effect.fail(
           incomplete("eight-page cap without empty terminal")
         );
+      if (!report.terminal) report.partialReason ??= "PAGE_LIMIT";
       report.uniqueCount = rows.size;
       const baselineKeys = new Set(baseline.deals.map((offer) => offer.key));
       for (const [key, { offer }] of rows) {
@@ -690,6 +927,9 @@ export function enrichStoreCampaigns(
       vendorCount: vendorIds.size,
       productCount: productKeys.size,
       deals: [...offers.values()],
+      coverage: reports.some((report) => report.coverage === "incomplete")
+        ? ("incomplete" as const)
+        : ("complete" as const),
       campaignResearch: {
         baselineEligible: baseline.deals.length,
         enrichedEligible: offers.size,

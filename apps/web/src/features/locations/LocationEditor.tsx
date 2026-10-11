@@ -1,4 +1,8 @@
 "use client";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { AlertDialog } from "radix-ui";
@@ -46,22 +50,22 @@ export function LocationEditor({
   return (
     <>
       <form onSubmit={save}>
-        <label>
+        <Label>
           نام مکان
-          <input
+          <Input
             autoFocus
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="مثلاً خانه یا محل کار"
           />
-        </label>
+        </Label>
         <div className="location-search" role="search">
-          <label htmlFor="location-address-search">
+          <Label htmlFor="location-address-search">
             جست‌وجوی نشانی در تهران
-          </label>
+          </Label>
           <div className="location-search-control">
-            <input
+            <Input
               id="location-address-search"
               value={searchQuery}
               onChange={(e) => {
@@ -76,13 +80,14 @@ export function LocationEditor({
               placeholder="مثلاً میدان ونک"
               inputMode="search"
             />
-            <button
+            <Button
+              variant="outline"
               type="button"
               onClick={() => void searchAddress()}
               disabled={searchState === "loading"}
             >
               {searchState === "loading" ? "در حال جست‌وجو…" : "جست‌وجو"}
-            </button>
+            </Button>
           </div>
           {searchState === "error" && (
             <p className="location-search-status is-error" role="alert">
@@ -100,7 +105,8 @@ export function LocationEditor({
               aria-label="نتایج جست‌وجوی نشانی"
             >
               {searchResults.map((result) => (
-                <button
+                <Button
+                  variant="outline"
                   type="button"
                   key={`${result.latitude}:${result.longitude}:${result.displayName}`}
                   onClick={() => {
@@ -110,7 +116,7 @@ export function LocationEditor({
                   }}
                 >
                   {result.displayName}
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -129,9 +135,9 @@ export function LocationEditor({
           )}
         </details>
         <div className="coordinate-fields">
-          <label>
+          <Label>
             عرض جغرافیایی
-            <input
+            <Input
               required
               type="number"
               step="any"
@@ -140,10 +146,10 @@ export function LocationEditor({
               value={latitude}
               onChange={(e) => setLatitude(Number(e.target.value))}
             />
-          </label>
-          <label>
+          </Label>
+          <Label>
             طول جغرافیایی
-            <input
+            <Input
               required
               type="number"
               step="any"
@@ -152,16 +158,16 @@ export function LocationEditor({
               value={longitude}
               onChange={(e) => setLongitude(Number(e.target.value))}
             />
-          </label>
+          </Label>
         </div>
-        <label className="check">
-          <input
-            type="checkbox"
+        <div className="check">
+          <Checkbox
+            id="default-location"
             checked={isDefault}
-            onChange={(e) => setDefault(e.target.checked)}
+            onCheckedChange={(checked) => setDefault(checked === true)}
           />
-          مکان پیش‌فرض باشد
-        </label>
+          <Label htmlFor="default-location">مکان پیش‌فرض باشد</Label>
+        </div>
         {!isWithinTehranBoundary(latitude, longitude) && (
           <p className="form-error" role="status">
             این موقعیت خارج از محدوده تهران است.
@@ -173,20 +179,21 @@ export function LocationEditor({
           </p>
         )}
         <div className="form-actions">
-          <button
+          <Button
+            variant="outline"
             disabled={pending || !isWithinTehranBoundary(latitude, longitude)}
           >
             {pending ? "در حال ذخیره…" : "ذخیره مکان"}
-          </button>
+          </Button>
           {location && (
-            <button
+            <Button
+              variant="destructive"
               type="button"
-              className="danger"
               disabled={pending}
               onClick={() => setConfirmingRemoval(true)}
             >
               حذف مکان و تاریخچه
-            </button>
+            </Button>
           )}
         </div>
       </form>
@@ -205,18 +212,18 @@ export function LocationEditor({
               </AlertDialog.Description>
               <div>
                 <AlertDialog.Cancel asChild>
-                  <button type="button" disabled={pending}>
+                  <Button variant="outline" type="button" disabled={pending}>
                     انصراف
-                  </button>
+                  </Button>
                 </AlertDialog.Cancel>
-                <button
+                <Button
+                  variant="destructive"
                   type="button"
-                  className="danger"
                   disabled={pending}
                   onClick={() => void remove()}
                 >
                   حذف همیشگی
-                </button>
+                </Button>
               </div>
             </AlertDialog.Content>
           </AlertDialog.Portal>

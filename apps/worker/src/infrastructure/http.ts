@@ -9,6 +9,7 @@ export interface RequestPolicy {
   baseDelayMs?: number;
   allow401?: boolean;
   discardBody?: boolean;
+  allowNoContent?: boolean;
   forbiddenCode?: "AUTH_REJECTED" | "UPSTREAM_FORBIDDEN";
   unauthorizedCode?: "AUTH_REJECTED" | "UPSTREAM_FORBIDDEN";
   invalidJsonCode?: "UPSTREAM_CHANGED" | "UPSTREAM_INVALID_JSON";
@@ -81,7 +82,10 @@ export function requestJson(
                 response.status === 408 || response.status >= 500
               )
             );
-          if (policy.discardBody)
+          if (
+            policy.discardBody ||
+            (policy.allowNoContent && response.status === 204)
+          )
             return { status: response.status, body: null };
           const body: unknown = yield* Effect.tryPromise({
             try: () => response.json(),

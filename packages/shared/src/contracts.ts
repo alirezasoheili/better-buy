@@ -73,6 +73,7 @@ export interface DealRecord {
   image: string | null;
   vendorTitle: string;
   vendorCode: string | null;
+  vendorLogoUrl?: string | null;
   categoryTitle: string | null;
   priceRials: number;
   discountRials: number;

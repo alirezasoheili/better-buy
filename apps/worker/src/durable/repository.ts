@@ -643,7 +643,7 @@ export class DurableRepository {
     const result = await this.db.batch([
       this.db
         .prepare(
-          `UPDATE scans SET status='succeeded',finished_at=?,context_json=json_set(context_json,'$.coverage','complete') WHERE id=? AND user_id=? AND ${active} AND EXISTS(SELECT 1 FROM scan_execution WHERE scan_id=? AND manifest_frozen=1) AND NOT EXISTS(SELECT 1 FROM scan_units WHERE scan_id=? AND terminal=0) AND NOT EXISTS(SELECT 1 FROM scan_pages WHERE scan_id=? AND complete=0) AND EXISTS(SELECT 1 FROM product_projection_scans p WHERE p.user_id=scans.user_id AND p.scan_id=scans.id AND p.ready=1)`
+          `UPDATE scans SET status='succeeded',finished_at=?,context_json=json_set(context_json,'$.coverage',CASE WHEN EXISTS(SELECT 1 FROM scan_pages WHERE scan_id=scans.id AND json_extract(metadata_json,'$.terminalEvidence')='bounded_partial_scope') THEN 'incomplete' ELSE 'complete' END) WHERE id=? AND user_id=? AND ${active} AND EXISTS(SELECT 1 FROM scan_execution WHERE scan_id=? AND manifest_frozen=1) AND NOT EXISTS(SELECT 1 FROM scan_units WHERE scan_id=? AND terminal=0) AND NOT EXISTS(SELECT 1 FROM scan_pages WHERE scan_id=? AND complete=0) AND EXISTS(SELECT 1 FROM product_projection_scans p WHERE p.user_id=scans.user_id AND p.scan_id=scans.id AND p.ready=1)`
         )
         .bind(
           publishedAt,

@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { ScanRecord } from "@better-buy/shared";
 import { faNumber, faDate, sourceLabel } from "../dashboard/format";
 export function HistoryPanel({
@@ -20,68 +22,78 @@ export function HistoryPanel({
       {scans.length ? (
         <div className="run-list">
           {scans.map((s) => (
-            <article className="run-item" key={s.id}>
-              <div>
-                <h2>{s.locationName}</h2>
-                <p>
-                  {sourceLabel(s.source)} · حداقل {faNumber.format(s.threshold)}
-                  ٪
-                </p>
-                <time dateTime={s.createdAt}>
-                  {faDate.format(new Date(s.createdAt))}
-                </time>
-              </div>
-              <div>
-                <strong>
-                  {s.status === "succeeded"
-                    ? `${faNumber.format(s.dealCount)} پیشنهاد`
-                    : s.status === "failed"
-                      ? "اسکن ناموفق"
-                      : s.status === "cancelled"
-                        ? "اسکن لغو شده"
-                        : s.status === "queued"
-                          ? "در انتظار بررسی"
-                          : "در حال بررسی"}
-                </strong>
-                {s.errorMessage && (
-                  <p className="form-error">{s.errorMessage}</p>
-                )}
-                <details>
-                  <summary>جزئیات اسکن</summary>
-                  {s.context ? (
-                    <p>
-                      موقعیت ثبت‌شده:{" "}
-                      <bdi dir="ltr">
-                        {s.context.location.latitude},{" "}
-                        {s.context.location.longitude}
-                      </bdi>
-                    </p>
-                  ) : (
-                    <p>
-                      موقعیت و پوشش تاریخی تأیید نشده؛ مقایسه زمانی انجام
-                      نمی‌شود.
-                    </p>
-                  )}
+            <Card asChild>
+              <article className="run-item" key={s.id}>
+                <div>
+                  <h2>{s.locationName}</h2>
                   <p>
-                    {faNumber.format(s.vendorCount)} فروشگاه بررسی‌شده ·{" "}
-                    {faNumber.format(s.productCount)} رکورد کالا
+                    {sourceLabel(s.source)} · حداقل{" "}
+                    {faNumber.format(s.threshold)}٪
                   </p>
-                  <p>حالت ثبت‌شده: {s.mode === "full" ? "کامل" : "جزئی"}</p>
-                </details>
-              </div>
-              {s.status === "succeeded" ? (
-                <button className="run-row" onClick={() => onOpen(s)}>
-                  نمایش نتیجه
-                </button>
-              ) : (s.status === "failed" || s.status === "cancelled") &&
-                s.source !== "digikalajet" ? (
-                <button disabled={blocked} onClick={() => onRetry(s)}>
-                  اسکن تازه با این گزینه‌ها
-                </button>
-              ) : s.source === "digikalajet" ? (
-                <span className="muted">اسکن تازه غیرفعال</span>
-              ) : null}
-            </article>
+                  <time dateTime={s.createdAt}>
+                    {faDate.format(new Date(s.createdAt))}
+                  </time>
+                </div>
+                <div>
+                  <strong>
+                    {s.status === "succeeded"
+                      ? `${faNumber.format(s.dealCount)} پیشنهاد`
+                      : s.status === "failed"
+                        ? "اسکن ناموفق"
+                        : s.status === "cancelled"
+                          ? "اسکن لغو شده"
+                          : s.status === "queued"
+                            ? "در انتظار بررسی"
+                            : "در حال بررسی"}
+                  </strong>
+                  {s.errorMessage && (
+                    <p className="form-error">{s.errorMessage}</p>
+                  )}
+                  <details>
+                    <summary>جزئیات اسکن</summary>
+                    {s.context ? (
+                      <p>
+                        موقعیت ثبت‌شده:{" "}
+                        <bdi dir="ltr">
+                          {s.context.location.latitude},{" "}
+                          {s.context.location.longitude}
+                        </bdi>
+                      </p>
+                    ) : (
+                      <p>
+                        موقعیت و پوشش تاریخی تأیید نشده؛ مقایسه زمانی انجام
+                        نمی‌شود.
+                      </p>
+                    )}
+                    <p>
+                      {faNumber.format(s.vendorCount)} فروشگاه بررسی‌شده ·{" "}
+                      {faNumber.format(s.productCount)} رکورد کالا
+                    </p>
+                    <p>حالت ثبت‌شده: {s.mode === "full" ? "کامل" : "جزئی"}</p>
+                  </details>
+                </div>
+                {s.status === "succeeded" ? (
+                  <Button
+                    variant="outline"
+                    className="run-row"
+                    onClick={() => onOpen(s)}
+                  >
+                    نمایش نتیجه
+                  </Button>
+                ) : (s.status === "failed" || s.status === "cancelled") &&
+                  s.source !== "digikalajet" ? (
+                  <Button
+                    variant="outline"
+                    disabled={blocked}
+                    onClick={() => onRetry(s)}
+                  >
+                    اسکن تازه با این گزینه‌ها
+                  </Button>
+                ) : s.source === "digikalajet" ? (
+                  <span className="muted">اسکن تازه غیرفعال</span>
+                ) : null}
+              </article>
+            </Card>
           ))}
         </div>
       ) : (

@@ -29,6 +29,10 @@ The application uses a Cloudflare Worker (Hono, D1, Better Auth) and a static Ne
 - API collection only in v1; DOM scraping, notifications, and purchasing are excluded.
 - SnappMarket price amounts are presented as the tomans supplied by the API, without a unit conversion.
 - Authentication material must stay out of browser-readable responses and logs.
+- Each signed-in user can keep separate SnappMarket and Okala baskets. Basket lines and quantities persist when the selected delivery location changes; the provider recommendation is recalculated from the latest successful scan compatible with that location and its coordinates, independently of any historical scan being viewed.
+- The compact header basket button opens a provider-specific drawer with grouped store assignments, editable quantities, missing-item details, and a persistent observed-price subtotal. Changing providers keeps their baskets separate; changing locations keeps saved lines and refreshes the recommendation when compatible scan data is available.
+- Recommend one observed store when it covers every basket quantity. Otherwise assign available products across the fewest stores proven by the supported promotional feed, and identify products with missing or insufficient observed quantity. A bounded search must say when it could not prove the minimum.
+- Cart recommendations describe supported promotional-feed observations only. They do not establish universal product availability or place orders.
 
 ## Evidence on Hand
 

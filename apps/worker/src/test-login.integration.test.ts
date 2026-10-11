@@ -5,7 +5,7 @@ import { api } from "./index";
 
 const databases: DatabaseSync[] = [];
 const origin = "http://127.0.0.1:8787";
-function setup(devMode = "true") {
+function setup(devMode = "true", appOrigin = origin) {
   const sqlite = new DatabaseSync(":memory:");
   databases.push(sqlite);
   for (const file of readdirSync(new URL("../migrations/", import.meta.url))
@@ -42,8 +42,8 @@ function setup(devMode = "true") {
     BOX_KEY: "local-integration-box-key",
     BETTER_AUTH_SECRET: "local-integration-secret-at-least-32-characters",
     BETTER_AUTH_URL: origin,
-    APP_ORIGIN: origin,
-    CORS_ORIGIN: origin,
+    APP_ORIGIN: appOrigin,
+    CORS_ORIGIN: appOrigin,
     GOOGLE_CLIENT_ID: "fixture.apps.googleusercontent.com",
     GOOGLE_CLIENT_SECRET: "fixture",
     DEV_MODE: devMode,
@@ -57,6 +57,54 @@ afterEach(() => {
 });
 
 describe("development login with the real Better Auth session reader", () => {
+  it("allows split-dev browsers to read login and session responses", async () => {
+    const appOrigin = "http://127.0.0.1:3000";
+    const { request } = setup("true", appOrigin);
+    const login = await request("/api/auth/test-login", {
+      method: "POST",
+      headers: { Origin: appOrigin },
+    });
+    expect(login.status).toBe(200);
+    expect(login.headers.get("access-control-allow-origin")).toBe(appOrigin);
+    expect(login.headers.get("access-control-allow-credentials")).toBe("true");
+    const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
+    const session = await request("/api/auth/get-session", {
+      headers: { Origin: appOrigin, cookie },
+    });
+    expect(session.status).toBe(200);
+    expect(session.headers.get("access-control-allow-origin")).toBe(appOrigin);
+    expect(session.headers.get("access-control-allow-credentials")).toBe(
+      "true"
+    );
+    expect(await session.json()).not.toBeNull();
+  });
+
+  it("allows development login preflight only for the configured origin", async () => {
+    const appOrigin = "http://127.0.0.1:3000";
+    const { request } = setup("true", appOrigin);
+    const preflight = await request("/api/auth/test-login", {
+      method: "OPTIONS",
+      headers: {
+        Origin: appOrigin,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type",
+      },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe(
+      appOrigin
+    );
+    const rejected = await request("/api/auth/get-session", {
+      headers: {
+        Origin: "https://untrusted.example",
+      },
+    });
+    expect(rejected.headers.has("access-control-allow-origin")).toBe(false);
+    expect(rejected.headers.has("access-control-allow-credentials")).toBe(
+      false
+    );
+  });
+
   it("accepts the issued browser cookie for session reads and protected application routes", async () => {
     const { request } = setup();
     const login = await request("/api/auth/test-login", { method: "POST" });

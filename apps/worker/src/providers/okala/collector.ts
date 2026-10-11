@@ -3,6 +3,7 @@ import {
   campaignsResponse,
   offersResponse,
   normalizeOkalaOffer,
+  officialOkalaStoreLogo,
 } from "./model";
 import { isEligibleDeal } from "../../domain/eligibility";
 import type { DealRecord } from "@better-buy/shared";
@@ -146,6 +147,7 @@ export function collectOkala(input: {
       );
       yield* checkPagination(payload);
       for (const entity of payload.entities) {
+        const vendorLogoUrl = officialOkalaStoreLogo(entity);
         // Empty returned entities count; repeated campaign appearances do not.
         if (eligibleStores.has(entity.storeId))
           inspectedStores.add(entity.storeId);
@@ -159,7 +161,10 @@ export function collectOkala(input: {
               input.threshold
             )
           )
-            rows.set(`${item.storeId}:${item.id}`, normalizeOkalaOffer(item));
+            rows.set(
+              `${item.storeId}:${item.id}`,
+              normalizeOkalaOffer(item, vendorLogoUrl)
+            );
         }
       }
       if (input.onProgress)

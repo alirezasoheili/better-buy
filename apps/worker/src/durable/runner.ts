@@ -124,7 +124,7 @@ export async function runDurableScan(
       scanId: id,
       contractVersion: 1,
       unitCount: units.length,
-      coverage: "complete",
+      coverage: (await repo.load(id))?.context.coverage,
     });
   } catch (error) {
     // Engine pause/termination and unexpected defects belong to the Workflow

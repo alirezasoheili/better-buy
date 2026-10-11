@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { isWithinTehranBoundary, type ScanRecord } from "@better-buy/shared";
 import { AppHeader } from "./AppHeader";
@@ -14,9 +15,12 @@ import { DealShelf } from "../deals/DealShelf";
 import { useDealFilters } from "../deals/useDealFilters";
 import type { DealSource } from "./types";
 import { ScanFeedback } from "../scans/ScanFeedback";
+import { ProviderCart, CartWriteNotice } from "../carts/ProviderCart";
+import { useProviderCart } from "../carts/useProviderCart";
 export function Dashboard() {
   const data = useDashboardData();
   const [view, setView] = useState<"deals" | "history">("deals");
+  const [cartOpen, setCartOpen] = useState(false);
   const [selection, setSelection] = useState<{
     source: DealSource | null;
     threshold: number | null;
@@ -29,6 +33,27 @@ export function Dashboard() {
     .filter((r) => r.locationId === data.selected && r.status === "succeeded")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const source = selection.source ?? "snappmarket";
+  const selectedLocation = data.locations.find(
+    (location) => location.id === data.selected
+  );
+  const coordinateRevision = selectedLocation?.coordinateRevision ?? 1;
+  const latestAvailableScan =
+    latest.find(
+      (run) =>
+        run.source === source &&
+        !!selectedLocation &&
+        run.context?.location.revision === coordinateRevision &&
+        run.context.location.latitude === selectedLocation.latitude &&
+        run.context.location.longitude === selectedLocation.longitude
+    ) ?? null;
+  const cartSource = source === "okala" ? "okala" : "snappmarket";
+  const cart = useProviderCart({
+    source: cartSource,
+    locationId: data.selected,
+    scanId: latestAvailableScan?.id ?? null,
+    coordinateRevision,
+    enabled: source !== "digikalajet",
+  });
   const threshold =
     selection.threshold ??
     latest.find((r) => r.source === source)?.threshold ??
@@ -96,6 +121,23 @@ export function Dashboard() {
         onHistory={() => setView("history")}
         onHome={() => setView("deals")}
         view={view}
+        actions={
+          source !== "digikalajet" ? (
+            <ProviderCart
+              source={cartSource}
+              locationId={data.selected}
+              locationName={selectedLocation?.name ?? "موقعیت انتخاب‌شده"}
+              controller={cart}
+              open={cartOpen}
+              onOpenChange={setCartOpen}
+            />
+          ) : undefined
+        }
+        feedback={
+          source !== "digikalajet" ? (
+            <CartWriteNotice controller={cart} visible={!cartOpen} />
+          ) : undefined
+        }
       />
       <div className="workspace">
         <ScanControls
@@ -152,9 +194,13 @@ export function Dashboard() {
         />
         {view === "history" ? (
           <>
-            <button className="back-button" onClick={() => setView("deals")}>
+            <Button
+              variant="outline"
+              className="back-button"
+              onClick={() => setView("deals")}
+            >
               بازگشت به پیشنهادها
-            </button>
+            </Button>
             <HistoryPanel
               scans={data.scans}
               onOpen={openRun}
@@ -183,12 +229,12 @@ export function Dashboard() {
               برای پیدا کردن پیشنهادهای اطراف، نشانی یا مختصات یک موقعیت در
               تهران را ثبت کنید.
             </p>
-            <button
-              className="primary"
+            <Button
+              variant="default"
               onClick={() => setLocationDialog("create")}
             >
               افزودن موقعیت تحویل
-            </button>
+            </Button>
             <p className="muted">
               اسنپ‌مارکت و اکالا بدون ورود به فروشگاه بررسی می‌شوند.
             </p>
@@ -229,6 +275,8 @@ export function Dashboard() {
               onLoadMore={ledger.loadMore}
               hasPreviousPages={ledger.hasPreviousPages}
               onFirstPage={ledger.firstPage}
+              latestAvailableScan={latestAvailableScan}
+              cart={cart}
             />
             {ledger.results.error &&
               ledger.requestedScan?.status === "succeeded" &&

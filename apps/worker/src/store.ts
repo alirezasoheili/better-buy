@@ -9,6 +9,7 @@ import type {
   DealRecord,
   LocationRecord,
   ScanRecord,
+  ScanContext,
 } from "@better-buy/shared";
 
 import { Credentials } from "./infrastructure/credentials";
@@ -399,7 +400,7 @@ export class Store {
   }
   async freezeSnappManifest(
     id: string,
-    scopes: { vendorId: number; vendorCode: string; collectionId: number }[]
+    scopes: NonNullable<ScanContext["manifest"]["storeCampaigns"]>
   ) {
     if (!scopes.length) return;
     const scan = await this.scan(id);
@@ -412,17 +413,27 @@ export class Store {
     const storeCampaigns = [
       ...new Map(
         scopes.map((scope) => [
-          `${scope.vendorId}:${scope.collectionId}`,
+          `${scope.source ?? "store_campaign"}:${scope.vendorId}:${scope.collectionId}`,
           scope,
         ])
       ).values(),
     ].sort(
-      (a, b) => a.vendorId - b.vendorId || a.collectionId - b.collectionId
+      (a, b) =>
+        a.vendorId - b.vendorId ||
+        (a.source ?? "store_campaign").localeCompare(
+          b.source ?? "store_campaign"
+        ) ||
+        a.collectionId - b.collectionId
     );
     const manifest = {
       adapter: "snapp-market-party-with-store-campaigns",
       contractVersion: 1,
-      feedKinds: ["market_party", "store_campaign"],
+      feedKinds: [
+        "market_party",
+        ...new Set(
+          storeCampaigns.map((scope) => scope.source ?? "store_campaign")
+        ),
+      ],
       collectionIds: [
         ...new Set(storeCampaigns.map((scope) => scope.collectionId)),
       ].sort((a, b) => a - b),
@@ -468,7 +479,11 @@ export class Store {
   }
   async succeed(
     id: string,
-    c: { vendorCount: number; productCount: number },
+    c: {
+      vendorCount: number;
+      productCount: number;
+      coverage?: "complete" | "incomplete";
+    },
     deals: Omit<DealRecord, "scanId" | "state">[]
   ) {
     const stmts = deals.map((d) =>
@@ -496,6 +511,7 @@ export class Store {
             benefit: d.benefit,
             observedAt: d.observedAt,
             provenance: d.provenance,
+            vendorLogoUrl: d.vendorLogoUrl ?? null,
             observationPriority: d.observationPriority,
           }),
           id,
@@ -505,13 +521,14 @@ export class Store {
     stmts.push(
       this.db
         .prepare(
-          "UPDATE scans SET status='succeeded',finished_at=?,vendor_count=?,product_count=?,deal_count=?,context_json=CASE WHEN context_json IS NULL THEN NULL ELSE json_set(context_json,'$.coverage','complete') END WHERE user_id=? AND id=? AND status IN ('queued','running')"
+          "UPDATE scans SET status='succeeded',finished_at=?,vendor_count=?,product_count=?,deal_count=?,context_json=CASE WHEN context_json IS NULL THEN NULL ELSE json_set(context_json,'$.coverage',?) END WHERE user_id=? AND id=? AND status IN ('queued','running')"
         )
         .bind(
           now(),
           c.vendorCount,
           c.productCount,
           deals.length,
+          c.coverage ?? "complete",
           this.userId,
           id
         )

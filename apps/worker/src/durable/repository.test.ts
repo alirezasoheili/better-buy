@@ -55,6 +55,274 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("durable scan persistence", () => {
+  it("persists and resumes hinted category pagination beyond eight pages", async () => {
+    const { db } = database(),
+      store = new Store(db, "tenant", "key"),
+      repo = new DurableRepository(db, "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const scan = await repo.reserve(
+      "tenant",
+      {
+        locationId: location!.id,
+        source: "snappmarket",
+        threshold: 40,
+        mode: "partial",
+      },
+      crypto.randomUUID(),
+      true
+    );
+    await repo.started(scan.id);
+    const scope = {
+      vendorId: 61,
+      vendorCode: "branch",
+      collectionId: 71,
+      source: "discounted_category" as const,
+      expectedPageSize: 1,
+      maxPages: 11,
+      bounded: true,
+    };
+    const unit: Unit = {
+      id: "category",
+      kind: "store_campaign",
+      title: "Store",
+      ...scope,
+    };
+    await repo.freeze(scan.id, [unit], {
+      ...scan.context!.manifest,
+      feedKinds: ["discounted_category"],
+      storeCampaigns: [scope],
+    });
+    const read = async (url: URL) => {
+      const page = Number(url.searchParams.get("page"));
+      return page === 10
+        ? { status: 204 }
+        : {
+            status: true,
+            data: {
+              count: 10,
+              finalResult: [
+                {
+                  type: "PRODUCT",
+                  data: {
+                    id: page + 1,
+                    vendor_id: 61,
+                    document_id: `${page + 1}-61`,
+                    title: "Item",
+                    price: 100000,
+                    discount: 50000,
+                    discountRatio: 50,
+                    stock: 3,
+                  },
+                },
+              ],
+            },
+          };
+    };
+    for (let page = 0; page <= 10; page++) {
+      // Reload the frozen unit and checkpoints on every iteration, as on resume.
+      const persisted = (await repo.units(scan.id))[0]!;
+      const data = await collectPage(
+        (await repo.load(scan.id))!,
+        persisted,
+        page,
+        await repo.pages(scan.id, persisted.id),
+        read
+      );
+      expect(data.terminal).toBe(page === 10);
+      await repo.stage(scan.id, persisted, page, data);
+    }
+    await materializeProducts(db, "tenant", scan.id);
+    await repo.publish(scan.id);
+    expect(await store.scan(scan.id)).toMatchObject({
+      status: "succeeded",
+      dealCount: 10,
+      context: { coverage: "complete", manifest: { storeCampaigns: [scope] } },
+    });
+  });
+  it.each([false, true])(
+    "persists bounded category coverage and caches 204 terminals across resume, partial=%s",
+    async (partial) => {
+      const { db } = database(),
+        store = new Store(db, "tenant", "key"),
+        repo = new DurableRepository(db, "key");
+      const location = await store.createLocation({
+        name: "Fixture",
+        latitude: 35.7,
+        longitude: 51.4,
+      });
+      const scan = await repo.reserve(
+        "tenant",
+        {
+          locationId: location!.id,
+          source: "snappmarket",
+          threshold: 40,
+          mode: "partial",
+        },
+        crypto.randomUUID(),
+        true
+      );
+      await repo.started(scan.id);
+      const unit: Unit = {
+        id: "category",
+        kind: "store_campaign",
+        source: "discounted_category",
+        vendorId: 61,
+        vendorCode: "branch",
+        collectionId: 71,
+        title: "Store",
+        expectedPageSize: 2,
+        ...(partial ? { bounded: true, maxPages: 1 } : {}),
+      };
+      await repo.freeze(scan.id, [unit], {
+        ...scan.context!.manifest,
+        feedKinds: ["discounted_category"],
+        storeCampaigns: [
+          {
+            vendorId: 61,
+            vendorCode: "branch",
+            collectionId: 71,
+            source: "discounted_category",
+            ...(partial ? { bounded: true, maxPages: 1 } : {}),
+          },
+        ],
+      });
+      let requests = 0;
+      const fetcher: typeof fetch = async (input) => {
+        requests++;
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/token"))
+          return Response.json({
+            status: true,
+            data: { access_token: "fixture", expires_in: 3600 },
+          });
+        if (url.searchParams.get("page") === "1")
+          return new Response(null, { status: 204 });
+        return Response.json({
+          status: true,
+          vendor_id: [61],
+          data: {
+            count: partial ? 9 : 2,
+            finalResult: [1, 2].map((id) => ({
+              type: "PRODUCT",
+              data: {
+                id,
+                vendor_id: 61,
+                document_id: `${id}-61`,
+                title: "Item",
+                price: 100000,
+                discount: 50000,
+                discountRatio: 50,
+                stock: 3,
+              },
+            })),
+          },
+        });
+      };
+      const steps = {
+        do: async <T extends Rpc.Serializable<T>>(
+          _name: string,
+          action: () => Promise<T>
+        ) => action(),
+        sleep: async () => {},
+      };
+      const read = providerReader(repo, scan.id, steps, fetcher);
+      const first = await collectPage(
+        (await repo.load(scan.id))!,
+        unit,
+        0,
+        [],
+        read
+      );
+      await repo.stage(scan.id, unit, 0, first);
+      if (!partial) {
+        const terminal = await collectPage(
+          (await repo.load(scan.id))!,
+          unit,
+          1,
+          await repo.pages(scan.id, unit.id),
+          read
+        );
+        expect(terminal.terminalEvidence).toBe("verified_empty_campaign_page");
+        await repo.stage(scan.id, unit, 1, terminal);
+        const before = requests;
+        await providerReader(
+          repo,
+          scan.id,
+          steps,
+          fetcher
+        )(
+          new URL(
+            "https://svc.snapp.market/express-search/product-list/vendor"
+          ),
+          "category-1"
+        );
+        expect(requests).toBe(before);
+      }
+      await materializeProducts(db, "tenant", scan.id);
+      await repo.publish(scan.id);
+      expect(await store.scan(scan.id)).toMatchObject({
+        status: "succeeded",
+        dealCount: 2,
+        context: { coverage: partial ? "incomplete" : "complete" },
+      });
+      expect(await readDurableComparison(db, "tenant", scan.id)).toMatchObject({
+        complete: !partial,
+        campaigns: [
+          {
+            terminal: !partial,
+            coverage: partial ? "incomplete" : "complete",
+            outcome: partial ? "incomplete" : "net_new",
+          },
+        ],
+      });
+      if (partial)
+        expect(
+          (await store.deals(scan.id)).every((d) => d.state === "current")
+        ).toBe(true);
+    }
+  );
+  it("publishes legacy partial observations without certifying disappearance", async () => {
+    const { db } = database(),
+      store = new Store(db, "tenant", "key");
+    const location = await store.createLocation({
+      name: "Fixture",
+      latitude: 35.7,
+      longitude: 51.4,
+    });
+    const id = await store.createScan(
+      location!.id,
+      40,
+      "snappmarket",
+      "partial"
+    );
+    await store.markRunning(id);
+    await store.freezeSnappManifest(id, [
+      {
+        vendorId: 61,
+        vendorCode: "branch",
+        collectionId: 71,
+        source: "discounted_category",
+        maxPages: 1,
+        bounded: true,
+      },
+    ]);
+    await store.succeed(
+      id,
+      { vendorCount: 0, productCount: 0, coverage: "incomplete" },
+      []
+    );
+    expect(await store.scan(id)).toMatchObject({
+      status: "succeeded",
+      context: {
+        coverage: "incomplete",
+        manifest: { feedKinds: ["market_party", "discounted_category"] },
+      },
+    });
+  });
   it.each([false, true])(
     "uses deterministic priority and feed identity for equal-time tuples, reversed=%s",
     async (reversed) => {

@@ -20,6 +20,10 @@ export interface ScanContext {
       vendorId: number;
       vendorCode: string;
       collectionId: number;
+      source?: "discounted_category";
+      expectedPageSize?: number;
+      maxPages?: number;
+      bounded?: boolean;
     }[];
   };
   scopeHash: string;

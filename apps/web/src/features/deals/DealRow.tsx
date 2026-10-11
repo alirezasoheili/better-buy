@@ -68,7 +68,7 @@ export function DealRow({
           <strong>
             <bdi>{money(best.finalPriceRials, source)}</bdi>
           </strong>
-          <small>{historical ? "قیمت تاریخی" : "کمترین قیمت مشاهده‌شده"}</small>
+          {historical && <small>قیمت تاریخی</small>}
         </div>
       ) : (
         <div className="price-label">

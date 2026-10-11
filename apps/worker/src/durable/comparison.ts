@@ -56,8 +56,11 @@ export async function readDurableComparison(
     Map<string, { eligible: boolean; excludedReason: string | null }>
   >();
   const rows = new Map<string, number>();
+  const partialUnits = new Set<string>();
   for (const page of pages.results) {
     const checkpoint = JSON.parse(page.metadata_json) as PageCheckpoint;
+    if (checkpoint.terminalEvidence === "bounded_partial_scope")
+      partialUnits.add(page.unit_id);
     const identities = facts.get(page.unit_id) ?? new Map();
     for (const [identity, fact] of Object.entries(checkpoint.eligibility ?? {}))
       identities.set(identity, fact);
@@ -95,7 +98,12 @@ export async function readDurableComparison(
         unitId: unit.id,
         vendorId: unit.vendorId,
         collectionId: unit.collectionId,
-        terminal: row.terminal === 1,
+        source: unit.source ?? "store_campaign",
+        terminal: row.terminal === 1 && !partialUnits.has(row.unit_id),
+        coverage:
+          partialUnits.has(row.unit_id) || row.terminal !== 1
+            ? "incomplete"
+            : "complete",
         rawCount: rows.get(row.unit_id) ?? 0,
         uniqueCount: identities.size,
         qualifying: eligible.length,
@@ -104,7 +112,7 @@ export async function readDurableComparison(
         additional,
         excluded,
         outcome:
-          row.terminal !== 1
+          row.terminal !== 1 || partialUnits.has(row.unit_id)
             ? "incomplete"
             : eligible.length === 0
               ? "zero_eligible"

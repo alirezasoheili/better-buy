@@ -35,6 +35,10 @@ export type Unit = {
   title?: string;
   storeIds?: number[];
   firstRequest?: string;
+  source?: "discounted_category";
+  expectedPageSize?: number;
+  maxPages?: number;
+  bounded?: boolean;
 };
 export type Page = {
   offers: Offer[];

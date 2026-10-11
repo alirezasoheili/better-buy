@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { useState, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
 import { authClient } from "../../app/auth-client";
 import { Panel } from "./Primitives";
@@ -8,17 +9,22 @@ export function AppHeader({
   onHistory,
   onHome,
   view,
+  actions,
+  feedback,
 }: {
   onLocations: () => void;
   onHistory: () => void;
   onHome: () => void;
   view: "deals" | "history";
+  actions?: ReactNode;
+  feedback?: ReactNode;
 }) {
   const [accountError, setAccountError] = useState("");
   return (
     <>
       <header className="app-header">
-        <button
+        <Button
+          variant="ghost"
           className="brand"
           onClick={onHome}
           aria-label="بهتر بخر، پیشنهادها"
@@ -30,16 +36,23 @@ export function AppHeader({
               <bdi>Better Buy</bdi>
             </small>
           </span>
-        </button>
+        </Button>
+        <div className="header-actions">{actions}</div>
         <nav aria-label="ناوبری اصلی">
-          <button onClick={onLocations}>موقعیت‌ها</button>
-          <button
+          <Button variant="ghost" onClick={onLocations}>
+            موقعیت‌ها
+          </Button>
+          <Button
+            variant="ghost"
             aria-current={view === "history" ? "page" : undefined}
             onClick={onHistory}
           >
             تاریخچه اسکن
-          </button>
-          <Panel title="راهنمای بهتر بخر" trigger={<button>راهنما</button>}>
+          </Button>
+          <Panel
+            title="راهنمای بهتر بخر"
+            trigger={<Button variant="ghost">راهنما</Button>}
+          >
             <p>
               موقعیت تحویل را ثبت کنید تا تخفیف‌ها پیدا شوند؛ سپس قیمت
               فروشگاه‌ها را مقایسه کنید.
@@ -63,8 +76,10 @@ export function AppHeader({
           </Panel>
           <ThemeMenu />
           <DropdownMenu.Root>
-            <DropdownMenu.Trigger className="account-button">
-              حساب
+            <DropdownMenu.Trigger asChild>
+              <Button variant="ghost" className="account-button">
+                حساب
+              </Button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content
@@ -96,6 +111,7 @@ export function AppHeader({
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
         </nav>
+        {feedback}
       </header>
       {accountError && (
         <p className="form-error" role="alert">

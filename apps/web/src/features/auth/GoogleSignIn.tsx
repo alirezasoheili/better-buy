@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useState } from "react";
 import { authClient } from "../../app/auth-client";
 export function GoogleSignIn() {
@@ -20,14 +22,15 @@ export function GoogleSignIn() {
   };
   return (
     <main className="auth-shell">
-      <section className="auth-card" aria-labelledby="sign-in-title">
+      <Card className="auth-card" aria-labelledby="sign-in-title">
         <div className="auth-mark">ب</div>
         <h1 id="sign-in-title">بهتر بخر</h1>
         <p>
           پیشنهادهای اسنپ‌مارکت و اکالا را برای موقعیت تحویل خود پیدا کنید و
           قیمت فروشگاه‌ها را مقایسه کنید.
         </p>
-        <button
+        <Button
+          variant="outline"
           className="google-button"
           onClick={() => void login()}
           disabled={submitting}
@@ -51,7 +54,7 @@ export function GoogleSignIn() {
             />
           </svg>
           {submitting ? "در حال باز کردن گوگل…" : "ادامه با گوگل"}
-        </button>
+        </Button>
         {error && (
           <p className="auth-error" role="alert">
             {error}
@@ -61,7 +64,7 @@ export function GoogleSignIn() {
           موقعیت‌ها و تاریخچه در حساب شما نگهداری می‌شوند. برای بررسی پیشنهادها،
           ورود به فروشگاه لازم نیست.
         </small>
-      </section>
+      </Card>
     </main>
   );
 }

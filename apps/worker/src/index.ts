@@ -7,24 +7,18 @@ import { registerSettings } from "./http/settings";
 import { registerScans } from "./http/scans";
 import { consumeRateLimit } from "./http/rateLimit";
 import { registerPagedProducts } from "./http/products";
+import { registerCarts } from "./http/carts";
 import type { WorkerEnv, Variables } from "./http/types";
 export const api = new Hono<{ Bindings: WorkerEnv; Variables: Variables }>();
-api.post("/api/auth/test-login", async (c) => {
-  if (c.env.DEV_MODE !== "true") return c.json({ error: "NOT_FOUND" }, 404);
-  const cookie = await issueTestSession(c.env.DB, c.env.BETTER_AUTH_SECRET);
-  c.header("Set-Cookie", cookie);
-  return c.json({ data: { ok: true } });
-});
-
-api.on(["GET", "POST"], "/api/auth/*", (c) =>
-  createAuth(c.env).handler(c.req.raw)
-);
-
 // Liveness must not depend on a user session or a D1 read. Keep diagnostics
 // under the authenticated /api/health route below.
 api.get("/healthz", (c) => c.json({ ok: true }));
 
 api.use("/api/*", async (c, next) => {
+  if (c.req.method === "OPTIONS") c.res = c.body(null, 204);
+  else await next();
+
+  // Better Auth returns a raw Response, so apply headers after it is finalized.
   const origin = c.req.header("Origin");
   if (origin) {
     const allowed = new Set(
@@ -39,7 +33,7 @@ api.use("/api/*", async (c, next) => {
     );
     if (allowed.has(origin)) {
       c.header("Access-Control-Allow-Origin", origin);
-      c.header("Vary", "Origin");
+      c.header("Vary", "Origin", { append: true });
       c.header("Access-Control-Allow-Credentials", "true");
       c.header(
         "Access-Control-Allow-Headers",
@@ -52,9 +46,19 @@ api.use("/api/*", async (c, next) => {
       c.header("Access-Control-Max-Age", "86400");
     }
   }
-  if (c.req.method === "OPTIONS") return c.body(null, 204);
-  await next();
 });
+
+// Register auth after CORS so split-dev browsers can read responses and cookies.
+api.post("/api/auth/test-login", async (c) => {
+  if (c.env.DEV_MODE !== "true") return c.json({ error: "NOT_FOUND" }, 404);
+  const cookie = await issueTestSession(c.env.DB, c.env.BETTER_AUTH_SECRET);
+  c.header("Set-Cookie", cookie);
+  return c.json({ data: { ok: true } });
+});
+
+api.on(["GET", "POST"], "/api/auth/*", (c) =>
+  createAuth(c.env).handler(c.req.raw)
+);
 
 api.use("/api/*", async (c, next) => {
   if (c.req.path.startsWith("/api/auth/")) return next();
@@ -100,6 +104,7 @@ api.get("/api/me", (c) => c.json({ data: { id: c.get("userId") } }));
 registerLocations(api);
 registerSettings(api);
 registerPagedProducts(api);
+registerCarts(api);
 registerScans(api);
 api.notFound((c) =>
   c.json({ error: "NOT_FOUND", message: "مسیر پیدا نشد." }, 404)

@@ -1,8 +1,11 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { QuerySession } from "../features/dashboard/QuerySession";
 import { authClient } from "./auth-client";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { GoogleSignIn } from "../features/auth/GoogleSignIn";
+import { DevSignIn } from "../features/auth/DevSignIn";
 export default function Page() {
   const { data: session, isPending, error, refetch } = authClient.useSession();
   if (isPending)
@@ -14,14 +17,21 @@ export default function Page() {
   if (error && !session)
     return (
       <main className="auth-shell">
-        <section className="auth-card" role="status">
+        <Card className="auth-card" role="status">
           <h1>بررسی ورود انجام نشد</h1>
           <p>برای ادامه، وضعیت حساب را دوباره دریافت کنید.</p>
-          <button onClick={() => void refetch()}>دریافت دوباره</button>
-        </section>
+          <Button variant="outline" onClick={() => void refetch()}>
+            دریافت دوباره
+          </Button>
+        </Card>
       </main>
     );
-  if (!session) return <GoogleSignIn />;
+  if (!session)
+    return process.env.NODE_ENV === "development" ? (
+      <DevSignIn />
+    ) : (
+      <GoogleSignIn />
+    );
   return (
     <QuerySession key={session.user.id}>
       <Dashboard />

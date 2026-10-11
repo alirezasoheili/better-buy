@@ -33,6 +33,27 @@ export const responseSchema = z.object({
 });
 
 export type SnappVendor = z.infer<typeof vendorSchema>;
+function officialStoreLogo(vendor: SnappVendor): string | null {
+  const raw = vendor as Record<string, unknown>;
+  for (const key of [
+    "logoUrl",
+    "storeLogoUrl",
+    "logo_url",
+    "store_logo_url",
+    "logo",
+  ]) {
+    const value = raw[key];
+    if (typeof value !== "string") continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === "https:" || url.protocol === "http:")
+        return url.toString();
+    } catch {
+      /* Ignore malformed provider metadata. */
+    }
+  }
+  return null;
+}
 export function normalizeSnappDeals(
   vendors: Iterable<SnappVendor>,
   vendorCount: number,
@@ -43,9 +64,12 @@ export function normalizeSnappDeals(
   deals: Omit<DealRecord, "scanId" | "state">[];
 } {
   const products = new Map<string, z.infer<typeof productSchema>>();
-  for (const vendor of vendors)
+  const vendorLogos = new Map<string, string | null>();
+  for (const vendor of vendors) {
+    vendorLogos.set(String(vendor.vendor_id), officialStoreLogo(vendor));
     for (const p of vendor.products)
       products.set(`${p.vendorId}:${p.productVariationId}`, p);
+  }
   const deals = [...products.entries()]
     .filter(([, p]) =>
       isEligibleDeal(p.discountRatio, !p.is_out_of_stock, p.stock, threshold)
@@ -58,6 +82,7 @@ export function normalizeSnappDeals(
       image: p.image ?? p.main_image ?? null,
       vendorTitle: p.vendorTitle,
       vendorCode: p.vendorCode ?? null,
+      vendorLogoUrl: vendorLogos.get(String(p.vendorId)) ?? null,
       categoryTitle: p.menu_category_title ?? null,
       priceRials: p.price,
       discountRials: p.discount,

@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { LocationRecord, ScanRecord } from "@better-buy/shared";
 import { ReadNotice } from "../dashboard/Primitives";
 import { faNumber, sourceLabel } from "../dashboard/format";
@@ -21,71 +23,77 @@ export function ScanFeedback({
   return (
     <>
       {active && (
-        <section className="active-scan" role="status">
-          <div>
-            <strong>
-              {polling.error
-                ? "وضعیت اسکن تازه‌سازی نشد"
-                : active.status === "queued"
-                  ? "اسکن در انتظار بررسی است"
-                  : "در حال پیدا کردن تخفیف‌ها…"}
-            </strong>
-            <p>
-              {active.locationName} · {sourceLabel(active.source)} · حداقل{" "}
-              {faNumber.format(active.threshold)}٪
-            </p>
-            {active.productCount > 0 && (
+        <Card asChild>
+          <section className="active-scan" role="status">
+            <div>
+              <strong>
+                {polling.error
+                  ? "وضعیت اسکن تازه‌سازی نشد"
+                  : active.status === "queued"
+                    ? "اسکن در انتظار بررسی است"
+                    : "در حال پیدا کردن تخفیف‌ها…"}
+              </strong>
               <p>
-                {faNumber.format(active.vendorCount)} فروشگاه بررسی‌شده ·{" "}
-                {faNumber.format(active.productCount)} رکورد کالا
+                {active.locationName} · {sourceLabel(active.source)} · حداقل{" "}
+                {faNumber.format(active.threshold)}٪
               </p>
-            )}
-            {polling.error && (
-              <p>
-                آخرین وضعیت شناخته‌شده نمایش داده می‌شود. این خطا به معنی شکست
-                اسکن نیست.
-              </p>
-            )}
-            {active.execution && (
-              <details>
-                <summary>جزئیات به‌روزرسانی</summary>
+              {active.productCount > 0 && (
                 <p>
-                  {faNumber.format(active.execution.completedPages)} صفحه
-                  دریافت‌شده · {faNumber.format(active.execution.observedRows)}{" "}
-                  رکورد مشاهده‌شده
+                  {faNumber.format(active.vendorCount)} فروشگاه بررسی‌شده ·{" "}
+                  {faNumber.format(active.productCount)} رکورد کالا
                 </p>
+              )}
+              {polling.error && (
                 <p>
-                  {faNumber.format(active.execution.completedUnits)} از{" "}
-                  {faNumber.format(active.execution.totalUnits)} بخش تکمیل شده
+                  آخرین وضعیت شناخته‌شده نمایش داده می‌شود. این خطا به معنی شکست
+                  اسکن نیست.
                 </p>
-              </details>
-            )}
-            {cancel.error && (
-              <p className="form-error">
-                لغو تأیید نشد؛ وضعیت اسکن را بررسی کنید. {cancel.error.message}
-              </p>
-            )}
-          </div>
-          <div>
-            <button
-              disabled={cancel.isPending}
-              onClick={() => cancel.mutate(active.id)}
-            >
-              {cancel.isPending ? "در حال لغو…" : "لغو به‌روزرسانی"}
-            </button>
-            {polling.error && (
-              <button
-                disabled={polling.isFetching}
-                onClick={() => void polling.refetch()}
+              )}
+              {active.execution && (
+                <details>
+                  <summary>جزئیات به‌روزرسانی</summary>
+                  <p>
+                    {faNumber.format(active.execution.completedPages)} صفحه
+                    دریافت‌شده ·{" "}
+                    {faNumber.format(active.execution.observedRows)} رکورد
+                    مشاهده‌شده
+                  </p>
+                  <p>
+                    {faNumber.format(active.execution.completedUnits)} از{" "}
+                    {faNumber.format(active.execution.totalUnits)} بخش تکمیل شده
+                  </p>
+                </details>
+              )}
+              {cancel.error && (
+                <p className="form-error">
+                  لغو تأیید نشد؛ وضعیت اسکن را بررسی کنید.{" "}
+                  {cancel.error.message}
+                </p>
+              )}
+            </div>
+            <div>
+              <Button
+                variant="outline"
+                disabled={cancel.isPending}
+                onClick={() => cancel.mutate(active.id)}
               >
-                بررسی دوباره وضعیت
-              </button>
-            )}
-            <button onClick={() => onOpenContext(active)}>
-              نمایش موقعیت اسکن
-            </button>
-          </div>
-        </section>
+                {cancel.isPending ? "در حال لغو…" : "لغو به‌روزرسانی"}
+              </Button>
+              {polling.error && (
+                <Button
+                  variant="outline"
+                  disabled={polling.isFetching}
+                  onClick={() => void polling.refetch()}
+                >
+                  بررسی دوباره وضعیت
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => onOpenContext(active)}>
+                نمایش موقعیت اسکن
+              </Button>
+            </div>
+          </section>
+        </Card>
       )}
       {start.unresolved && start.uncertain && (
         <ReadNotice
@@ -103,9 +111,13 @@ export function ScanFeedback({
             <>
               در آخرین بررسی اسکن تازه‌ای پیدا نشد؛ نتیجه درخواست قبلی همچنان
               نامشخص است.{" "}
-              <button disabled={start.submitting} onClick={start.retryIntent}>
+              <Button
+                variant="outline"
+                disabled={start.submitting}
+                onClick={start.retryIntent}
+              >
                 بررسی دوباره درخواست قبلی
-              </button>
+              </Button>
             </>
           )}
         </ReadNotice>

@@ -6,7 +6,8 @@ import {
   campaignExclusionReason,
   enrichStoreCampaigns,
   collectionUrl,
-  parsePage,
+  parseScopePage,
+  type CampaignScope,
   type Plan,
   type CampaignDiagnostics,
 } from "../providers/snapp/storeCampaigns";
@@ -53,11 +54,7 @@ export async function planUnits(repo: DurableRepository, job: Job, read: Read) {
   if (job.runtime.manifest_frozen) return repo.units(id);
   if (job.scan.source === "snappmarket") {
     const units: Unit[] = [{ id: "market-party", kind: "market_party" }];
-    let scopes: {
-      vendorId: number;
-      vendorCode: string;
-      collectionId: number;
-    }[] = [];
+    let scopes: CampaignScope[] = [];
     if (job.runtime.enrichment_enabled) {
       // Each actual discovery GET is its own persisted Workflow request checkpoint.
       let remaining = job.runtime.attempt_limit - job.runtime.attempt_count;
@@ -102,22 +99,19 @@ export async function planUnits(repo: DurableRepository, job: Job, read: Read) {
       });
       await repo.savePlanningAudit(id, plans.omitted);
       for (const plan of plans.plans) {
+        const { first, firstObservedAt, title, ...scope } = plan;
         const firstRequest = `plan-${await identityDigest(collectionUrl(plan, 0, loc).toString())}`;
         units.push({
-          id: `campaign-${plan.vendorId}-${plan.collectionId}`,
+          id: `${plan.source ?? "campaign"}-${plan.vendorId}-${plan.collectionId}`,
           kind: "store_campaign",
-          vendorId: plan.vendorId,
-          vendorCode: plan.vendorCode,
-          collectionId: plan.collectionId,
+          ...scope,
           title: plan.title,
           firstRequest,
         });
       }
-      scopes = plans.plans.map(({ vendorId, vendorCode, collectionId }) => ({
-        vendorId,
-        vendorCode,
-        collectionId,
-      }));
+      scopes = plans.plans.map(
+        ({ first, firstObservedAt, title, ...scope }) => scope
+      );
     }
     const manifest = {
       ...job.context.manifest,
@@ -125,7 +119,10 @@ export async function planUnits(repo: DurableRepository, job: Job, read: Read) {
         ? "snapp-market-party+store-campaigns"
         : "snapp-market-party",
       feedKinds: scopes.length
-        ? ["market_party", "store_campaign"]
+        ? [
+            "market_party",
+            ...new Set(scopes.map((scope) => scope.source ?? "store_campaign")),
+          ]
         : ["market_party"],
       ...(job.runtime.enrichment_enabled ? { storeCampaigns: scopes } : {}),
     };
@@ -272,21 +269,31 @@ export async function collectPage(
       vendorId: unit.vendorId!,
       vendorCode: unit.vendorCode!,
       collectionId: unit.collectionId!,
+      ...(unit.source ? { source: unit.source } : {}),
+      ...(unit.expectedPageSize
+        ? { expectedPageSize: unit.expectedPageSize }
+        : {}),
     };
-    const data = parsePage(
+    const data = parseScopePage(
       await read(
         collectionUrl(scope, page, loc),
         page === 0 && unit.firstRequest
           ? unit.firstRequest
           : `${unit.id}-${page}`
       ),
-      scope.collectionId
+      scope,
+      previous[0]?.reportedTotal
     );
     const first = previous[0];
     if (first && first.reportedTotal !== data.count)
       throw incomplete("Campaign count drift");
     if (data.finalResult.length > 100)
       throw incomplete("Campaign page size changed");
+    if (
+      scope.expectedPageSize &&
+      data.finalResult.length > scope.expectedPageSize
+    )
+      throw incomplete("Category page size changed");
     const raw =
       previous.reduce((n, p) => n + p.rowCount, 0) + data.finalResult.length;
     const identities = data.finalResult.map(
@@ -325,12 +332,15 @@ export async function collectPage(
         );
       signatures[key] = signature;
     }
-    const terminal = data.finalResult.length === 0;
-    if (terminal && raw !== data.count)
+    const emptyTerminal = data.finalResult.length === 0;
+    if (emptyTerminal && raw !== data.count)
       throw incomplete(
         "Campaign terminal did not cover reported raw row count"
       );
-    if (page >= 7 && !terminal)
+    const boundedTerminal =
+      unit.bounded === true && page + 1 >= (unit.maxPages ?? 8);
+    const terminal = emptyTerminal || boundedTerminal;
+    if (page + 1 >= (unit.maxPages ?? 8) && !terminal)
       throw incomplete("Campaign cap reached without terminal evidence");
     // Reuse the shipped ownership/money/benefit normalizer with an in-memory
     // synthetic terminal; no extra provider call and no whole-collector step.
@@ -355,6 +365,7 @@ export async function collectPage(
           Effect.succeed({
             status: 200,
             body: {
+              status: true,
               data: {
                 id: scope.collectionId,
                 type: "default",
@@ -389,7 +400,11 @@ export async function collectPage(
       reportedTotal: data.count,
       rowCount: data.finalResult.length,
       terminal,
-      terminalEvidence: terminal ? "verified_empty_campaign_page" : null,
+      terminalEvidence: emptyTerminal
+        ? "verified_empty_campaign_page"
+        : boundedTerminal
+          ? "bounded_partial_scope"
+          : null,
       fingerprint: await identityDigest([...identities].sort()),
     };
   }

@@ -83,6 +83,8 @@ export function providerReader(
             allow401: true,
             forbiddenCode: "UPSTREAM_FORBIDDEN",
             invalidJsonCode: "UPSTREAM_INVALID_JSON",
+            allowNoContent:
+              u.pathname === "/express-search/product-list/vendor",
           })
         );
       } catch (error) {
@@ -165,7 +167,13 @@ export function providerReader(
           try {
             const job = await repo.check(id);
             const response = await attempt(new URL(url), job, key);
-            await repo.saveDiscovery(id, key, response.body);
+            // JSON null means cache miss in the repository API. Preserve a 204
+            // as explicit metadata so category terminals resume without refetch.
+            await repo.saveDiscovery(
+              id,
+              key,
+              response.status === 204 ? { status: 204 } : response.body
+            );
             return { ok: true as const };
           } catch (error) {
             const current = await repo.check(id);

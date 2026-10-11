@@ -45,6 +45,10 @@ const product = z.object({
 const offerEntity = z.object({
   storeId: z.number(),
   storeName: z.string(),
+  logoUrl: z.unknown().optional(),
+  storeLogoUrl: z.unknown().optional(),
+  logo_url: z.unknown().optional(),
+  store_logo_url: z.unknown().optional(),
   products: z.array(product),
 });
 export const offersResponse = z.object({
@@ -55,8 +59,29 @@ export const offersResponse = z.object({
 });
 
 export type OkalaProduct = z.infer<typeof product>;
+export function officialOkalaStoreLogo(
+  entity: z.infer<typeof offerEntity>
+): string | null {
+  for (const value of [
+    entity.logoUrl,
+    entity.storeLogoUrl,
+    entity.logo_url,
+    entity.store_logo_url,
+  ]) {
+    if (typeof value !== "string") continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === "https:" || url.protocol === "http:")
+        return url.toString();
+    } catch {
+      /* Ignore malformed provider metadata. */
+    }
+  }
+  return null;
+}
 export function normalizeOkalaOffer(
-  item: OkalaProduct
+  item: OkalaProduct,
+  vendorLogoUrl: string | null = null
 ): Omit<DealRecord, "scanId" | "state"> {
   const key = `${item.storeId}:${item.id}`;
   return {
@@ -67,6 +92,7 @@ export function normalizeOkalaOffer(
     image: item.imageUrl ?? null,
     vendorTitle: item.storeName,
     vendorCode: null,
+    vendorLogoUrl,
     categoryTitle: item.storeTypeName ?? null,
     priceRials: item.price,
     discountRials: Math.max(0, item.price - item.okPrice),

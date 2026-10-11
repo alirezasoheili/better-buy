@@ -1,3 +1,12 @@
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { LocationRecord } from "@better-buy/shared";
 import type { DealSource } from "../dashboard/types";
 import { faNumber } from "../dashboard/format";
@@ -29,77 +38,87 @@ export function ScanControls({
 }) {
   return (
     <section className="scan-controls" aria-label="موقعیت و تخفیف‌ها">
-      <label className="feed-location">
+      <Label className="feed-location">
         موقعیت تحویل
-        <select
-          id="selected-location"
-          value={selected}
-          onChange={(e) => onLocation(e.target.value)}
-          aria-label="موقعیت تحویل"
-        >
-          {!selected && <option value="">یک موقعیت اضافه کنید</option>}
-          {locations.map((location) => (
-            <option key={location.id} value={location.id}>
-              {location.name}
-            </option>
-          ))}
-        </select>
-      </label>
+        <Select value={selected || undefined} onValueChange={onLocation}>
+          <SelectTrigger id="selected-location" aria-label="موقعیت تحویل">
+            <SelectValue placeholder="یک موقعیت اضافه کنید" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map((location) => (
+              <SelectItem key={location.id} value={location.id}>
+                {location.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Label>
       <div className="feed-actions">
-        <Panel title="تنظیمات تخفیف‌ها" trigger={<button>تنظیمات</button>}>
+        <Panel
+          title="تنظیمات تخفیف‌ها"
+          trigger={<Button variant="outline">تنظیمات</Button>}
+        >
           {source === "digikalajet" ? (
             <div className="historical-source">
               <strong>دیجی‌کالا جت · فقط مشاهده</strong>
-              <button onClick={() => onSource("snappmarket")}>
+              <Button variant="outline" onClick={() => onSource("snappmarket")}>
                 بازگشت به تخفیف‌ها
-              </button>
+              </Button>
             </div>
           ) : (
             <>
-              <label>
+              <Label>
                 فروشگاه
-                <select
+                <Select
                   value={source}
-                  onChange={(e) =>
-                    onSource(
-                      e.target.value === "okala" ? "okala" : "snappmarket"
-                    )
+                  onValueChange={(value) =>
+                    onSource(value === "okala" ? "okala" : "snappmarket")
                   }
                 >
-                  <option value="snappmarket">اسنپ‌مارکت</option>
-                  <option value="okala">اکالا</option>
-                </select>
-              </label>
-              <label>
+                  <SelectTrigger aria-label="فروشگاه">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="snappmarket">اسنپ‌مارکت</SelectItem>
+                    <SelectItem value="okala">اکالا</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Label>
+              <Label>
                 حداقل درصد تخفیف
-                <select
-                  aria-label="حداقل درصد تخفیف"
-                  value={threshold}
-                  onChange={(e) => onThreshold(Number(e.target.value))}
+                <Select
+                  value={String(threshold)}
+                  onValueChange={(value) => onThreshold(Number(value))}
                 >
-                  {[
-                    ...new Set([
-                      threshold,
-                      ...(source === "okala"
-                        ? [30, 35, 40, 45, 50]
-                        : [15, 20, 25, 30, 35, 40, 45, 50]),
-                    ]),
-                  ]
-                    .sort((a, b) => a - b)
-                    .map((n) => (
-                      <option key={n} value={n}>
-                        {faNumber.format(n)}٪ به بالا
-                      </option>
-                    ))}
-                </select>
-              </label>
+                  <SelectTrigger aria-label="حداقل درصد تخفیف">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      ...new Set([
+                        threshold,
+                        ...(source === "okala"
+                          ? [30, 35, 40, 45, 50]
+                          : [15, 20, 25, 30, 35, 40, 45, 50]),
+                      ]),
+                    ]
+                      .sort((a, b) => a - b)
+                      .map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {faNumber.format(n)}٪ به بالا
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </Label>
               <p className="muted">
                 این تنظیمات در به‌روزرسانی بعدی استفاده می‌شوند.
               </p>
             </>
           )}
         </Panel>
-        <button
+        <Button
+          variant="default"
           className="primary scan-button"
           disabled={blocked || source === "digikalajet"}
           onClick={onStart}
@@ -109,7 +128,7 @@ export function ScanControls({
             : hasSnapshot
               ? "به‌روزرسانی تخفیف‌ها"
               : "پیدا کردن تخفیف‌ها"}
-        </button>
+        </Button>
       </div>
     </section>
   );

@@ -375,7 +375,7 @@ function decodeCursor(text: string, context: Omit<Cursor, "v" | "position">) {
 }
 const positionWhere = (columns: readonly string[]) =>
   `(${columns.join(",")}) > (${columns.map(() => "?").join(",")})`;
-async function publishedProjection(
+export async function publishedProjection(
   db: D1Database,
   userId: string,
   scanId: string

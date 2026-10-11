@@ -145,6 +145,8 @@ export function collectDeals(input: CollectInput) {
               allow401: true,
               forbiddenCode: "UPSTREAM_FORBIDDEN",
               invalidJsonCode: "UPSTREAM_INVALID_JSON",
+              allowNoContent:
+                url.pathname === "/express-search/product-list/vendor",
             }
           );
         let response = yield* requestPage();
@@ -180,11 +182,9 @@ export function collectDeals(input: CollectInput) {
       : undefined;
     if (planned && input.onManifest)
       yield* input.onManifest(
-        planned.plans.map(({ vendorId, vendorCode, collectionId }) => ({
-          vendorId,
-          vendorCode,
-          collectionId,
-        }))
+        planned.plans.map(
+          ({ first, firstObservedAt, title, ...scope }) => scope
+        )
       );
     let totalCount = Infinity;
     for (let page = 0; page < 50 && vendors.size < totalCount; page++) {
@@ -299,7 +299,8 @@ export function collectDeals(input: CollectInput) {
       baseline,
       productKeys,
       vendorIds,
-      planned.omitted
+      planned.omitted,
+      () => SNAPP_SCAN_REQUEST_BUDGET - attempts
     );
     if (input.onProgress)
       yield* input.onProgress({
@@ -310,6 +311,7 @@ export function collectDeals(input: CollectInput) {
       ...result,
       campaignResearch: {
         ...result.campaignResearch,
+        discoveredCandidates: planned.discoveredCandidates,
         requests: attempts,
         elapsedMs: Date.now() - startedAt,
         requestBudget: SNAPP_SCAN_REQUEST_BUDGET,
