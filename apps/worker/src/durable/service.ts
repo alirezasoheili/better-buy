@@ -214,27 +214,4 @@ export async function reconcileDurableOperations(env: DurableEnv) {
     .all<{ scan_id: string; user_id: string }>();
   for (const row of results)
     await reconcileDurableScan(env, row.user_id, row.scan_id);
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString();
-  const old = await env.DB.prepare(
-    "SELECT id FROM scans WHERE status IN ('failed','cancelled') AND finished_at < ? AND (EXISTS(SELECT 1 FROM deals WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM scan_pages WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM scan_observations WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM scan_discovery WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM scan_attempts WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM scan_units WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM saved_product_offers WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM saved_products WHERE scan_id=scans.id) OR EXISTS(SELECT 1 FROM product_projection_scans WHERE scan_id=scans.id)) ORDER BY finished_at,id LIMIT 20"
-  )
-    .bind(cutoff)
-    .all<{ id: string }>();
-  for (const row of old.results) {
-    await env.DB.batch(
-      [
-        "deals",
-        "scan_pages",
-        "scan_observations",
-        "scan_discovery",
-        "scan_attempts",
-        "scan_units",
-        "saved_product_offers",
-        "saved_products",
-        "product_projection_scans",
-      ].map((table) =>
-        env.DB.prepare(`DELETE FROM ${table} WHERE scan_id=?`).bind(row.id)
-      )
-    );
-  }
 }

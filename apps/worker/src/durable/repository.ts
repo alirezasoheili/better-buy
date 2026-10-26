@@ -7,6 +7,7 @@ import {
 } from "@better-buy/shared";
 import type { ScanInput } from "../application/scans";
 import { Store } from "../store";
+import { terminalScanArtifactStatements } from "../scan-artifacts";
 import {
   DurableError,
   type Job,
@@ -274,9 +275,9 @@ export class DurableRepository {
         ),
       this.db
         .prepare(
-          "INSERT INTO scan_attempts(scan_id,operation,ordinal,reserved_at) SELECT ?,?,attempt_count,? FROM scan_execution WHERE scan_id=? AND attempt_count=?"
+          `INSERT INTO scan_attempts(scan_id,operation,ordinal,reserved_at) SELECT ?,?,attempt_count,? FROM scan_execution WHERE scan_id=? AND attempt_count=? AND ${active}`
         )
-        .bind(id, operation, iso(), id, ordinal),
+        .bind(id, operation, iso(), id, ordinal, id, job.runtime.user_id),
     ]);
     if (!result[0]?.meta.changes)
       throw new DurableError(
@@ -684,6 +685,7 @@ export class DurableRepository {
           "UPDATE scan_execution SET phase='failed',heartbeat_at=? WHERE scan_id=? AND EXISTS(SELECT 1 FROM scans WHERE id=? AND status='failed')"
         )
         .bind(iso(), id, id),
+      ...terminalScanArtifactStatements(this.db, id),
     ]);
   }
   async cancel(id: string, userId: string) {
@@ -698,6 +700,7 @@ export class DurableRepository {
           "UPDATE scan_execution SET cancel_requested=1,phase='cancelled',heartbeat_at=? WHERE scan_id=? AND user_id=? AND EXISTS(SELECT 1 FROM scans WHERE id=? AND status='cancelled')"
         )
         .bind(iso(), id, userId, id),
+      ...terminalScanArtifactStatements(this.db, id, userId),
     ]);
     return !!result[0]?.meta.changes;
   }

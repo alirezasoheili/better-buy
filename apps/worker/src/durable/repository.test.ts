@@ -841,66 +841,6 @@ describe("durable scan persistence", () => {
       conflictingOfferIdentities: ["1:2"],
     });
   });
-  it("cleanup progresses beyond its bounded first batch without erasing history or successful data", async () => {
-    const { db, sqlite } = database(),
-      store = new Store(db, "tenant", "key"),
-      repo = new DurableRepository(db, "key");
-    const location = await store.createLocation({
-      name: "Fixture",
-      latitude: 35.7,
-      longitude: 51.4,
-    });
-    const input = {
-      locationId: location!.id,
-      source: "snappmarket" as const,
-      threshold: 40,
-      mode: "partial" as const,
-    };
-    for (let i = 0; i < 22; i++) {
-      const scan = await repo.reserve(
-        "tenant",
-        input,
-        crypto.randomUUID(),
-        false
-      );
-      await repo.saveDiscovery(scan.id, "fixture", { fixture: true });
-      await repo.cancel(scan.id, "tenant");
-      sqlite
-        .prepare("UPDATE scans SET finished_at=? WHERE id=?")
-        .run("2026-01-01T00:00:00.000Z", scan.id);
-      if (i === 21)
-        sqlite
-          .prepare("UPDATE scans SET status='succeeded' WHERE id=?")
-          .run(scan.id);
-    }
-    const env = {
-      DB: db,
-      BOX_KEY: "key",
-      SCAN_WORKFLOW: {
-        get: async () => {
-          throw new Error("must not reach engine");
-        },
-        create: async () => {
-          throw new Error("must not dispatch");
-        },
-      },
-    };
-    await reconcileDurableOperations(env);
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM scan_discovery").get()
-    ).toMatchObject({ n: 2 });
-    await reconcileDurableOperations(env);
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM scan_discovery").get()
-    ).toMatchObject({ n: 1 });
-    await reconcileDurableOperations(env);
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM scans").get()
-    ).toMatchObject({ n: 22 });
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM scan_start_intents").get()
-    ).toMatchObject({ n: 22 });
-  });
   it("comparison measures incremental union contributions and requires publication for completeness", async () => {
     const { db } = database(),
       store = new Store(db, "tenant", "key"),

@@ -29,9 +29,9 @@
     "not_found_handling": "single-page-application",
   },
   "vars": {
-    "APP_ORIGIN": "https://better-buy.better-buy-worker.workers.dev",
-    "BETTER_AUTH_URL": "https://better-buy.better-buy-worker.workers.dev",
-    "CORS_ORIGIN": "https://better-buy.better-buy-worker.workers.dev",
+    "APP_ORIGIN": "https://better-buy.ir",
+    "BETTER_AUTH_URL": "https://better-buy.ir",
+    "CORS_ORIGIN": "https://better-buy.ir",
     "DEV_MODE": "false",
     "SNAPP_STORE_CAMPAIGNS_ENABLED": "true",
     "SCAN_WORKFLOW_ENABLED": "false",

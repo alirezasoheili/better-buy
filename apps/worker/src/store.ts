@@ -14,6 +14,7 @@ import type {
 
 import { Credentials } from "./infrastructure/credentials";
 import { ScanValidationError } from "./domain/failures";
+import { terminalScanArtifactStatements } from "./scan-artifacts";
 const now = () => new Date().toISOString();
 
 // Both scan reads use the same correlated execution projection.
@@ -225,18 +226,20 @@ export class Store {
   async reconcileStale() {
     const queuedCutoff = new Date(Date.now() - 2 * 60_000).toISOString();
     const runningCutoff = new Date(Date.now() - 15 * 60_000).toISOString();
-    await this.db.batch([
-      this.db
-        .prepare(
-          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='queued' AND created_at < ? AND NOT EXISTS(SELECT 1 FROM scan_execution e WHERE e.scan_id=scans.id AND e.execution_kind='workflow')"
-        )
-        .bind(now(), this.userId, queuedCutoff),
-      this.db
-        .prepare(
-          "UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE user_id=? AND status='running' AND created_at < ? AND NOT EXISTS(SELECT 1 FROM scan_execution e WHERE e.scan_id=scans.id AND e.execution_kind='workflow')"
-        )
-        .bind(now(), this.userId, runningCutoff),
-    ]);
+    const stale = `user_id=? AND status IN ('queued','running') AND ((status='queued' AND created_at < ?) OR (status='running' AND created_at < ?)) AND NOT EXISTS(SELECT 1 FROM scan_execution e WHERE e.scan_id=scans.id AND e.execution_kind='workflow')`;
+    const { results } = await this.db
+      .prepare(`SELECT id FROM scans WHERE ${stale}`)
+      .bind(this.userId, queuedCutoff, runningCutoff)
+      .all<{ id: string }>();
+    for (const { id } of results)
+      await this.db.batch([
+        this.db
+          .prepare(
+            `UPDATE scans SET status='failed',finished_at=?,error_code='INTERRUPTED',error_message='اسکن با توقف برنامه متوقف شد' WHERE id=? AND ${stale}`
+          )
+          .bind(now(), id, this.userId, queuedCutoff, runningCutoff),
+        ...terminalScanArtifactStatements(this.db, id, this.userId),
+      ]);
   }
   async createScan(
     locationId: string,
@@ -470,12 +473,14 @@ export class Store {
       .run();
   }
   async fail(id: string, code: string, message: string) {
-    await this.db
-      .prepare(
-        "UPDATE scans SET status='failed',finished_at=?,error_code=?,error_message=?,context_json=CASE WHEN context_json IS NULL THEN NULL ELSE json_set(context_json,'$.coverage','incomplete') END WHERE user_id=? AND id=? AND status IN ('queued','running')"
-      )
-      .bind(now(), code, message, this.userId, id)
-      .run();
+    await this.db.batch([
+      this.db
+        .prepare(
+          "UPDATE scans SET status='failed',finished_at=?,error_code=?,error_message=?,context_json=CASE WHEN context_json IS NULL THEN NULL ELSE json_set(context_json,'$.coverage','incomplete') END WHERE user_id=? AND id=? AND status IN ('queued','running')"
+        )
+        .bind(now(), code, message, this.userId, id),
+      ...terminalScanArtifactStatements(this.db, id, this.userId),
+    ]);
   }
   async succeed(
     id: string,

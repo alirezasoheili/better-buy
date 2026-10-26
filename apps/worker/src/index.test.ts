@@ -17,6 +17,7 @@ const env = {
   DB: {
     prepare: (sql: string) => ({
       bind: () => ({
+        all: async () => ({ results: [] }),
         first: async () =>
           /FROM locations/i.test(sql)
             ? {
@@ -199,6 +200,7 @@ describe("Worker API provider policy", () => {
           ...env.DB,
           prepare: (sql: string) => ({
             bind: () => ({
+              all: async () => ({ results: [] }),
               first: async () =>
                 /FROM locations/i.test(sql)
                   ? {
@@ -215,7 +217,7 @@ describe("Worker API provider policy", () => {
             }),
           }),
         },
-      } as typeof env,
+      } as unknown as typeof env,
       {} as ExecutionContext
     );
 
