@@ -1,0 +1,123 @@
+.alerts-content {
+  display: grid;
+  gap: 16px;
+  min-inline-size: 0;
+}
+.alerts-content p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.alerts-content label {
+  display: block;
+  font-weight: 600;
+  margin-block-end: 8px;
+}
+.alerts-actions,
+.wishlist-items > li,
+.inbox-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.alerts-actions {
+  flex-wrap: wrap;
+}
+.alerts-actions input {
+  flex: 1;
+  min-inline-size: 140px;
+}
+.wishlist-items,
+.inbox-items,
+.notification-matches {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.wishlist-items > li {
+  justify-content: space-between;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--border);
+}
+.wishlist-items span,
+.inbox-heading h3 {
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
+}
+.wishlist-location select {
+  inline-size: 100%;
+  min-block-size: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 8px;
+  font: inherit;
+  margin-block-end: 8px;
+}
+.push-settings {
+  border-block-start: 1px solid var(--border);
+  padding-block-start: 16px;
+  display: grid;
+  gap: 12px;
+}
+.push-settings h3,
+.inbox-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.inbox-item {
+  padding-block: 18px;
+  border-block-end: 1px solid var(--border);
+}
+.inbox-item article {
+  display: grid;
+  gap: 12px;
+}
+.inbox-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.unread-label {
+  font-size: 12px;
+  color: var(--primary);
+}
+.inbox-item time {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.notification-matches {
+  display: grid;
+  gap: 12px;
+}
+.notification-matches > li {
+  padding: 12px;
+  background: var(--muted);
+  border-radius: var(--radius-control);
+  overflow-wrap: anywhere;
+}
+.notification-matches a {
+  display: inline-block;
+  padding-block: 8px;
+  color: var(--primary);
+  text-decoration: underline;
+}
+.alerts-content button {
+  white-space: normal;
+}
+.alerts-content :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (max-width: 1100px) {
+  .app-header {
+    flex-wrap: wrap;
+  }
+  .app-header nav {
+    max-inline-size: 100%;
+    overflow-x: auto;
+  }
+  .app-header nav > button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}

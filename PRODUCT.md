@@ -12,7 +12,7 @@ Signed-in users in Iran who want to quickly compare unusually deep grocery disco
 
 ## Product Purpose
 
-Better Buy manually scans supported store APIs, keeps products discounted by at least 40%, and makes changes between scans visible. Success means the user can choose a location, run a scan, and identify worthwhile available deals without searching stores one by one.
+Better Buy scans supported store APIs, keeps deeply discounted products, and makes changes between scans visible. Users can scan manually or save wishlist keywords and a delivery location for twice-daily checks. Success means identifying worthwhile available deals without searching stores one by one.
 
 ## Positioning
 
@@ -25,8 +25,8 @@ The application uses a Cloudflare Worker (Hono, D1, Better Auth) and a static Ne
 ## Capabilities and Constraints
 
 - Persian RTL web interface.
-- Hono Worker API, static Next.js frontend, tenant-isolated D1 history, and no scheduled execution.
-- API collection only in v1; DOM scraping, notifications, and purchasing are excluded.
+- Hono Worker API, static Next.js frontend, tenant-isolated D1 history, and location-specific wishlist scans scheduled for 09:00 and 18:00 Asia/Tehran.
+- API collection only; DOM scraping and purchasing are excluded. Wishlist matches appear in an in-app inbox and, with explicit permission and configured VAPID keys, encrypted browser/PWA Web Push notifications.
 - SnappMarket price amounts are presented as the tomans supplied by the API, without a unit conversion.
 - Authentication material must stay out of browser-readable responses and logs.
 - Each signed-in user can keep separate SnappMarket and Okala baskets. Basket lines and quantities persist when the selected delivery location changes; the provider recommendation is recalculated from the latest successful scan compatible with that location and its coordinates, independently of any historical scan being viewed.

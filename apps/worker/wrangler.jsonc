@@ -37,6 +37,7 @@
     "SCAN_WORKFLOW_ENABLED": "false",
     "SCAN_WORKFLOW_CONCURRENCY": "1",
     "API_RATE_LIMITS_ENABLED": "true",
+    "WISHLIST_SCHEDULE_ENABLED": "true",
   },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 }

@@ -9,6 +9,10 @@ export type WorkerEnv = AuthEnv & {
   SCAN_WORKFLOW_ENABLED?: string;
   SCAN_WORKFLOW_CONCURRENCY?: string;
   API_RATE_LIMITS_ENABLED?: string;
+  WISHLIST_SCHEDULE_ENABLED?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
   SCAN_WORKFLOW?: Workflow<{ scanId: string; contractVersion: 1 }>;
   ASSETS: Fetcher;
 };

@@ -41,6 +41,7 @@ export function useScanLedger({
   coordinateRevision,
   query = "",
   sort = "discount",
+  wishlistRevision = 0,
 }: {
   busy: boolean;
   selected: string;
@@ -50,6 +51,7 @@ export function useScanLedger({
   coordinateRevision: number;
   query?: string;
   sort?: string;
+  wishlistRevision?: number;
 }) {
   const client = useQueryClient();
   const contextual = scans
@@ -76,6 +78,7 @@ export function useScanLedger({
     requestedScan?.id ?? null,
     query,
     sort,
+    wishlistRevision,
   ];
   const contextKey = JSON.stringify(baseKey);
   const [paging, setPaging] = useState<{
@@ -125,6 +128,7 @@ export function useScanLedger({
       id,
       query,
       sort,
+      wishlistRevision,
     ];
     return (paging.context === JSON.stringify(key) ? paging.cursors : [null])
       .map((value) => client.getQueryData<ProductPage>([...key, value]))

@@ -8,6 +8,7 @@ import { registerScans } from "./http/scans";
 import { consumeRateLimit } from "./http/rateLimit";
 import { registerPagedProducts } from "./http/products";
 import { registerCarts } from "./http/carts";
+import { registerWishlist } from "./http/wishlist";
 import type { WorkerEnv, Variables } from "./http/types";
 export const api = new Hono<{ Bindings: WorkerEnv; Variables: Variables }>();
 // Liveness must not depend on a user session or a D1 read. Keep diagnostics
@@ -105,6 +106,7 @@ registerLocations(api);
 registerSettings(api);
 registerPagedProducts(api);
 registerCarts(api);
+registerWishlist(api);
 registerScans(api);
 api.notFound((c) =>
   c.json({ error: "NOT_FOUND", message: "مسیر پیدا نشد." }, 404)

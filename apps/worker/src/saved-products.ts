@@ -2,6 +2,7 @@ import {
   compareDeals,
   groupDealsV2,
   normalizeDealGroupText,
+  identityDigest,
   offerFactsSchema,
   productSummarySchema,
   productGroupSchema,
@@ -14,6 +15,7 @@ import {
 } from "@better-buy/shared";
 import { z } from "zod";
 import { Store } from "./store";
+import { wishlistMatchSql } from "./wishlist-matching";
 
 export class SavedProductsError extends Error {
   constructor(
@@ -342,7 +344,8 @@ const cursorSchema = z
     q: z.string(),
     sort: z.string(),
     group: z.string().optional(),
-    position: z.array(z.union([z.number().finite(), z.string()])).max(5),
+    wishlist: z.string().optional(),
+    position: z.array(z.union([z.number().finite(), z.string()])).max(6),
   })
   .strict();
 type Cursor = z.infer<typeof cursorSchema>;
@@ -366,7 +369,15 @@ function decodeCursor(text: string, context: Omit<Cursor, "v" | "position">) {
         )
       )
     );
-    for (const k of ["user", "scan", "kind", "q", "sort", "group"] as const)
+    for (const k of [
+      "user",
+      "scan",
+      "kind",
+      "q",
+      "sort",
+      "group",
+      "wishlist",
+    ] as const)
       if (c[k] !== context[k]) throw new Error("context");
     return c.position;
   } catch {
@@ -399,16 +410,28 @@ export async function readProductPage(
   if (!parsed.success) throw new SavedProductsError("INVALID_INPUT", 400);
   const { sort, limit, cursor } = parsed.data,
     q = normalizeProductSearch(parsed.data.q);
+  const wishlist = (
+    await db
+      .prepare(
+        "SELECT id, normalized_phrase FROM wishlist_items WHERE user_id=? ORDER BY id"
+      )
+      .bind(userId)
+      .all<{ id: string; normalized_phrase: string }>()
+  ).results;
+  const revision = wishlist.length ? await identityDigest(wishlist) : undefined;
   const context = {
     user: userId,
     scan: scanId,
     kind: "products" as const,
     q,
     sort,
+    wishlist: revision,
   };
   const position = cursor ? decodeCursor(cursor, context) : null;
   const { scan, p } = await publishedProjection(db, userId, scanId);
-  const columns = sortColumns[sort];
+  const columns = wishlist.length
+    ? ["wishlist_rank", ...sortColumns[sort]]
+    : [...sortColumns[sort]];
   if (
     position &&
     (position.length !== columns.length ||
@@ -425,11 +448,12 @@ export async function readProductPage(
   const rows = (
     await db
       .prepare(
-        `SELECT * FROM saved_products WHERE user_id=? AND scan_id=?
+        `WITH ranked AS (SELECT *, CASE WHEN presence=0 AND ${wishlistMatchSql("title_sort")} THEN 0 ELSE 1 END wishlist_rank
+    FROM saved_products WHERE user_id=? AND scan_id=?) SELECT * FROM ranked WHERE 1=1
     ${tokens.map(() => "AND instr(search_text,?)>0").join(" ")} ${position ? "AND " + positionWhere(columns) : ""}
     ORDER BY ${columns.join(",")} LIMIT ?`
       )
-      .bind(userId, scanId, ...tokens, ...(position ?? []), limit + 1)
+      .bind(userId, userId, scanId, ...tokens, ...(position ?? []), limit + 1)
       .all<Record<string, string | number>>()
   ).results;
   const page = rows.slice(0, limit),

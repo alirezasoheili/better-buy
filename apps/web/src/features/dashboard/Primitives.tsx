@@ -6,13 +6,17 @@ export function Panel({
   title,
   children,
   trigger,
+  open,
+  onOpenChange,
 }: {
   title: string;
   children: ReactNode;
   trigger: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <Dialog.Root>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="sheet-backdrop" />

@@ -1,6 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isWithinTehranBoundary, type ScanRecord } from "@better-buy/shared";
 import { AppHeader } from "./AppHeader";
 import { ReadNotice } from "./Primitives";
@@ -17,10 +17,16 @@ import type { DealSource } from "./types";
 import { ScanFeedback } from "../scans/ScanFeedback";
 import { ProviderCart, CartWriteNotice } from "../carts/ProviderCart";
 import { useProviderCart } from "../carts/useProviderCart";
+import { WishlistPanel } from "../alerts/WishlistPanel";
+import { NotificationInbox } from "../alerts/NotificationInbox";
+import { useWishlistQuery } from "../alerts/useAlerts";
 export function Dashboard() {
   const data = useDashboardData();
+  const wishlist = useWishlistQuery();
   const [view, setView] = useState<"deals" | "history">("deals");
   const [cartOpen, setCartOpen] = useState(false);
+  const scanLinkHandled = useRef(false);
+  const [scanLinkError, setScanLinkError] = useState(false);
   const [selection, setSelection] = useState<{
     source: DealSource | null;
     threshold: number | null;
@@ -29,6 +35,24 @@ export function Dashboard() {
   const [locationDialog, setLocationDialog] = useState<
     "list" | "create" | null
   >(null);
+  useEffect(() => {
+    if (scanLinkHandled.current || !data.scansQuery.isSuccess) return;
+    scanLinkHandled.current = true;
+    const scanId = new URLSearchParams(window.location.search).get("scan");
+    if (!scanId) return;
+    const run = data.scans.find((record) => record.id === scanId);
+    if (!run) {
+      setScanLinkError(true);
+      return;
+    }
+    data.setSelected(run.locationId);
+    setSelection({
+      source: run.source,
+      threshold: run.threshold,
+      runId: run.id,
+    });
+    setView("deals");
+  }, [data.scans, data.scansQuery.isSuccess, data.setSelected]);
   const latest = data.scans
     .filter((r) => r.locationId === data.selected && r.status === "succeeded")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -69,6 +93,7 @@ export function Dashboard() {
   });
   const filters = useDealFilters();
   const ledger = useScanLedger({
+    wishlistRevision: wishlist.dataUpdatedAt,
     busy: data.busy,
     selected: data.selected,
     scans: data.scans,
@@ -116,11 +141,25 @@ export function Dashboard() {
   };
   return (
     <main className="app-shell">
+      {scanLinkError && (
+        <ReadNotice title="اسکن این پیوند در حساب شما در دسترس نیست">
+          از تاریخچه اسکن یا صندوق اعلان‌ها، نتیجه دیگری را انتخاب کنید.
+        </ReadNotice>
+      )}
       <AppHeader
         onLocations={() => setLocationDialog("list")}
         onHistory={() => setView("history")}
         onHome={() => setView("deals")}
         view={view}
+        alerts={
+          <>
+            <WishlistPanel
+              locations={data.locations}
+              locationsReady={data.locationsQuery.isSuccess}
+            />
+            <NotificationInbox />
+          </>
+        }
         actions={
           source !== "digikalajet" ? (
             <ProviderCart

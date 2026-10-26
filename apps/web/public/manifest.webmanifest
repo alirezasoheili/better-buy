@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "بهتر بخر",
+  "short_name": "بهتر بخر",
+  "description": "مقایسه تخفیف فروشگاه‌های محلی و اعلان پیشنهادهای دلخواه",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#9a3412",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

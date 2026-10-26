@@ -4,6 +4,7 @@ import { DropdownMenu } from "radix-ui";
 import { authClient } from "../../app/auth-client";
 import { Panel } from "./Primitives";
 import { ThemeMenu } from "./ThemeMenu";
+import { cleanupPushBeforeSignOut } from "../alerts/push";
 export function AppHeader({
   onLocations,
   onHistory,
@@ -11,6 +12,7 @@ export function AppHeader({
   view,
   actions,
   feedback,
+  alerts,
 }: {
   onLocations: () => void;
   onHistory: () => void;
@@ -18,8 +20,10 @@ export function AppHeader({
   view: "deals" | "history";
   actions?: ReactNode;
   feedback?: ReactNode;
+  alerts?: ReactNode;
 }) {
   const [accountError, setAccountError] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
   return (
     <>
       <header className="app-header">
@@ -39,6 +43,7 @@ export function AppHeader({
         </Button>
         <div className="header-actions">{actions}</div>
         <nav aria-label="ناوبری اصلی">
+          {alerts}
           <Button variant="ghost" onClick={onLocations}>
             موقعیت‌ها
           </Button>
@@ -89,23 +94,36 @@ export function AppHeader({
               >
                 <DropdownMenu.Label>حساب بهتر بخر</DropdownMenu.Label>
                 <DropdownMenu.Item
-                  onSelect={() => {
-                    void authClient
-                      .signOut()
+                  disabled={signingOut}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    if (signingOut) return;
+                    setSigningOut(true);
+                    setAccountError("");
+                    void cleanupPushBeforeSignOut()
+                      .catch(() => {
+                        throw new Error(
+                          "خروج متوقف شد؛ پاک‌سازی اعلان این دستگاه انجام نشد. اتصال را بررسی و دوباره تلاش کنید."
+                        );
+                      })
+                      .then(() => authClient.signOut())
                       .then((r) => {
                         if (r.error)
                           setAccountError(
                             "خروج از حساب انجام نشد؛ دوباره تلاش کنید."
                           );
                       })
-                      .catch(() =>
+                      .catch((error: unknown) =>
                         setAccountError(
-                          "خروج از حساب انجام نشد؛ دوباره تلاش کنید."
+                          error instanceof Error && /[؀-ۿ]/.test(error.message)
+                            ? error.message
+                            : "خروج از حساب انجام نشد؛ دوباره تلاش کنید."
                         )
-                      );
+                      )
+                      .finally(() => setSigningOut(false));
                   }}
                 >
-                  خروج از حساب
+                  {signingOut ? "در حال خروج امن…" : "خروج از حساب"}
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
