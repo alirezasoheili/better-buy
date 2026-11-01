@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { QuerySession } from "../features/dashboard/QuerySession";
 import { authClient } from "./auth-client";
 import { Dashboard } from "../features/dashboard/Dashboard";
-import { GoogleSignIn } from "../features/auth/GoogleSignIn";
+import { AuthScreen } from "../features/auth/AuthScreen";
 import { DevSignIn } from "../features/auth/DevSignIn";
 export default function Page() {
   const { data: session, isPending, error, refetch } = authClient.useSession();
@@ -30,7 +30,7 @@ export default function Page() {
     return process.env.NODE_ENV === "development" ? (
       <DevSignIn />
     ) : (
-      <GoogleSignIn />
+      <AuthScreen />
     );
   return (
     <QuerySession key={session.user.id}>

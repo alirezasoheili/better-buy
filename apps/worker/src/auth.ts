@@ -23,7 +23,7 @@ export function createAuth(env: AuthEnv) {
         clientSecret: env.GOOGLE_CLIENT_SECRET,
       },
     },
-    emailAndPassword: { enabled: false },
+    emailAndPassword: { enabled: true },
     // Keep OAuth state and PKCE in Better Auth's short-lived encrypted cookie.
     // This avoids a D1 state round-trip while retaining CSRF and PKCE validation.
     account: { storeStateStrategy: "cookie" },
