@@ -650,6 +650,53 @@ details > p {
 .mobile-bottom-nav {
   display: none;
 }
+.scan-progress-card {
+  position: relative;
+  overflow: hidden;
+  margin-block: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--background));
+}
+.scan-sweep {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -30%;
+  inline-size: 25%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--primary) 15%, transparent),
+    transparent
+  );
+  animation: scan-sweep 2.4s ease-in-out infinite;
+}
+.scan-progress-track {
+  position: relative;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted);
+}
+.scan-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 400ms ease;
+}
+.scan-status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@keyframes scan-sweep {
+  to {
+    transform: translateX(-520%);
+  }
+}
 .check {
   display: flex;
   align-items: center;

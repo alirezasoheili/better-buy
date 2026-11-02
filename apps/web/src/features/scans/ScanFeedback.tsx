@@ -24,7 +24,7 @@ export function ScanFeedback({
     <>
       {active && (
         <Card asChild>
-          <section className="active-scan" role="status">
+          <section className="active-scan" role="status" aria-live="polite">
             <div>
               <strong>
                 {polling.error
@@ -33,7 +33,7 @@ export function ScanFeedback({
                     ? "اسکن در انتظار بررسی است"
                     : "در حال پیدا کردن تخفیف‌ها…"}
               </strong>
-              <p>
+              <p className="scan-status-badges">
                 {active.locationName} · {sourceLabel(active.source)} · حداقل{" "}
                 {faNumber.format(active.threshold)}٪
               </p>
@@ -50,19 +50,37 @@ export function ScanFeedback({
                 </p>
               )}
               {active.execution && (
-                <details>
-                  <summary>جزئیات به‌روزرسانی</summary>
-                  <p>
-                    {faNumber.format(active.execution.completedPages)} صفحه
-                    دریافت‌شده ·{" "}
-                    {faNumber.format(active.execution.observedRows)} رکورد
-                    مشاهده‌شده
-                  </p>
-                  <p>
-                    {faNumber.format(active.execution.completedUnits)} از{" "}
-                    {faNumber.format(active.execution.totalUnits)} بخش تکمیل شده
-                  </p>
-                </details>
+                <div className="scan-progress-card">
+                  <div className="scan-sweep" aria-hidden="true" />
+                  <div
+                    className="scan-progress-track"
+                    role="progressbar"
+                    aria-label="پیشرفت اسکن"
+                    aria-valuemin={0}
+                    aria-valuemax={active.execution.totalUnits}
+                    aria-valuenow={active.execution.completedUnits}
+                  >
+                    <span
+                      style={{
+                        width: `${active.execution.totalUnits ? Math.min(100, (active.execution.completedUnits / active.execution.totalUnits) * 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <details>
+                    <summary>جزئیات به‌روزرسانی</summary>
+                    <p>
+                      {faNumber.format(active.execution.completedPages)} صفحه
+                      دریافت‌شده ·{" "}
+                      {faNumber.format(active.execution.observedRows)} رکورد
+                      مشاهده‌شده
+                    </p>
+                    <p>
+                      {faNumber.format(active.execution.completedUnits)} از{" "}
+                      {faNumber.format(active.execution.totalUnits)} بخش تکمیل
+                      شده
+                    </p>
+                  </details>
+                </div>
               )}
               {cancel.error && (
                 <p className="form-error">
