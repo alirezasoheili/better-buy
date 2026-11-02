@@ -621,7 +621,15 @@ func (c *Collector) okalaRequest(ctx context.Context, method, endpoint string, q
 	if method == http.MethodPost {
 		headers.Set("Content-Type", "application/json")
 	}
-	value, err := c.request(ctx, method, target, headers, payload, "Okala", 3, false, job.ReserveRequest)
+	reserve := job.ReserveRequest
+	if method == http.MethodPost {
+		// Distinguish logical requests that share a path, such as separate Okala campaigns.
+		payloadKey := fmt.Sprintf(":%x", sha256.Sum256(payload))
+		reserve = func(ctx context.Context, operation string) error {
+			return job.ReserveRequest(ctx, operation+payloadKey)
+		}
+	}
+	value, err := c.request(ctx, method, target, headers, payload, "Okala", 3, false, reserve)
 	if err != nil {
 		return response{}, err
 	}
