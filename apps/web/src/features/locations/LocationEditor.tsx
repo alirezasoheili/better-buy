@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { AlertDialog } from "radix-ui";
 import type { LocationRecord } from "@better-buy/shared";
@@ -42,6 +42,13 @@ export function LocationEditor({
     searchError,
     searchAddress,
   } = useLocationSearch();
+  useEffect(() => {
+    if (searchState === "results" && searchResults[0]) {
+      setLatitude(searchResults[0].latitude);
+      setLongitude(searchResults[0].longitude);
+      setMapOpen(true);
+    }
+  }, [searchResults, searchState]);
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     void saveLocation({ name, latitude, longitude, isDefault });

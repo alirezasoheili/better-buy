@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   Marker,
   Rectangle,
   TileLayer,
   useMapEvents,
+  useMap,
 } from "react-leaflet";
 import { divIcon, Marker as LeafletMarker, type LatLngLiteral } from "leaflet";
 import { isWithinTehranBoundary, TEHRAN_BOUNDARY } from "@better-buy/shared";
@@ -16,6 +17,23 @@ const TEHRAN_BOUNDS: [[number, number], [number, number]] = [
   [TEHRAN_BOUNDARY.minLatitude, TEHRAN_BOUNDARY.minLongitude],
   [TEHRAN_BOUNDARY.maxLatitude, TEHRAN_BOUNDARY.maxLongitude],
 ];
+
+function MapPosition({
+  latitude,
+  longitude,
+}: {
+  latitude: number;
+  longitude: number;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (isWithinTehranBoundary(latitude, longitude)) {
+      map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
+      map.invalidateSize();
+    }
+  }, [map, latitude, longitude]);
+  return null;
+}
 
 function PickPoint({
   onPick,
@@ -127,7 +145,7 @@ export default function LocationMap({
     !hasValidPoint || mapNotice === "outside"
       ? "این محدوده خارج از شهر تهران است؛ یک نقطه داخل کادر انتخاب کنید."
       : mapNotice === "tiles"
-        ? "نمایش نقشه موقتاً در دسترس نیست؛ می‌توانید مختصات را از فیلدهای پایین وارد کنید."
+        ? "نمایش نقشه موقتاً در دسترس نیست؛ اتصال را بررسی و دوباره تلاش کنید."
         : "نقطه را بکشید یا روی نقشه کلیک کنید. محدوده پشتیبانی فعلاً تهران است.";
 
   return (
@@ -147,9 +165,10 @@ export default function LocationMap({
         scrollWheelZoom
         className="leaflet-map"
       >
+        <MapPosition latitude={latitude} longitude={longitude} />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png"
           eventHandlers={{ tileerror: handleTileError }}
         />
         <Rectangle
@@ -159,7 +178,7 @@ export default function LocationMap({
             weight: 2,
             dashArray: "7 7",
             fillColor: "var(--primary)",
-            fillOpacity: 0.035,
+            fillOpacity: 0,
           }}
         />
         <PickPoint onPick={handlePick} onOutsidePick={handleOutsidePick} />

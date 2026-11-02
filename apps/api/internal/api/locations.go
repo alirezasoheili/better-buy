@@ -76,14 +76,13 @@ func registerLocations(mux *http.ServeMux, db *sql.DB, cfg config.Config, servic
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "INVALID_SEARCH_QUERY", "message": "عبارت جست‌وجو باید بین ۲ تا ۱۲۰ نویسه باشد."})
 			return
 		}
-		if strings.TrimSpace(cfg.GeocoderBaseURL) == "" {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "GEOCODER_UNAVAILABLE", "message": "جست‌وجوی نشانی فعلاً در دسترس نیست؛ مختصات را دستی وارد کنید."})
-			return
-		}
 		results, status, err := searchLocations(r.Context(), cfg.GeocoderBaseURL, query)
+		if err != nil || len(results) == 0 {
+			results, status, err = searchPhoton(r.Context(), query)
+		}
 		if err != nil {
 			if status == http.StatusServiceUnavailable {
-				writeJSON(w, status, map[string]string{"error": "GEOCODER_UNAVAILABLE", "message": "جست‌وجوی نشانی فعلاً در دسترس نیست؛ مختصات را دستی وارد کنید."})
+				writeJSON(w, status, map[string]string{"error": "GEOCODER_UNAVAILABLE", "message": "جست‌وجوی نشانی فعلاً در دسترس نیست؛ روی نقشه انتخاب کنید."})
 			} else {
 				writeJSON(w, http.StatusBadGateway, map[string]string{"error": "GEOCODER_ERROR", "message": "پاسخ جست‌وجوی نشانی دریافت نشد؛ دوباره تلاش کنید."})
 			}
