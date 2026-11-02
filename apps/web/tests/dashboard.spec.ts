@@ -232,7 +232,7 @@ async function mock(
         state.scans = [
           run({
             ...input,
-            id: "active",
+            id: input.source === "okala" ? "active-okala" : "active",
             status: "queued",
             createdAt: new Date().toISOString(),
             finishedAt: null,
@@ -272,6 +272,27 @@ async function mock(
   });
   return state;
 }
+async function chooseSelect(page: Page, label: string, option: string) {
+  await page.getByRole("combobox", { name: label, exact: true }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+async function openMenuItem(page: Page, name: string) {
+  await page.getByRole("button", { name: "منوی برنامه", exact: true }).click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
+}
+async function onlyProvider(page: Page, source: "snappmarket" | "okala") {
+  const selected = page.getByRole("checkbox", {
+    name: source === "okala" ? "اکالا" : "اسنپ‌مارکت",
+    exact: true,
+  });
+  await selected.check();
+  await page
+    .getByRole("checkbox", {
+      name: source === "okala" ? "اسنپ‌مارکت" : "اکالا",
+      exact: true,
+    })
+    .uncheck();
+}
 const scanButton = (page: Page) =>
   page.getByRole("button", {
     name: /^(پیدا کردن تخفیف‌ها|به‌روزرسانی تخفیف‌ها)$/,
@@ -297,13 +318,15 @@ test("signed out, pending, and authentication error have clear next steps", asyn
   await expect(
     page.getByRole("button", { name: "ادامه با گوگل" })
   ).toBeVisible();
-  await page.route("**/api/auth/sign-in/social", (r) =>
-    r.fulfill({ status: 500, json: { code: "FAILED", message: "failed" } })
+  await page.route("**/api/auth/sign-in/email", (r) =>
+    r.fulfill({ status: 500, json: { error: { message: "failed" } } })
   );
-  await page.getByRole("button", { name: "ادامه با گوگل" }).click();
-  await expect(page.locator(".auth-error")).toContainText(
-    "شروع ورود با گوگل ممکن نشد"
-  );
+  await page.getByLabel("ایمیل", { exact: true }).fill("test@example.com");
+  await page.getByLabel("رمز عبور", { exact: true }).fill("test-password");
+  await page
+    .getByRole("button", { name: "ورود با ایمیل", exact: true })
+    .click();
+  await expect(page.locator(".auth-error")).toContainText("ورود انجام نشد");
   await captureState(page, "sign-in-error");
   let release = () => {};
   const waiting = new Promise<void>((resolve) => {
@@ -329,7 +352,7 @@ test("signed out, pending, and authentication error have clear next steps", asyn
     page.getByRole("button", { name: "ادامه با گوگل" })
   ).toBeVisible();
 });
-test("first visit creates a location using address search and manual coordinates without a map", async ({
+test("first visit creates a location from address search and maps the selected result", async ({
   page,
 }) => {
   const state = await mock(page, { locations: [] });
@@ -363,13 +386,14 @@ test("first visit creates a location using address search and manual coordinates
   await dialog.getByLabel("جست‌وجوی نشانی در تهران").fill("ونک");
   await dialog.getByRole("button", { name: "جست‌وجو", exact: true }).click();
   await dialog.getByRole("button", { name: "میدان ونک، تهران" }).click();
-  await expect(dialog.getByLabel("عرض جغرافیایی")).toHaveValue("35.75");
-  await dialog.getByLabel("عرض جغرافیایی").fill("0");
+  await expect(dialog.getByLabel("جست‌وجوی نشانی در تهران")).toHaveValue(
+    "میدان ونک، تهران"
+  );
+  await expect(dialog.locator(".leaflet-map")).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: "ذخیره مکان" })
-  ).toBeDisabled();
-  await captureState(page, "outside-area-editor");
-  await dialog.getByLabel("عرض جغرافیایی").fill("35.75");
+  ).toBeEnabled();
+  await captureState(page, "address-selected");
   await dialog.getByRole("button", { name: "ذخیره مکان" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByLabel("موقعیت تحویل", { exact: true })).toContainText(
@@ -378,18 +402,27 @@ test("first visit creates a location using address search and manual coordinates
   await expect.poll(() => delayedHistoryStarted).toBe(true);
   expect(state.posts).toEqual([]);
   releaseHistory();
-  await expect(page.locator(".active-scan")).toBeVisible();
-  expect(state.posts).toEqual([
-    {
-      locationId: "created",
-      source: "snappmarket",
-      threshold: 40,
-      mode: "partial",
-    },
-  ]);
+  await expect(page.locator(".active-scan")).toHaveCount(2);
+  expect(state.posts).toEqual(
+    expect.arrayContaining([
+      {
+        locationId: "created",
+        source: "snappmarket",
+        threshold: 15,
+        mode: "partial",
+      },
+      {
+        locationId: "created",
+        source: "okala",
+        threshold: 15,
+        mode: "partial",
+      },
+    ])
+  );
+  expect(state.posts).toHaveLength(2);
   await page.reload();
-  await expect(page.locator(".active-scan")).toBeVisible();
-  expect(state.posts).toHaveLength(1);
+  await expect(page.locator(".active-scan")).toHaveCount(2);
+  expect(state.posts).toHaveLength(2);
   await captureState(page, "first-automatic-update");
   expect(state.locations).toHaveLength(1);
 });
@@ -428,13 +461,13 @@ test("location reads recover and out-of-area saved locations remain editable", a
   await expect(page.getByText("موقعیت خارج از محدوده خدمات است")).toBeVisible();
   await captureState(page, "outside-area");
   await expect(scanButton(page)).toBeDisabled();
-  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await openMenuItem(page, "مدیریت موقعیت‌ها");
   await page.getByRole("button", { name: "ویرایش خانه" }).click();
   await expect(
     page.getByRole("dialog", { name: "ویرایش مکان", exact: true })
   ).toBeVisible();
 });
-test("new scans use the 40 percent default with no mode choice, credential routes, or duplicate submits", async ({
+test("selected-provider scans use the 15 percent collection floor with no mode choice or duplicate submits", async ({
   page,
 }) => {
   const state = await mock(page);
@@ -448,11 +481,7 @@ test("new scans use the 40 percent default with no mode choice, credential route
   });
   await page.goto("/");
   await expect(scanButton(page)).toBeEnabled();
-  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "فروشگاه", exact: true })
-    .selectOption("okala");
-  await page.keyboard.press("Escape");
+  await onlyProvider(page, "okala");
   await scanButton(page).dblclick();
   await expect(
     page.getByRole("button", { name: "در حال شروع…", exact: true })
@@ -463,12 +492,12 @@ test("new scans use the 40 percent default with no mode choice, credential route
     page.getByText("اسکن در انتظار بررسی است", { exact: true })
   ).toBeVisible();
   expect(state.posts).toEqual([
-    { locationId: "home", source: "okala", threshold: 40, mode: "partial" },
+    { locationId: "home", source: "okala", threshold: 15, mode: "partial" },
   ]);
   await expect(scanButton(page)).toBeDisabled();
   await expect(page.getByText("دامنه اسکن", { exact: true })).toHaveCount(0);
   expect(state.retailerRequests).toEqual([]);
-  await page.getByRole("button", { name: "راهنما", exact: true }).click();
+  await openMenuItem(page, "راهنمای بهتر بخر");
   await expect(
     page.getByRole("dialog", { name: "راهنمای بهتر بخر" })
   ).toContainText("ورود به فروشگاه نیست");
@@ -498,12 +527,8 @@ test("account-wide running scans remain discoverable in another location and sto
   await expect(
     page.getByText("در حال پیدا کردن تخفیف‌ها…", { exact: true })
   ).toBeVisible();
-  await page.getByLabel("موقعیت تحویل", { exact: true }).selectOption("office");
-  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "فروشگاه", exact: true })
-    .selectOption("okala");
-  await page.keyboard.press("Escape");
+  await chooseSelect(page, "موقعیت تحویل", "دفتر");
+  await onlyProvider(page, "okala");
   await expect(page.locator(".active-scan")).toContainText("خانه · اسنپ‌مارکت");
   await expect(scanButton(page)).toBeDisabled();
   finish = true;
@@ -534,9 +559,7 @@ test("status transport failure retains the server status and recovers without ma
     page.getByText("وضعیت اسکن تازه‌سازی نشد", { exact: true })
   ).toBeVisible();
   expect(calls).toBe(3);
-  await expect(page.getByText("اسکن ناموفق بود", { exact: true })).toHaveCount(
-    0
-  );
+  await expect(page.getByText(/اسکن ناموفق بود/)).toHaveCount(0);
   fail = false;
   await page.getByRole("button", { name: "بررسی دوباره وضعیت" }).click();
   await expect(page.locator(".active-scan")).toHaveCount(0);
@@ -617,7 +640,7 @@ test("background result failures preserve this context's cached snapshot and cle
   ).toBeVisible();
   await expect(offerHeading(page)).toBeVisible();
   await expect(
-    page.getByText("نتیجه ذخیره‌شده؛ تازه‌سازی نشد", { exact: false })
+    page.getByText("نتیجه ذخیره‌شده با زمان خودش حفظ شده است.", { exact: true })
   ).toBeVisible();
   fail = false;
   await page.getByRole("button", { name: "دریافت دوباره نتیجه" }).click();
@@ -687,6 +710,7 @@ test("a lost start response reconciles a known scan with one POST", async ({
     return r.fulfill({ json: { data: state.scans } });
   });
   await page.goto("/");
+  await onlyProvider(page, "snappmarket");
   await scanButton(page).click();
   await expect(page.locator(".active-scan")).toContainText("خانه");
   await expect(scanButton(page)).toBeDisabled();
@@ -706,6 +730,7 @@ test("an unknown start retains its intent after fresh reads and an explicit rese
     return r.fulfill({ json: { data: state.scans } });
   });
   await page.goto("/");
+  await onlyProvider(page, "snappmarket");
   await scanButton(page).click();
   await expect(
     page.getByText("نتیجه شروع اسکن مشخص نیست", { exact: true })
@@ -739,6 +764,7 @@ test("reconciliation failure keeps duplicate start blocked until the authenticat
     );
   });
   await page.goto("/");
+  await onlyProvider(page, "snappmarket");
   await scanButton(page).click();
   await expect(
     page.getByText("نتیجه شروع اسکن مشخص نیست", { exact: true })
@@ -779,20 +805,12 @@ for (const boundary of ["location", "source", "scan"])
     await page.goto("/");
     await expect.poll(() => started).toBe(true);
     if (boundary === "location")
-      await page
-        .getByLabel("موقعیت تحویل", { exact: true })
-        .selectOption("office");
+      await chooseSelect(page, "موقعیت تحویل", "دفتر");
     if (boundary === "source") {
-      await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
-      await page
-        .getByRole("combobox", { name: "فروشگاه", exact: true })
-        .selectOption("okala");
-      await page.keyboard.press("Escape");
+      await onlyProvider(page, "okala");
     }
     if (boundary === "scan") {
-      await page
-        .getByRole("button", { name: "تاریخچه اسکن", exact: true })
-        .click();
+      await page.getByRole("button", { name: "تاریخچه", exact: true }).click();
       await page
         .locator(".run-item")
         .last()
@@ -827,7 +845,7 @@ test("sign-out retires reads and another account cannot see late private results
   await page.route("**/api/auth/sign-out", (r) =>
     r.fulfill({ json: { success: true } })
   );
-  await page.getByRole("button", { name: "حساب", exact: true }).click();
+  await page.getByRole("button", { name: "منوی برنامه", exact: true }).click();
   await page.getByRole("menuitem", { name: "خروج از حساب" }).click();
   await expect(
     page.getByRole("button", { name: "ادامه با گوگل" })
@@ -928,17 +946,20 @@ test("history identifies context and retains Jet results without new Jet scans",
     groups: [group("پیشنهاد تاریخی جت", "jet")],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "تاریخچه اسکن", exact: true }).click();
+  await page.getByRole("button", { name: "تاریخچه", exact: true }).click();
   await expect(page.locator(".run-item")).toContainText("حداقل ۲۵٪");
   await page.getByRole("button", { name: "نمایش نتیجه", exact: true }).click();
   await expect(offerHeading(page, "پیشنهاد تاریخی جت")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "نتیجه تاریخی", exact: true })
   ).toBeVisible();
-  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
-  await expect(page.getByText("دیجی‌کالا جت · فقط مشاهده")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(scanButton(page)).toBeDisabled();
+  await expect(page.locator(".deal-row .product-provider")).toContainText(
+    "دیجی‌کالا جت"
+  );
+  await expect(
+    page.getByRole("button", { name: /افزودن .* به سبد/ })
+  ).toHaveCount(0);
+  await expect(scanButton(page)).toBeEnabled();
   expect(state.posts).toEqual([]);
 });
 test("a failed scan retains the previous snapshot and repeating it is an explicit new scan", async ({
@@ -958,10 +979,8 @@ test("a failed scan retains the previous snapshot and repeating it is an explici
   });
   await page.goto("/");
   await expect(offerHeading(page)).toBeVisible();
-  await expect(
-    page.getByText("اسکن ناموفق بود", { exact: true })
-  ).toBeVisible();
-  await page.getByRole("button", { name: "تاریخچه اسکن", exact: true }).click();
+  await expect(page.getByText(/اسکن ناموفق بود/)).toBeVisible();
+  await page.getByRole("button", { name: "تاریخچه", exact: true }).click();
   await page.getByRole("button", { name: "اسکن تازه با این گزینه‌ها" }).click();
   await expect(page.locator(".active-scan")).toBeVisible();
   expect(state.posts).toHaveLength(1);
@@ -971,7 +990,7 @@ test("location editing and deletion restore selection with keyboard-accessible d
 }) => {
   await mock(page, { locations: [home, office] });
   await page.goto("/");
-  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await openMenuItem(page, "مدیریت موقعیت‌ها");
   const manager = page.getByRole("dialog", {
     name: "موقعیت‌های تحویل",
     exact: true,
@@ -1010,10 +1029,10 @@ test("location editing and deletion restore selection with keyboard-accessible d
   await page.keyboard.press("Escape");
   await expect(manager).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "موقعیت‌ها", exact: true })
+    page.getByRole("button", { name: "منوی برنامه", exact: true })
   ).toBeFocused();
-  await expect(page.getByLabel("موقعیت تحویل", { exact: true })).toHaveValue(
-    "office"
+  await expect(page.getByLabel("موقعیت تحویل", { exact: true })).toContainText(
+    "دفتر"
   );
 });
 test("location list, edit and create replace content in the same dialog and discard cancelled drafts", async ({
@@ -1021,7 +1040,7 @@ test("location list, edit and create replace content in the same dialog and disc
 }) => {
   const state = await mock(page, { locations: [home, office] });
   await page.goto("/");
-  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await openMenuItem(page, "مدیریت موقعیت‌ها");
   const shell = page.locator('[role="dialog"]');
   await shell.evaluate((element) =>
     element.setAttribute("data-location-dialog-instance", "original")
@@ -1078,11 +1097,11 @@ test("location list, edit and create replace content in the same dialog and disc
   await shell.getByRole("button", { name: "بستن پنجره مکان" }).click();
   await expect(shell).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "موقعیت‌ها", exact: true })
+    page.getByRole("button", { name: "منوی برنامه", exact: true })
   ).toBeFocused();
   expect(state.locations).toHaveLength(3);
 });
-test("one feed has optional search, sorting, accessible comparison and settings without collection", async ({
+test("saved feed supports search, sorting, inline discount filtering and accessible details without collection", async ({
   page,
 }) => {
   const state = await success(page);
@@ -1096,12 +1115,17 @@ test("one feed has optional search, sorting, accessible comparison and settings 
     .getByRole("button", { name: "پاک‌کردن جست‌وجو", exact: true })
     .click();
   await expect(page.locator(".deal-row")).toHaveCount(3);
-  await page
-    .getByRole("combobox", { name: "مرتب‌سازی", exact: true })
-    .selectOption("price");
-  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "تنظیمات تخفیف‌ها" });
-  await dialog.getByLabel("حداقل درصد تخفیف").selectOption("50");
+  await chooseSelect(page, "مرتب‌سازی", "کمترین قیمت");
+  await page.getByRole("slider", { name: /حداقل تخفیف/ }).fill("50");
+  const detailTrigger = page.getByRole("button", {
+    name: `جزئیات ${representative[0]!.title}`,
+    exact: true,
+  });
+  await detailTrigger.click();
+  const dialog = page.getByRole("dialog", {
+    name: representative[0]!.title,
+    exact: true,
+  });
   for (let i = 0; i < 8; i++) {
     await page.keyboard.press("Tab");
     expect(
@@ -1110,7 +1134,10 @@ test("one feed has optional search, sorting, accessible comparison and settings 
   }
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "تنظیمات", exact: true })
+    page.getByRole("button", {
+      name: `جزئیات ${representative[0]!.title}`,
+      exact: true,
+    })
   ).toBeFocused();
   await expect(page.locator(".deal-row")).toHaveCount(3);
   await expect(
@@ -1161,8 +1188,14 @@ test("appearance menu changes and persists light, dark and system themes", async
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await success(page);
-  const appearance = page.getByRole("button", { name: "ظاهر", exact: true });
+  const appearance = page.getByRole("button", {
+    name: "منوی برنامه",
+    exact: true,
+  });
   await appearance.click();
+  await page
+    .getByRole("menuitem", { name: "ظاهر برنامه", exact: true })
+    .click();
   await expect(
     page.getByRole("menuitemradio", { name: "سیستم", exact: true })
   ).toHaveAttribute("aria-checked", "true");
@@ -1172,6 +1205,9 @@ test("appearance menu changes and persists light, dark and system themes", async
   await expect(appearance).toBeVisible();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await appearance.click();
+  await page
+    .getByRole("menuitem", { name: "ظاهر برنامه", exact: true })
+    .click();
   await expect(
     page.getByRole("menuitemradio", { name: "تیره", exact: true })
   ).toHaveAttribute("aria-checked", "true");
@@ -1183,16 +1219,22 @@ test("appearance menu changes and persists light, dark and system themes", async
   await expect(page.locator("html")).toHaveClass(/light/);
   await appearance.focus();
   await page.keyboard.press("Enter");
+  await page
+    .getByRole("menuitem", { name: "ظاهر برنامه", exact: true })
+    .click();
   await page.getByRole("menuitemradio", { name: "سیستم", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveClass(/dark/);
   await expect(appearance).toBeFocused();
-  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await openMenuItem(page, "مدیریت موقعیت‌ها");
   await page.getByRole("button", { name: "ویرایش خانه", exact: true }).click();
   await expect(page.locator('[role="dialog"]')).toHaveCount(1);
   await captureState(page, "single-location-editor-dark", false);
   await page.getByRole("button", { name: "بستن پنجره مکان" }).click();
   await appearance.click();
+  await page
+    .getByRole("menuitem", { name: "ظاهر برنامه", exact: true })
+    .click();
   await captureState(page, "appearance-menu-dark", false);
   await page.keyboard.press("Escape");
   await page.emulateMedia({ colorScheme: "light" });
@@ -1380,11 +1422,19 @@ test("capture state views, real retailer images, touch targets, focus and token 
   await capture("real-images");
   await page.locator(".vendor-disclosure summary").first().click();
   await capture("expanded-offers");
-  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
-  await capture("settings-dialog");
+  await page
+    .getByRole("button", {
+      name: `جزئیات ${state.groups[0]!.title}`,
+      exact: true,
+    })
+    .click();
+  await capture("product-detail-dialog");
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "تنظیمات", exact: true })
+    page.getByRole("button", {
+      name: `جزئیات ${state.groups[0]!.title}`,
+      exact: true,
+    })
   ).toBeFocused();
   const metrics = await page.evaluate(() => {
     const contrast = (a: string, b: string) => {
@@ -1475,14 +1525,12 @@ test("capture state views, real retailer images, touch targets, focus and token 
     run(),
   ];
   await page.reload();
-  await expect(
-    page.getByText("اسکن ناموفق بود", { exact: true })
-  ).toBeVisible();
+  await expect(page.getByText(/اسکن ناموفق بود/)).toBeVisible();
   await capture("failed");
   state.scans = [run({ id: "jet", source: "digikalajet" })];
   state.groups = [group("پیشنهاد تاریخی جت", "jet")];
   await page.reload();
-  await page.getByRole("button", { name: "تاریخچه اسکن", exact: true }).click();
+  await page.getByRole("button", { name: "تاریخچه", exact: true }).click();
   await capture("history");
   await page.getByRole("button", { name: "نمایش نتیجه", exact: true }).click();
   await expect(offerHeading(page, "پیشنهاد تاریخی جت")).toBeVisible();
@@ -1518,7 +1566,7 @@ test("small mobile keyboard viewport keeps location forms and filters usable", a
 }) => {
   await success(page);
   await page.setViewportSize({ width: 390, height: 480 });
-  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await openMenuItem(page, "مدیریت موقعیت‌ها");
   await page.getByRole("button", { name: "ویرایش خانه" }).click();
   const editor = page.getByRole("dialog", { name: "ویرایش مکان", exact: true });
   await editor.getByLabel("نام مکان").fill("خانه با صفحه‌کلید باز");
@@ -1534,7 +1582,7 @@ test("small mobile keyboard viewport keeps location forms and filters usable", a
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "موقعیت‌ها", exact: true })
+    page.getByRole("button", { name: "منوی برنامه", exact: true })
   ).toBeFocused();
   await expect
     .poll(() =>
@@ -1545,24 +1593,23 @@ test("small mobile keyboard viewport keeps location forms and filters usable", a
     .toBe(true);
 });
 
-test("optional map loads on demand and tile failure leaves manual coordinates usable", async ({
+test("map selection stays usable when the visual tile service fails", async ({
   page,
 }) => {
-  await mock(page);
-  await page.route(/https:\/\/[abc]\.tile\.openstreetmap\.org\//, (r) =>
-    r.abort()
+  const state = await mock(page);
+  await page.route(/https:\/\/(?:[^/]+\.)?basemaps\.cartocdn\.com\//, (route) =>
+    route.abort()
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "موقعیت‌ها", exact: true }).click();
+  await openMenuItem(page, "مدیریت موقعیت‌ها");
   await page.getByRole("button", { name: "ویرایش خانه" }).click();
   const dialog = page.getByRole("dialog", { name: "ویرایش مکان", exact: true });
-  await expect(dialog.locator(".leaflet-map")).toHaveCount(0);
-  await dialog.getByText("انتخاب روی نقشه (اختیاری)", { exact: true }).click();
   await expect(dialog.locator(".leaflet-map")).toBeVisible();
   await expect(
     dialog.getByText("نمایش نقشه موقتاً در دسترس نیست", { exact: false })
   ).toBeVisible();
-  await dialog.getByLabel("عرض جغرافیایی").fill("35.72");
+  await dialog.locator(".leaflet-map").click({ position: { x: 100, y: 100 } });
   await dialog.getByRole("button", { name: "ذخیره مکان" }).click();
   await expect(dialog).toHaveCount(0);
+  expect(state.locations[0]?.latitude).not.toBe(home.latitude);
 });

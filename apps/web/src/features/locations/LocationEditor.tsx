@@ -130,7 +130,7 @@ export function LocationEditor({
           )}
         </div>
         <details
-          open
+          open={mapOpen}
           onToggle={(event) => setMapOpen(event.currentTarget.open)}
         >
           <summary>انتخاب موقعیت روی نقشه</summary>

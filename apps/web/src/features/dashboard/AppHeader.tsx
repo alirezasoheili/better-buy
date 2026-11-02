@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { DropdownMenu } from "radix-ui";
 import { useTheme } from "next-themes";
 import { authClient } from "../../app/auth-client";
@@ -32,6 +32,7 @@ export function AppHeader({
   const [accountError, setAccountError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement | null>(null);
   const signOut = () => {
     if (signingOut) return;
     setSigningOut(true);
@@ -95,6 +96,7 @@ export function AppHeader({
         <DropdownMenu.Root dir="rtl">
           <DropdownMenu.Trigger asChild>
             <Button
+              ref={menuTrigger}
               variant="ghost"
               className="secondary-menu-trigger"
               aria-label="منوی برنامه"
@@ -109,10 +111,14 @@ export function AppHeader({
               sideOffset={8}
             >
               <DropdownMenu.Item onSelect={onHome}>پیشنهادها</DropdownMenu.Item>
-              <DropdownMenu.Item onSelect={onLocations}>
+              <DropdownMenu.Item
+                onSelect={() => requestAnimationFrame(onLocations)}
+              >
                 مدیریت موقعیت‌ها
               </DropdownMenu.Item>
-              <DropdownMenu.Item onSelect={() => setHelpOpen(true)}>
+              <DropdownMenu.Item
+                onSelect={() => requestAnimationFrame(() => setHelpOpen(true))}
+              >
                 راهنمای بهتر بخر
               </DropdownMenu.Item>
               {onAdmin && (
@@ -156,7 +162,10 @@ export function AppHeader({
       <Panel
         title="راهنمای بهتر بخر"
         open={helpOpen}
-        onOpenChange={setHelpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (!open) requestAnimationFrame(() => menuTrigger.current?.focus());
+        }}
         trigger={<button type="button" hidden aria-label="راهنما" />}
       >
         <p>

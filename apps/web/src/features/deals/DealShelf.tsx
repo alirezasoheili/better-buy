@@ -142,8 +142,8 @@ export function DealShelf({
           {ledger.results.error && (
             <div className="result-error" role="status">
               <div>
+                <span>{sourceLabel(source)}</span>
                 <strong>
-                  {sourceLabel(source)} ·{" "}
                   {ledger.hasResults
                     ? "تازه‌سازی نتیجه انجام نشد"
                     : "نتیجه اسکن دریافت نشد"}

@@ -26,6 +26,9 @@ export function ScanFeedback({
         <Card asChild>
           <section className="active-scan" role="status" aria-live="polite">
             <div>
+              <span className="scan-provider">
+                {sourceLabel(active.source)}
+              </span>
               <strong>
                 {polling.error
                   ? "وضعیت اسکن تازه‌سازی نشد"
@@ -52,13 +55,24 @@ export function ScanFeedback({
               {active.execution && (
                 <div className="scan-progress-card">
                   <div className="scan-sweep" aria-hidden="true" />
+                  <p className="scan-phase">
+                    {active.execution.cancelRequested
+                      ? "در حال توقف و حفظ نتیجه قبلی…"
+                      : active.execution.phase === "queued"
+                        ? "در انتظار شروع بررسی فروشگاه‌ها"
+                        : "در حال دریافت و مقایسه پیشنهادهای فروشگاه‌ها"}
+                  </p>
                   <div
                     className="scan-progress-track"
                     role="progressbar"
                     aria-label="پیشرفت اسکن"
                     aria-valuemin={0}
-                    aria-valuemax={active.execution.totalUnits}
-                    aria-valuenow={active.execution.completedUnits}
+                    aria-valuemax={active.execution.totalUnits || undefined}
+                    aria-valuenow={
+                      active.execution.totalUnits
+                        ? active.execution.completedUnits
+                        : undefined
+                    }
                   >
                     <span
                       style={{
@@ -66,6 +80,12 @@ export function ScanFeedback({
                       }}
                     />
                   </div>
+                  <p className="scan-progress-count">
+                    {faNumber.format(active.execution.completedUnits)} از{" "}
+                    {faNumber.format(active.execution.totalUnits)} بخش ·{" "}
+                    {faNumber.format(active.execution.observedRows)} کالا
+                    بررسی‌شده
+                  </p>
                   <details>
                     <summary>جزئیات به‌روزرسانی</summary>
                     <p>

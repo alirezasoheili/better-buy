@@ -423,51 +423,6 @@
   }
 }
 @media (max-width: 520px) {
-  .app-header:has(.cart-trigger) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "brand actions"
-      "nav nav"
-      "feedback feedback";
-    align-items: center;
-    gap: 8px 12px;
-  }
-  .app-header:has(.cart-trigger) > .brand {
-    grid-area: brand;
-    justify-self: start;
-  }
-  .app-header:has(.cart-trigger) > .header-actions {
-    grid-area: actions;
-    justify-self: end;
-  }
-  .app-header:has(.cart-trigger) > nav {
-    grid-area: nav;
-    inline-size: 100%;
-    flex-wrap: nowrap;
-    justify-content: space-between;
-    gap: 0;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: none;
-  }
-  .app-header:has(.cart-trigger) > nav::-webkit-scrollbar {
-    display: none;
-  }
-  .app-header:has(.cart-trigger) > nav > button {
-    flex: 0 0 auto;
-    min-inline-size: 44px;
-    min-block-size: 44px;
-    padding-inline: 6px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-  .app-header:has(.cart-trigger) > .cart-write-notice {
-    grid-area: feedback;
-    inline-size: 100%;
-    max-inline-size: 100%;
-    margin: 0;
-  }
   .provider-cart-drawer {
     inline-size: 100vw;
     border: 0;
@@ -505,5 +460,25 @@
   }
   .cart-store-copy h3 {
     font-size: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-header:has(.cart-trigger) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+  .app-header:has(.cart-trigger) > .header-actions,
+  .app-header:has(.cart-trigger) > .desktop-primary-nav {
+    display: none;
+  }
+  .app-header:has(.cart-trigger) > .brand {
+    margin-inline-end: auto;
+  }
+  .app-header:has(.cart-trigger) > .cart-write-notice {
+    flex-basis: 100%;
+    max-inline-size: 100%;
+    margin: 0;
   }
 }

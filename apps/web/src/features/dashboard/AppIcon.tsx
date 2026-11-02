@@ -1,0 +1,82 @@
+import type { SVGProps } from "react";
+
+type IconName =
+  | "menu"
+  | "cart"
+  | "heart"
+  | "bell"
+  | "history"
+  | "home"
+  | "close"
+  | "plus"
+  | "check"
+  | "external"
+  | "location";
+
+export function AppIcon({
+  name,
+  ...props
+}: SVGProps<SVGSVGElement> & { name: IconName }) {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      {name === "menu" && <path d="M4 6h16M4 12h16M4 18h16" />}
+      {name === "cart" && (
+        <>
+          <path d="M3 3h2l2.4 12h11.2L21 7H6" />
+          <circle cx="9" cy="20" r="1" />
+          <circle cx="18" cy="20" r="1" />
+        </>
+      )}
+      {name === "heart" && (
+        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+      )}
+      {name === "bell" && (
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+      )}
+      {name === "history" && (
+        <path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2" />
+      )}
+      {name === "home" && <path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8" />}
+      {name === "close" && <path d="m6 6 12 12M6 18 18 6" />}
+      {name === "plus" && <path d="M12 5v14M5 12h14" />}
+      {name === "check" && <path d="m5 12 4 4L19 6" />}
+      {name === "external" && (
+        <path d="M14 3h7v7M21 3l-11 11M10 3H3v18h18v-7" />
+      )}
+      {name === "location" && (
+        <>
+          <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" />
+          <circle cx="12" cy="10" r="2.5" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+export function ProviderMark({
+  source,
+}: {
+  source: "snappmarket" | "okala" | "digikalajet";
+}) {
+  if (source === "digikalajet") return null;
+  return (
+    <img
+      className="provider-mark"
+      src={`/providers/${source}.png`}
+      alt=""
+      width={24}
+      height={24}
+    />
+  );
+}
