@@ -428,15 +428,13 @@ func normalizeSnapp(vendors map[string]snappVendor, observedAt map[string]string
 }
 
 type okalaOfferStore struct {
-	StoreID   int64   `json:"storeId"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
+	ID int64 `json:"id"`
 }
 
 type okalaOfferRequest struct {
-	Request  struct{}          `json:"request"`
-	Stores   []okalaOfferStore `json:"stores"`
-	PageType string            `json:"pageType"`
+	CarouselID int64             `json:"carouselId,omitempty"`
+	Stores     []okalaOfferStore `json:"stores"`
+	PageType   string            `json:"pageType,omitempty"`
 }
 
 func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult, error) {
@@ -474,20 +472,13 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	}
 	stores := make([]okalaOfferStore, 0, len(storeIDs))
 	for _, storeID := range storeIDs {
-		stores = append(stores, okalaOfferStore{StoreID: storeID, Latitude: job.Location.Latitude, Longitude: job.Location.Longitude})
+		stores = append(stores, okalaOfferStore{ID: storeID})
 	}
 	campaignPayload, err := json.Marshal(okalaOfferRequest{Stores: stores, PageType: "HomePage"})
 	if err != nil {
 		return scanResult{}, err
 	}
-	campaignQuery := url.Values{"pageType": {"HomePage"}}
-	for key, values := range coordinates {
-		campaignQuery[key] = append([]string(nil), values...)
-	}
-	for _, storeID := range storeIDs {
-		campaignQuery.Add("StoreIds", strconv.FormatInt(storeID, 10))
-	}
-	campaignBody, err := c.okalaRequest(ctx, http.MethodPost, "/carousel/v4/offers", campaignQuery, campaignPayload, job)
+	campaignBody, err := c.okalaRequest(ctx, http.MethodPost, "/carousel/v4/offers", nil, campaignPayload, job)
 	if err != nil {
 		return scanResult{}, err
 	}
@@ -523,11 +514,11 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	inspected := make(map[int64]struct{})
 	productCount := 0
 	for _, campaignID := range campaignIDs {
-		query := url.Values{"carouselId": {strconv.FormatInt(campaignID, 10)}}
-		for _, storeID := range storeIDs {
-			query.Add("StoreIds", strconv.FormatInt(storeID, 10))
+		detailPayload, err := json.Marshal(okalaOfferRequest{CarouselID: campaignID, Stores: stores})
+		if err != nil {
+			return scanResult{}, err
 		}
-		body, err := c.okalaRequest(ctx, http.MethodPost, "/carousel/v4/offers/multi-store", query, campaignPayload, job)
+		body, err := c.okalaRequest(ctx, http.MethodPost, "/carousel/v4/offers/multi-store", nil, detailPayload, job)
 		if err != nil {
 			return scanResult{}, err
 		}
@@ -607,7 +598,10 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 }
 
 func (c *Collector) okalaRequest(ctx context.Context, method, endpoint string, query url.Values, payload []byte, job *scanJob) (response, error) {
-	target := "https://apigateway.okala.com/api" + endpoint + "?" + query.Encode()
+	target := "https://apigateway.okala.com/api" + endpoint
+	if encodedQuery := query.Encode(); encodedQuery != "" {
+		target += "?" + encodedQuery
+	}
 	cacheKey := discoveryRequestKey("okala", method, target)
 	if method == http.MethodPost {
 		cacheKey += fmt.Sprintf(":%x", sha256.Sum256(payload))
