@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alirezasoheili/better-buy/apps/api/internal/discounts"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/scans"
 	"golang.org/x/text/unicode/norm"
 )
@@ -107,6 +108,8 @@ type ProductSummary struct {
 	CurrentStoreOfferCount int          `json:"currentStoreOfferCount"`
 	Diagnostics            []string     `json:"diagnostics"`
 	ConditionalOfferCount  int          `json:"conditionalOfferCount"`
+	CartQuantity           int          `json:"cartQuantity"`
+	WishlistMatch          bool         `json:"wishlistMatch"`
 }
 
 type ProductPage struct {
@@ -126,14 +129,15 @@ type OfferPage struct {
 }
 
 type cursor struct {
-	Version  int    `json:"v"`
-	User     string `json:"user"`
-	Scan     string `json:"scan"`
-	Kind     string `json:"kind"`
-	Query    string `json:"q"`
-	Sort     string `json:"sort"`
-	Group    string `json:"group,omitempty"`
-	Position []any  `json:"position"`
+	Version     int    `json:"v"`
+	User        string `json:"user"`
+	Scan        string `json:"scan"`
+	Kind        string `json:"kind"`
+	Query       string `json:"q"`
+	Sort        string `json:"sort"`
+	MinDiscount int    `json:"minDiscount"`
+	Group       string `json:"group,omitempty"`
+	Position    []any  `json:"position"`
 }
 
 type Service struct {
@@ -191,6 +195,10 @@ func (s *Service) Deals(ctx context.Context, queue *scans.Queue, userID, scanID 
 }
 
 func (s *Service) ProductPage(ctx context.Context, queue *scans.Queue, userID, scanID string, query url.Values) (ProductPage, error) {
+	minDiscount, err := minimumDiscount(query)
+	if err != nil {
+		return ProductPage{}, err
+	}
 	deals, scan, err := s.Deals(ctx, queue, userID, scanID)
 	if err != nil {
 		return ProductPage{}, err
@@ -214,11 +222,11 @@ func (s *Service) ProductPage(ctx context.Context, queue *scans.Queue, userID, s
 		}
 		limit = parsed
 	}
-	position, err := decodeCursor(query.Get("cursor"), cursor{Version: 1, User: userID, Scan: scanID, Kind: "products", Query: q, Sort: sortBy})
+	position, err := decodeCursor(query.Get("cursor"), cursor{Version: 1, User: userID, Scan: scanID, Kind: "products", Query: q, Sort: sortBy, MinDiscount: minDiscount})
 	if err != nil {
 		return ProductPage{}, &scans.Error{Code: "INVALID_CURSOR", Message: "Invalid product cursor.", Status: 400}
 	}
-	groups := groupV2(scan.Source, deals)
+	groups := groupV2(scan.Source, deals, minDiscount)
 	if q != "" {
 		filtered := groups[:0]
 		for _, group := range groups {
@@ -229,8 +237,12 @@ func (s *Service) ProductPage(ctx context.Context, queue *scans.Queue, userID, s
 		}
 		groups = filtered
 	}
-	wishlistWords := s.wishlistWords(ctx, userID)
-	sortGroups(groups, sortBy, wishlistWords)
+	wishlistPhrases := s.wishlistPhrases(ctx, userID)
+	cartQuantities, err := s.cartQuantities(ctx, userID, scan.Source)
+	if err != nil {
+		return ProductPage{}, err
+	}
+	sortGroups(groups, sortBy, wishlistPhrases, cartQuantities)
 	if position > len(groups) {
 		return ProductPage{}, &scans.Error{Code: "INVALID_CURSOR", Message: "Invalid product cursor.", Status: 400}
 	}
@@ -247,10 +259,10 @@ func (s *Service) ProductPage(ctx context.Context, queue *scans.Queue, userID, s
 		page.CoverageSummary = "supported_discount_feeds"
 	}
 	for _, group := range groups[position:end] {
-		page.Items = append(page.Items, ProductSummary{Key: group.Key, GroupKeyVersion: 2, ScanID: group.ScanID, Title: group.Title, Image: group.Image, CategoryTitle: group.CategoryTitle, PriceRials: group.PriceRials, DiscountRials: group.DiscountRials, FinalPriceRials: group.FinalPriceRials, DiscountRatio: group.DiscountRatio, State: group.State, BestCurrentOffer: group.BestCurrentOffer, CurrentStoreOfferCount: group.CurrentStoreOfferCount, Diagnostics: group.Diagnostics, ConditionalOfferCount: len(group.ConditionalOffers)})
+		page.Items = append(page.Items, ProductSummary{Key: group.Key, GroupKeyVersion: 2, ScanID: group.ScanID, Title: group.Title, Image: group.Image, CategoryTitle: group.CategoryTitle, PriceRials: group.PriceRials, DiscountRials: group.DiscountRials, FinalPriceRials: group.FinalPriceRials, DiscountRatio: group.DiscountRatio, State: group.State, BestCurrentOffer: group.BestCurrentOffer, CurrentStoreOfferCount: group.CurrentStoreOfferCount, Diagnostics: group.Diagnostics, ConditionalOfferCount: len(group.ConditionalOffers), CartQuantity: cartQuantities[group.Key], WishlistMatch: matchesWishlist(group.Title, wishlistPhrases)})
 	}
 	if end < len(groups) {
-		next, err := encodeCursor(cursor{Version: 1, User: userID, Scan: scanID, Kind: "products", Query: q, Sort: sortBy, Position: []any{end}})
+		next, err := encodeCursor(cursor{Version: 1, User: userID, Scan: scanID, Kind: "products", Query: q, Sort: sortBy, MinDiscount: minDiscount, Position: []any{end}})
 		if err != nil {
 			return ProductPage{}, err
 		}
@@ -260,11 +272,15 @@ func (s *Service) ProductPage(ctx context.Context, queue *scans.Queue, userID, s
 }
 
 func (s *Service) ProductGroups(ctx context.Context, queue *scans.Queue, userID, scanID string) ([]Group, *scans.Record, error) {
+	return s.productGroupsAtDiscount(ctx, queue, userID, scanID, discounts.Minimum)
+}
+
+func (s *Service) productGroupsAtDiscount(ctx context.Context, queue *scans.Queue, userID, scanID string, minDiscount int) ([]Group, *scans.Record, error) {
 	deals, scan, err := s.Deals(ctx, queue, userID, scanID)
 	if err != nil {
 		return nil, scan, err
 	}
-	return groupV2(scan.Source, deals), scan, nil
+	return groupV2(scan.Source, deals, minDiscount), scan, nil
 }
 
 func LegacyGroups(source string, deals []DealRecord) []map[string]any {
@@ -331,6 +347,10 @@ func LegacyGroups(source string, deals []DealRecord) []map[string]any {
 }
 
 func (s *Service) OfferPage(ctx context.Context, queue *scans.Queue, userID, scanID, groupKey string, query url.Values) (OfferPage, error) {
+	minDiscount, err := minimumDiscount(query)
+	if err != nil {
+		return OfferPage{}, err
+	}
 	limit := 20
 	if raw := query.Get("limit"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -347,11 +367,11 @@ func (s *Service) OfferPage(ctx context.Context, queue *scans.Queue, userID, sca
 	if len([]rune(query.Get("q"))) > 200 {
 		return OfferPage{}, &scans.Error{Code: "INVALID_INPUT", Message: "Invalid offer query.", Status: 400}
 	}
-	position, err := decodeCursor(query.Get("cursor"), cursor{Version: 1, User: userID, Scan: scanID, Kind: "offers", Query: q, Sort: sortBy, Group: groupKey})
+	position, err := decodeCursor(query.Get("cursor"), cursor{Version: 1, User: userID, Scan: scanID, Kind: "offers", Query: q, Sort: sortBy, Group: groupKey, MinDiscount: minDiscount})
 	if err != nil {
 		return OfferPage{}, &scans.Error{Code: "INVALID_CURSOR", Message: "Invalid offer cursor.", Status: 400}
 	}
-	groups, _, err := s.ProductGroups(ctx, queue, userID, scanID)
+	groups, _, err := s.productGroupsAtDiscount(ctx, queue, userID, scanID, minDiscount)
 	if err != nil {
 		return OfferPage{}, err
 	}
@@ -411,7 +431,7 @@ func (s *Service) OfferPage(ctx context.Context, queue *scans.Queue, userID, sca
 	end := min(position+limit, len(offers))
 	page := OfferPage{Items: append([]VendorOffer{}, offers[position:end]...)}
 	if end < len(offers) {
-		next, err := encodeCursor(cursor{Version: 1, User: userID, Scan: scanID, Kind: "offers", Query: q, Sort: sortBy, Group: groupKey, Position: []any{end}})
+		next, err := encodeCursor(cursor{Version: 1, User: userID, Scan: scanID, Kind: "offers", Query: q, Sort: sortBy, Group: groupKey, MinDiscount: minDiscount, Position: []any{end}})
 		if err != nil {
 			return OfferPage{}, err
 		}
@@ -482,13 +502,13 @@ func (s *Service) baseline(ctx context.Context, userID string, scan scans.Record
 	return &id, "comparable", true
 }
 
-func (s *Service) wishlistWords(ctx context.Context, userID string) []string {
+func (s *Service) wishlistPhrases(ctx context.Context, userID string) [][]string {
 	rows, err := s.db.QueryContext(ctx, `SELECT tokens_json FROM wishlist_items WHERE user_id=?`, userID)
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
-	var words []string
+	var phrases [][]string
 	for rows.Next() {
 		var raw string
 		if rows.Scan(&raw) != nil {
@@ -498,12 +518,30 @@ func (s *Service) wishlistWords(ctx context.Context, userID string) []string {
 		if json.Unmarshal([]byte(raw), &tokens) != nil {
 			continue
 		}
-		words = append(words, tokens...)
+		phrases = append(phrases, tokens)
 	}
-	return words
+	return phrases
 }
 
-func groupV2(provider string, deals []DealRecord) []Group {
+func (s *Service) cartQuantities(ctx context.Context, userID, source string) (map[string]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT group_key,quantity FROM provider_carts WHERE user_id=? AND source=?`, userID, source)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	quantities := make(map[string]int)
+	for rows.Next() {
+		var key string
+		var quantity int
+		if err := rows.Scan(&key, &quantity); err != nil {
+			return nil, err
+		}
+		quantities[key] = quantity
+	}
+	return quantities, rows.Err()
+}
+
+func groupV2(provider string, deals []DealRecord, minDiscount int) []Group {
 	buckets := make(map[string][]DealRecord)
 	variants := make(map[string]map[string]struct{})
 	for _, row := range deals {
@@ -518,7 +556,7 @@ func groupV2(provider string, deals []DealRecord) []Group {
 	}
 	groups := make([]Group, 0, len(buckets))
 	for identity, rows := range buckets {
-		g := buildGroup(provider, identity, rows, variants)
+		g := buildGroup(provider, identity, rows, variants, minDiscount)
 		if len(g.Vendors) > 0 || len(g.ConditionalOffers) > 0 {
 			groups = append(groups, g)
 		}
@@ -527,7 +565,7 @@ func groupV2(provider string, deals []DealRecord) []Group {
 	return groups
 }
 
-func buildGroup(provider, identity string, rows []DealRecord, variants map[string]map[string]struct{}) Group {
+func buildGroup(provider, identity string, rows []DealRecord, variants map[string]map[string]struct{}, minDiscount int) Group {
 	type observation struct {
 		row        DealRecord
 		provenance map[string]struct{}
@@ -564,6 +602,9 @@ func buildGroup(provider, identity string, rows []DealRecord, variants map[strin
 	rowsByKey := map[string]DealRecord{}
 	for id, ob := range observations {
 		row := ob.row
+		if row.DiscountRatio < float64(minDiscount) {
+			continue
+		}
 		rowsByKey[row.Key] = row
 		prov := sortedKeys(ob.provenance)
 		kind := "rial"
@@ -846,7 +887,7 @@ func vendorTitles(values []VendorOffer) []string {
 	}
 	return result
 }
-func sortGroups(groups []Group, sortBy string, wishlist []string) {
+func sortGroups(groups []Group, sortBy string, wishlist [][]string, cartQuantities map[string]int) {
 	sort.SliceStable(groups, func(i, j int) bool {
 		a, b := groups[i], groups[j]
 		if sortBy == "title" {
@@ -867,14 +908,17 @@ func sortGroups(groups []Group, sortBy string, wishlist []string) {
 			if am != bm {
 				return am
 			}
+			if cartQuantities[a.Key] != cartQuantities[b.Key] {
+				return cartQuantities[a.Key] > cartQuantities[b.Key]
+			}
 		}
 		return compareProductDiscount(a, b) < 0
 	})
 }
-func matchesWishlist(title string, words []string) bool {
+func matchesWishlist(title string, phrases [][]string) bool {
 	n := normalizeProductText(title)
-	for _, word := range words {
-		if word != "" && strings.Contains(n, word) {
+	for _, tokens := range phrases {
+		if len(tokens) > 0 && containsTokens(n, strings.Join(tokens, " ")) {
 			return true
 		}
 	}
@@ -892,7 +936,7 @@ func decodeCursor(value string, context cursor) (int, error) {
 		return 0, err
 	}
 	var decoded cursor
-	if json.Unmarshal(bytes, &decoded) != nil || decoded.Version != 1 || decoded.User != context.User || decoded.Scan != context.Scan || decoded.Kind != context.Kind || decoded.Query != context.Query || decoded.Sort != context.Sort || decoded.Group != context.Group || len(decoded.Position) != 1 {
+	if json.Unmarshal(bytes, &decoded) != nil || decoded.Version != 1 || decoded.User != context.User || decoded.Scan != context.Scan || decoded.Kind != context.Kind || decoded.Query != context.Query || decoded.Sort != context.Sort || decoded.Group != context.Group || decoded.MinDiscount != context.MinDiscount || len(decoded.Position) != 1 {
 		return 0, errors.New("invalid cursor")
 	}
 	n, ok := decoded.Position[0].(float64)
@@ -900,6 +944,17 @@ func decodeCursor(value string, context cursor) (int, error) {
 		return 0, errors.New("invalid cursor")
 	}
 	return int(n), nil
+}
+
+func minimumDiscount(query url.Values) (int, error) {
+	if !query.Has("minDiscount") {
+		return discounts.Minimum, nil
+	}
+	percent, err := strconv.Atoi(query.Get("minDiscount"))
+	if err != nil || !discounts.Valid(percent) {
+		return 0, &scans.Error{Code: "INVALID_INPUT", Message: "Minimum discount must be between 15 and 80 percent.", Status: 400}
+	}
+	return percent, nil
 }
 func encodeCursor(value cursor) (string, error) {
 	bytes, err := json.Marshal(value)

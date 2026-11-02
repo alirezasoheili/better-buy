@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alirezasoheili/better-buy/apps/api/internal/discounts"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/products"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/scans"
 )
@@ -29,9 +30,10 @@ type Error struct {
 func (e *Error) Error() string { return e.Code }
 
 type Item struct {
-	ID        string `json:"id"`
-	Phrase    string `json:"phrase"`
-	CreatedAt string `json:"createdAt"`
+	ID          string `json:"id"`
+	Phrase      string `json:"phrase"`
+	MinDiscount int    `json:"minDiscount"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 type Match struct {
@@ -99,8 +101,11 @@ func (s *Service) Read(ctx context.Context, userID string, publicKey *string, sc
 	return Snapshot{Items: items, DefaultLocationID: locationID, PushPublicKey: publicKey, ScheduleEnabled: scheduleEnabled, DevScanEnabled: devEnabled}, nil
 }
 
-func (s *Service) Add(ctx context.Context, userID, phrase string) ([]Item, error) {
+func (s *Service) Add(ctx context.Context, userID, phrase string, minDiscount int) ([]Item, error) {
 	phrase = strings.TrimSpace(phrase)
+	if !discounts.Valid(minDiscount) {
+		return nil, &Error{Code: "INVALID_DISCOUNT", Status: 400}
+	}
 	if runeLen(phrase) < 2 || runeLen(phrase) > 120 {
 		return nil, &Error{Code: "INVALID_INPUT", Status: 400}
 	}
@@ -118,15 +123,33 @@ func (s *Service) Add(ctx context.Context, userID, phrase string) ([]Item, error
 		return nil, err
 	}
 	var inserted string
-	err = s.db.QueryRowContext(ctx, `INSERT INTO wishlist_items(id,user_id,phrase,normalized_phrase,tokens_json,created_at)
-		SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM wishlist_items WHERE user_id=?)<30 OR EXISTS(SELECT 1 FROM wishlist_items WHERE user_id=? AND normalized_phrase=?)
-		ON CONFLICT(user_id,normalized_phrase) DO UPDATE SET phrase=wishlist_items.phrase RETURNING id`,
-		id, userID, phrase, normalized, string(encodedTokens), time.Now().UTC().Format(time.RFC3339Nano), userID, userID, normalized).Scan(&inserted)
+	err = s.db.QueryRowContext(ctx, `INSERT INTO wishlist_items(id,user_id,phrase,normalized_phrase,tokens_json,min_discount,created_at)
+		SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM wishlist_items WHERE user_id=?)<30 OR EXISTS(SELECT 1 FROM wishlist_items WHERE user_id=? AND normalized_phrase=?)
+		ON CONFLICT(user_id,normalized_phrase) DO UPDATE SET min_discount=excluded.min_discount RETURNING id`,
+		id, userID, phrase, normalized, string(encodedTokens), minDiscount, time.Now().UTC().Format(time.RFC3339Nano), userID, userID, normalized).Scan(&inserted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &Error{Code: "WISHLIST_LIMIT", Status: 409}
 	}
 	if err != nil {
 		return nil, err
+	}
+	return s.items(ctx, userID)
+}
+
+func (s *Service) SetMinimumDiscount(ctx context.Context, userID, itemID string, minDiscount int) ([]Item, error) {
+	if !discounts.Valid(minDiscount) {
+		return nil, &Error{Code: "INVALID_DISCOUNT", Status: 400}
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE wishlist_items SET min_discount=? WHERE user_id=? AND id=?`, minDiscount, userID, itemID)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if changed == 0 {
+		return nil, &Error{Code: "NOT_FOUND", Status: 404}
 	}
 	return s.items(ctx, userID)
 }
@@ -251,7 +274,7 @@ func (s *Service) DeletePushSubscription(ctx context.Context, userID, endpoint s
 }
 
 func (s *Service) items(ctx context.Context, userID string) ([]Item, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,phrase,created_at FROM wishlist_items WHERE user_id=? ORDER BY created_at,id", userID)
+	rows, err := s.db.QueryContext(ctx, "SELECT id,phrase,min_discount,created_at FROM wishlist_items WHERE user_id=? ORDER BY created_at,id", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +282,7 @@ func (s *Service) items(ctx context.Context, userID string) ([]Item, error) {
 	items := make([]Item, 0)
 	for rows.Next() {
 		var item Item
-		if err := rows.Scan(&item.ID, &item.Phrase, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Phrase, &item.MinDiscount, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

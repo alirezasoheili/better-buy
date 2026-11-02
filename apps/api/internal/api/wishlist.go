@@ -10,6 +10,7 @@ import (
 
 	"github.com/alirezasoheili/better-buy/apps/api/internal/auth"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/config"
+	"github.com/alirezasoheili/better-buy/apps/api/internal/discounts"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/scans"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/wishlist"
 )
@@ -31,18 +32,38 @@ func registerWishlist(mux *http.ServeMux, db *sql.DB, cfg config.Config, service
 	})))
 	mux.Handle("POST /api/wishlist", requireIdentity(service, db, cfg.APIRateLimitsEnabled, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Phrase string `json:"phrase"`
+			Phrase      string `json:"phrase"`
+			MinDiscount *int   `json:"minDiscount"`
 		}
 		if decodeFlexibleJSON(r, &body) != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "INVALID_INPUT"})
 			return
 		}
-		items, err := store.Add(r.Context(), requestIdentity(r).User.ID, body.Phrase)
+		minDiscount := discounts.Minimum
+		if body.MinDiscount != nil {
+			minDiscount = *body.MinDiscount
+		}
+		items, err := store.Add(r.Context(), requestIdentity(r).User.ID, body.Phrase, minDiscount)
 		if err != nil {
 			writeWishlistError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"data": items})
+	})))
+	mux.Handle("PATCH /api/wishlist/{id}", requireIdentity(service, db, cfg.APIRateLimitsEnabled, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			MinDiscount *int `json:"minDiscount"`
+		}
+		if decodeFlexibleJSON(r, &body) != nil || body.MinDiscount == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "INVALID_INPUT"})
+			return
+		}
+		items, err := store.SetMinimumDiscount(r.Context(), requestIdentity(r).User.ID, r.PathValue("id"), *body.MinDiscount)
+		if err != nil {
+			writeWishlistError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": items})
 	})))
 	mux.Handle("DELETE /api/wishlist/{id}", requireIdentity(service, db, cfg.APIRateLimitsEnabled, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := store.Delete(r.Context(), requestIdentity(r).User.ID, r.PathValue("id")); err != nil {
@@ -155,6 +176,8 @@ func writeWishlistError(w http.ResponseWriter, err error) {
 		message := ""
 		if wishlistError.Code == "INVALID_INPUT" {
 			message = "نام کالا باید بین ۲ تا ۱۲۰ نویسه باشد."
+		} else if wishlistError.Code == "INVALID_DISCOUNT" {
+			message = "حداقل تخفیف باید بین ۱۵ تا ۸۰ درصد باشد."
 		} else if wishlistError.Code == "WISHLIST_LIMIT" {
 			message = "حداکثر ۳۰ عبارت می‌توانید اضافه کنید."
 		}

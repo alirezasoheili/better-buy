@@ -222,26 +222,33 @@ func (s *Service) notifyScan(ctx context.Context, queue *scans.Queue, catalog Pr
 		if err := json.Unmarshal([]byte(item.tokens), &tokens); err != nil {
 			return err
 		}
-		candidates := make([]products.Group, 0)
+		type candidate struct {
+			product products.Group
+			offer   products.VendorOffer
+		}
+		candidates := make([]candidate, 0)
 		for _, group := range groups {
-			if hasAllTokens(products.NormalizeSearchText(group.Title), tokens) {
-				candidates = append(candidates, group)
+			if !hasAllTokens(products.NormalizeSearchText(group.Title), tokens) {
+				continue
+			}
+			for _, offer := range group.Vendors {
+				if offer.State != "no_longer_present" && offer.Stock > 0 && offer.DiscountRatio >= float64(item.minDiscount) {
+					candidates = append(candidates, candidate{product: group, offer: offer})
+					break
+				}
 			}
 		}
 		sort.Slice(candidates, func(i, j int) bool {
-			if candidates[i].FinalPriceRials != candidates[j].FinalPriceRials {
-				return candidates[i].FinalPriceRials < candidates[j].FinalPriceRials
+			if candidates[i].offer.FinalPriceRials != candidates[j].offer.FinalPriceRials {
+				return candidates[i].offer.FinalPriceRials < candidates[j].offer.FinalPriceRials
 			}
-			return candidates[i].Key < candidates[j].Key
+			return candidates[i].product.Key < candidates[j].product.Key
 		})
 		if len(candidates) > 3 {
 			candidates = candidates[:3]
 		}
-		for _, product := range candidates {
-			offer := product.BestCurrentOffer
-			if offer == nil || offer.Stock <= 0 {
-				continue
-			}
+		for _, candidate := range candidates {
+			product, offer := candidate.product, candidate.offer
 			observations = append(observations, seenObservation{wishlistID: item.id, productID: offer.ProductVariationID, price: offer.FinalPriceRials})
 			var previous sql.NullFloat64
 			err := s.db.QueryRowContext(ctx, "SELECT price FROM wishlist_seen WHERE user_id=? AND wishlist_id=? AND scope=? AND product_id=?", userID, item.id, scope, offer.ProductVariationID).Scan(&previous)
@@ -312,10 +319,11 @@ func (s *Service) notifyScan(ctx context.Context, queue *scans.Queue, catalog Pr
 }
 
 type wishlistItem struct {
-	id      string
-	phrase  string
-	tokens  string
-	created string
+	id          string
+	phrase      string
+	tokens      string
+	created     string
+	minDiscount int
 }
 
 type seenObservation struct {
@@ -325,7 +333,7 @@ type seenObservation struct {
 }
 
 func (s *Service) scanWishlistItems(ctx context.Context, userID, scanCreated string) ([]wishlistItem, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,phrase,tokens_json,created_at FROM wishlist_items WHERE user_id=? ORDER BY created_at,id LIMIT 30", userID)
+	rows, err := s.db.QueryContext(ctx, "SELECT id,phrase,tokens_json,created_at,min_discount FROM wishlist_items WHERE user_id=? ORDER BY created_at,id LIMIT 30", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +345,7 @@ func (s *Service) scanWishlistItems(ctx context.Context, userID, scanCreated str
 	items := make([]wishlistItem, 0)
 	for rows.Next() {
 		var item wishlistItem
-		if err := rows.Scan(&item.id, &item.phrase, &item.tokens, &item.created); err != nil {
+		if err := rows.Scan(&item.id, &item.phrase, &item.tokens, &item.created, &item.minDiscount); err != nil {
 			return nil, err
 		}
 		createdAt, err := time.Parse(time.RFC3339Nano, item.created)

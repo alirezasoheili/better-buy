@@ -11,6 +11,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"github.com/alirezasoheili/better-buy/apps/api/internal/discounts"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/scans"
 )
 
@@ -135,12 +136,8 @@ func (m *Maintainer) dispatchScheduleJob(ctx context.Context, now time.Time, job
 	if err != nil {
 		return err
 	}
-	threshold := 40
-	if job.source == "okala" {
-		threshold = 30
-	}
 	key := scheduleIdempotencyKey(job.userID, job.date, job.slot, job.source)
-	scan, err := m.queue.Enqueue(ctx, job.userID, scans.Input{LocationID: job.locationID, Source: job.source, Threshold: threshold, Mode: "full"}, key)
+	scan, err := m.queue.Enqueue(ctx, job.userID, scans.Input{LocationID: job.locationID, Source: job.source, Threshold: discounts.Minimum, Mode: "full"}, key)
 	if err == nil {
 		return m.finishScheduleJob(ctx, now, job, "done", &scan.ID, "")
 	}

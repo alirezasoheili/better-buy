@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alirezasoheili/better-buy/apps/api/internal/discounts"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/providers"
 )
 
@@ -115,7 +116,7 @@ func NewQueue(db *sql.DB, collector Collector, options Options) (*Queue, error) 
 }
 
 func (q *Queue) Enqueue(ctx context.Context, userID string, input Input, idempotencyKey string) (Record, error) {
-	if !ValidUUID(input.LocationID) || input.Source == "" || input.Mode == "" || input.Threshold < 1 || input.Threshold > 99 {
+	if !ValidUUID(input.LocationID) || input.Source == "" || input.Mode == "" || !discounts.Valid(input.Threshold) {
 		return Record{}, &Error{Code: "INVALID_INPUT", Message: "Invalid scan request.", Status: 400}
 	}
 	if input.Source != "snappmarket" && input.Source != "okala" && input.Source != "digikalajet" {
@@ -164,17 +165,14 @@ func (q *Queue) Enqueue(ctx context.Context, userID string, input Input, idempot
 		return Record{}, &Error{Code: "OUTSIDE_TEHRAN", Message: "Delivery location is outside the supported service area.", Status: 422}
 	}
 	var activeID string
-	err = tx.QueryRowContext(ctx, `SELECT id FROM scans WHERE user_id=? AND status IN ('queued','running') LIMIT 1`, userID).Scan(&activeID)
+	err = tx.QueryRowContext(ctx, `SELECT id FROM scans WHERE user_id=? AND source=? AND status IN ('queued','running') LIMIT 1`, userID, input.Source).Scan(&activeID)
 	if err == nil {
 		return Record{}, &Error{Code: "SCAN_IN_PROGRESS", Message: activeID, Status: 409}
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Record{}, err
 	}
-	threshold := input.Threshold
-	if input.Source == "okala" && threshold < 30 {
-		threshold = 30
-	}
+	threshold := discounts.Minimum
 	contextRecord := newContext(location, input, threshold)
 	contextJSON, err := json.Marshal(contextRecord)
 	if err != nil {
@@ -290,8 +288,12 @@ func (q *Queue) List(ctx context.Context, userID string) ([]Record, error) {
 }
 
 func (q *Queue) Active(ctx context.Context, userID string) (*Record, error) {
+	return q.activeForSource(ctx, userID, "")
+}
+
+func (q *Queue) activeForSource(ctx context.Context, userID, source string) (*Record, error) {
 	var scanID string
-	err := q.db.QueryRowContext(ctx, `SELECT id FROM scans WHERE user_id=? AND status IN ('queued','running') LIMIT 1`, userID).Scan(&scanID)
+	err := q.db.QueryRowContext(ctx, `SELECT id FROM scans WHERE user_id=? AND (?='' OR source=?) AND status IN ('queued','running') ORDER BY created_at DESC,id DESC LIMIT 1`, userID, source, source).Scan(&scanID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -420,7 +422,7 @@ func (q *Queue) History(ctx context.Context, userID, boxKey, locationID, source 
 		token := base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 		page.NextCursor = &token
 	}
-	page.ActiveScan, err = q.Active(ctx, userID)
+	page.ActiveScan, err = q.activeForSource(ctx, userID, source)
 	if err != nil {
 		return HistoryPage{}, err
 	}
@@ -469,18 +471,40 @@ func (q *Queue) Run(ctx context.Context) error {
 	if err := q.recoverInterrupted(ctx); err != nil {
 		return err
 	}
-	for ctx.Err() == nil {
-		job, ok, err := q.claimNext(ctx)
+	workerContext, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	slots := make(chan struct{}, 2)
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+	for workerContext.Err() == nil {
+		select {
+		case slots <- struct{}{}:
+		case <-workerContext.Done():
+			return nil
+		}
+		job, ok, err := q.claimNext(workerContext)
 		if err != nil {
+			<-slots
+			if workerContext.Err() != nil {
+				return nil
+			}
 			return err
 		}
 		if !ok {
-			if !pause(ctx, 500*time.Millisecond) {
+			<-slots
+			if !pause(workerContext, 500*time.Millisecond) {
 				return nil
 			}
 			continue
 		}
-		q.runJob(ctx, job)
+		workers.Add(1)
+		go func(claim providers.Claim) {
+			defer workers.Done()
+			defer func() { <-slots }()
+			q.runJob(workerContext, claim)
+		}(job)
 	}
 	return nil
 }

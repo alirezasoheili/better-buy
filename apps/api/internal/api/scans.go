@@ -8,6 +8,7 @@ import (
 
 	"github.com/alirezasoheili/better-buy/apps/api/internal/auth"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/config"
+	"github.com/alirezasoheili/better-buy/apps/api/internal/discounts"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/scans"
 )
 
@@ -90,7 +91,7 @@ func registerScans(mux *http.ServeMux, db *sql.DB, cfg config.Config, service *a
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "INVALID_INPUT"})
 			return
 		}
-		value := scans.Input{LocationID: *input.LocationID, Source: "snappmarket", Threshold: 40, Mode: "partial"}
+		value := scans.Input{LocationID: *input.LocationID, Source: "snappmarket", Threshold: discounts.Minimum, Mode: "partial"}
 		if input.Source != nil {
 			value.Source = *input.Source
 		}
@@ -117,9 +118,16 @@ func writeScanError(w http.ResponseWriter, queue *scans.Queue, r *http.Request, 
 		}
 		body := map[string]any{"error": scanError.Code, "message": scanError.Message}
 		if scanError.Code == "ACTIVE_SCAN_EXISTS" || scanError.Code == "SCAN_IN_PROGRESS" {
-			active, activeErr := queue.Active(r.Context(), userID)
-			if activeErr == nil && active != nil {
-				body["activeScan"] = active
+			if scans.ValidUUID(scanError.Message) {
+				active, activeErr := queue.Get(r.Context(), userID, scanError.Message)
+				if activeErr == nil {
+					body["activeScan"] = active
+				}
+			} else {
+				active, activeErr := queue.Active(r.Context(), userID)
+				if activeErr == nil && active != nil {
+					body["activeScan"] = active
+				}
 			}
 		}
 		writeJSON(w, scanError.Status, body)

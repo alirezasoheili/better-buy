@@ -16,6 +16,7 @@ import (
 
 	"github.com/alirezasoheili/better-buy/apps/api/internal/auth"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/config"
+	"github.com/alirezasoheili/better-buy/apps/api/internal/discounts"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/products"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/scans"
 	"github.com/alirezasoheili/better-buy/apps/api/internal/wishlist"
@@ -192,11 +193,7 @@ func validDevScanInput(source, key string) bool {
 }
 
 func wishlistScanInput(locationID, source string) scans.Input {
-	threshold := 40
-	if source == "okala" {
-		threshold = 30
-	}
-	return scans.Input{LocationID: locationID, Source: source, Threshold: threshold, Mode: "full"}
+	return scans.Input{LocationID: locationID, Source: source, Threshold: discounts.Minimum, Mode: "full"}
 }
 
 func wishlistTarget(r *http.Request, db *sql.DB, userID string) (string, error) {
