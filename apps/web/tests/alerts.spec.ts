@@ -80,7 +80,12 @@ async function fixture(
     }
   );
   const state = {
-    items: [] as { id: string; phrase: string; createdAt: string }[],
+    items: [] as {
+      id: string;
+      phrase: string;
+      minDiscount: number;
+      createdAt: string;
+    }[],
     defaultLocationId: null as string | null,
     readAt: null as string | null,
     pushWrites: [] as { method: string; body: unknown }[],
@@ -109,6 +114,7 @@ async function fixture(
         state.items.push({
           id: "tea",
           phrase: route.request().postDataJSON().phrase,
+          minDiscount: route.request().postDataJSON().minDiscount,
           createdAt: date,
         });
       data = {
@@ -121,6 +127,11 @@ async function fixture(
       state.defaultLocationId = route.request().postDataJSON().locationId;
     } else if (url.pathname === "/api/wishlist/tea" && method === "DELETE") {
       state.items = [];
+    } else if (url.pathname === "/api/wishlist/tea" && method === "PATCH") {
+      state.items = state.items.map((item) => ({
+        ...item,
+        minDiscount: route.request().postDataJSON().minDiscount,
+      }));
     } else if (url.pathname === "/api/notifications") {
       data = [
         {
@@ -173,6 +184,14 @@ async function fixture(
           updatedAt: date,
         },
       ];
+    else if (url.pathname === "/api/scans/saved/products")
+      data = {
+        items: [],
+        nextCursor: null,
+        observedAt: date,
+        coverageSummary: "legacy_unverified",
+        baseline: { scanId: null, reason: "legacy_unverified" },
+      };
     else if (url.pathname === "/api/scans" && options.scan)
       data = [
         {
@@ -220,9 +239,17 @@ test("wishlist CRUD, independent scan location, and disabled setup banner", asyn
     panel.getByRole("button", { name: "فعال‌سازی اعلان مرورگر" })
   ).toBeDisabled();
   await panel.getByLabel("نام کالا یا عبارت دلخواه").fill("  چای  ");
+  await panel
+    .getByRole("slider", { name: /حداقل تخفیف برای اعلان/ })
+    .press("End");
   await panel.getByRole("button", { name: "افزودن", exact: true }).click();
   await expect(panel.getByRole("button", { name: "حذف چای" })).toBeVisible();
   expect(state.items[0]?.phrase).toBe("چای");
+  expect(state.items[0]?.minDiscount).toBe(80);
+  await panel.getByRole("slider", { name: /حداقل تخفیف:/ }).press("Home");
+  await panel.getByRole("button", { name: "ذخیره حداقل تخفیف چای" }).click();
+  await expect(panel.getByText("حداقل تخفیف ذخیره شد.")).toBeVisible();
+  expect(state.items[0]?.minDiscount).toBe(15);
   await panel.getByLabel("موقعیت اسکن زمان‌بندی‌شده").selectOption("office");
   await expect(panel.getByLabel("موقعیت اسکن زمان‌بندی‌شده")).toHaveValue(
     "office"
@@ -268,10 +295,10 @@ test("scan deep link restores the scan location and source", async ({
   await expect(
     page.getByRole("combobox", { name: "موقعیت تحویل" })
   ).toContainText("دفتر");
-  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
   await expect(
-    page.getByRole("combobox", { name: "فروشگاه", exact: true })
-  ).toContainText("اکالا");
+    page.getByRole("heading", { name: "نتیجه تاریخی", exact: true })
+  ).toBeVisible();
+  await expect(page.getByText(/حداقل.*تخفیف · اکالا/)).toBeVisible();
 });
 test("push requests permission only on click and syncs/unsubscribes the exact endpoint", async ({
   page,
