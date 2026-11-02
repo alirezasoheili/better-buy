@@ -328,6 +328,20 @@ export function Dashboard() {
           </>
         )}
       </div>
+      <nav className="mobile-bottom-nav" aria-label="دسترسی سریع">
+        <button type="button" onClick={() => setView("deals")}>
+          <span aria-hidden="true">⌂</span>
+          <small>پیشنهادها</small>
+        </button>
+        <button type="button" onClick={() => setCartOpen(true)}>
+          <span aria-hidden="true">🛒</span>
+          <small>سبد خرید</small>
+        </button>
+        <button type="button" onClick={() => setView("history")}>
+          <span aria-hidden="true">◷</span>
+          <small>تاریخچه</small>
+        </button>
+      </nav>
       {locationDialog && (
         <LocationManager
           locations={data.locations}

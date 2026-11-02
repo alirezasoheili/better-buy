@@ -43,6 +43,35 @@ export function AppHeader({
         </Button>
         <div className="header-actions">{actions}</div>
         <nav aria-label="ناوبری اصلی">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <Button
+                variant="ghost"
+                className="mobile-menu-trigger"
+                aria-label="باز کردن منو"
+              >
+                ☰
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className="account-menu mobile-menu"
+                align="end"
+                sideOffset={8}
+              >
+                <DropdownMenu.Item onSelect={onLocations}>
+                  موقعیت‌ها
+                </DropdownMenu.Item>
+                <DropdownMenu.Item onSelect={onHistory}>
+                  تاریخچه اسکن
+                </DropdownMenu.Item>
+                <DropdownMenu.Item onSelect={onHome}>
+                  پیشنهادها
+                </DropdownMenu.Item>
+                {alerts}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
           {alerts}
           <Button variant="ghost" onClick={onLocations}>
             موقعیت‌ها
