@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -426,9 +427,21 @@ func normalizeSnapp(vendors map[string]snappVendor, observedAt map[string]string
 	return scanResult{VendorCount: len(vendors), ProductCount: len(products), Deals: deals, Coverage: "complete"}
 }
 
+type okalaOfferStore struct {
+	StoreID   int64   `json:"storeId"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+type okalaOfferRequest struct {
+	Request  struct{}          `json:"request"`
+	Stores   []okalaOfferStore `json:"stores"`
+	PageType string            `json:"pageType"`
+}
+
 func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult, error) {
 	coordinates := url.Values{"latitude": {strconv.FormatFloat(job.Location.Latitude, 'f', -1, 64)}, "longitude": {strconv.FormatFloat(job.Location.Longitude, 'f', -1, 64)}}
-	nearby, err := c.okalaRequest(ctx, "/opex/v4/stores/nearby", coordinates, job)
+	nearby, err := c.okalaRequest(ctx, http.MethodGet, "/opex/v4/stores/nearby", coordinates, nil, job)
 	if err != nil {
 		return scanResult{}, err
 	}
@@ -459,6 +472,14 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	if len(storeIDs) == 0 {
 		return scanResult{}, &Failure{Code: "NO_STORES", Message: "No active Okala stores serve this location.", Status: 502}
 	}
+	stores := make([]okalaOfferStore, 0, len(storeIDs))
+	for _, storeID := range storeIDs {
+		stores = append(stores, okalaOfferStore{StoreID: storeID, Latitude: job.Location.Latitude, Longitude: job.Location.Longitude})
+	}
+	campaignPayload, err := json.Marshal(okalaOfferRequest{Stores: stores, PageType: "HomePage"})
+	if err != nil {
+		return scanResult{}, err
+	}
 	campaignQuery := url.Values{"pageType": {"HomePage"}}
 	for key, values := range coordinates {
 		campaignQuery[key] = append([]string(nil), values...)
@@ -466,7 +487,7 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	for _, storeID := range storeIDs {
 		campaignQuery.Add("StoreIds", strconv.FormatInt(storeID, 10))
 	}
-	campaignBody, err := c.okalaRequest(ctx, "/carousel/v4/offers", campaignQuery, job)
+	campaignBody, err := c.okalaRequest(ctx, http.MethodPost, "/carousel/v4/offers", campaignQuery, campaignPayload, job)
 	if err != nil {
 		return scanResult{}, err
 	}
@@ -498,9 +519,6 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 		campaignIDs = append(campaignIDs, campaign.ID)
 		expiries[campaign.ID] = campaign.EndTime
 	}
-	if len(campaignIDs) == 0 {
-		return scanResult{}, &Failure{Code: "NO_CAMPAIGNS", Message: "No active multi-store Okala campaign was found.", Status: 502}
-	}
 	rows := make(map[string]Deal)
 	inspected := make(map[int64]struct{})
 	productCount := 0
@@ -509,7 +527,7 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 		for _, storeID := range storeIDs {
 			query.Add("StoreIds", strconv.FormatInt(storeID, 10))
 		}
-		body, err := c.okalaRequest(ctx, "/carousel/v4/offers/multi-store", query, job)
+		body, err := c.okalaRequest(ctx, http.MethodPost, "/carousel/v4/offers/multi-store", query, campaignPayload, job)
 		if err != nil {
 			return scanResult{}, err
 		}
@@ -588,9 +606,12 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	return scanResult{VendorCount: len(inspected), ProductCount: productCount, Deals: deals, Coverage: "complete"}, nil
 }
 
-func (c *Collector) okalaRequest(ctx context.Context, endpoint string, query url.Values, job *scanJob) (response, error) {
+func (c *Collector) okalaRequest(ctx context.Context, method, endpoint string, query url.Values, payload []byte, job *scanJob) (response, error) {
 	target := "https://apigateway.okala.com/api" + endpoint + "?" + query.Encode()
-	cacheKey := discoveryRequestKey("okala", http.MethodGet, target)
+	cacheKey := discoveryRequestKey("okala", method, target)
+	if method == http.MethodPost {
+		cacheKey += fmt.Sprintf(":%x", sha256.Sum256(payload))
+	}
 	cached, found, err := job.LoadDiscovery(ctx, cacheKey)
 	if err != nil {
 		return response{}, err
@@ -603,7 +624,10 @@ func (c *Collector) okalaRequest(ctx context.Context, endpoint string, query url
 	headers.Set("Origin", "https://www.okala.com")
 	headers.Set("Source", "okala")
 	headers.Set("Ui-Version", "2.0")
-	value, err := c.request(ctx, http.MethodGet, target, headers, nil, "Okala", 3, false, job.ReserveRequest)
+	if method == http.MethodPost {
+		headers.Set("Content-Type", "application/json")
+	}
+	value, err := c.request(ctx, method, target, headers, payload, "Okala", 3, false, job.ReserveRequest)
 	if err != nil {
 		return response{}, err
 	}
