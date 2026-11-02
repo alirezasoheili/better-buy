@@ -640,8 +640,9 @@ func campaignProduct(row map[string]any, scope CampaignScope, vendorTitle string
 	if !valid || vendorID != scope.VendorID {
 		return campaignContribution{}, "", changed("vendor_id ownership")
 	}
+	subVendorID := row["sub_vendor_id"]
 	documentID, _ := row["document_id"].(string)
-	if documentID != fmt.Sprintf("%d-%d", id, scope.VendorID) {
+	if subVendorID == nil && documentID != fmt.Sprintf("%d-%d", id, scope.VendorID) {
 		return campaignContribution{}, "", changed("document_id ownership")
 	}
 	title, _ := row["title"].(string)
@@ -698,9 +699,6 @@ func campaignProduct(row map[string]any, scope CampaignScope, vendorTitle string
 			}
 		}
 	}
-	if value, exists := row["sub_vendor_id"]; exists && value != nil {
-		return campaignContribution{}, "", changed("sub_vendor_id ownership is unverified")
-	}
 	identity := strconv.FormatInt(scope.VendorID, 10) + ":" + strconv.FormatInt(id, 10)
 	stockValue, stockKnown := number(row["stock"])
 	if stockKnown && (stockValue < 0 || stockValue > math.MaxInt || math.Trunc(stockValue) != stockValue) {
@@ -718,6 +716,8 @@ func campaignProduct(row map[string]any, scope CampaignScope, vendorTitle string
 	conditional := conditionalMetadata(row)
 	var exclusion string
 	switch {
+	case subVendorID != nil:
+		exclusion = "UNVERIFIED_SUB_VENDOR_OWNERSHIP"
 	case !stockKnown:
 		exclusion = "UNKNOWN_STOCK"
 	case noStock || outOfStock || stockValue <= 0:
@@ -758,6 +758,9 @@ func campaignProduct(row map[string]any, scope CampaignScope, vendorTitle string
 		normalizedStock = stockValue
 	}
 	signatureFields := []any{price, discount, ratio, normalizedStock, row["no_stock"], row["is_out_of_stock"], title, row["is_pro"], row["requires_pro"], row["isPro"], row["conditions"], row["terms"], row["benefit"]}
+	if subVendorID != nil {
+		signatureFields = append(signatureFields, []any{"UNVERIFIED_SUB_VENDOR_OWNERSHIP", subVendorID, row["document_id"]})
+	}
 	signatureJSON, err := json.Marshal(signatureFields)
 	if err != nil {
 		return campaignContribution{}, "", err
