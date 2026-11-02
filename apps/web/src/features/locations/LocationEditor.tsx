@@ -33,7 +33,7 @@ export function LocationEditor({
     remove: removeLocation,
   } = useLocationMutations(location?.id, onSaved);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
-  const [mapOpen, setMapOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(true);
   const {
     searchQuery,
     setSearchQuery,
@@ -96,7 +96,8 @@ export function LocationEditor({
           )}
           {searchState === "empty" && (
             <p className="location-search-status" role="status">
-              نتیجه‌ای در محدوده تهران پیدا نشد؛ مختصات را دستی وارد کنید.
+              نتیجه‌ای در محدوده تهران پیدا نشد؛ نام محله یا خیابان را امتحان
+              کنید.
             </p>
           )}
           {searchState === "results" && (
@@ -121,8 +122,11 @@ export function LocationEditor({
             </div>
           )}
         </div>
-        <details onToggle={(event) => setMapOpen(event.currentTarget.open)}>
-          <summary>انتخاب روی نقشه (اختیاری)</summary>
+        <details
+          open
+          onToggle={(event) => setMapOpen(event.currentTarget.open)}
+        >
+          <summary>انتخاب موقعیت روی نقشه</summary>
           {mapOpen && (
             <LocationMap
               latitude={latitude}
@@ -134,32 +138,6 @@ export function LocationEditor({
             />
           )}
         </details>
-        <div className="coordinate-fields">
-          <Label>
-            عرض جغرافیایی
-            <Input
-              required
-              type="number"
-              step="any"
-              min="-90"
-              max="90"
-              value={latitude}
-              onChange={(e) => setLatitude(Number(e.target.value))}
-            />
-          </Label>
-          <Label>
-            طول جغرافیایی
-            <Input
-              required
-              type="number"
-              step="any"
-              min="-180"
-              max="180"
-              value={longitude}
-              onChange={(e) => setLongitude(Number(e.target.value))}
-            />
-          </Label>
-        </div>
         <div className="check">
           <Checkbox
             id="default-location"

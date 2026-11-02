@@ -643,6 +643,9 @@ details > p {
   direction: ltr;
   text-align: start;
 }
+.location-map .leaflet-map {
+  min-block-size: min(58vh, 520px);
+}
 .check {
   display: flex;
   align-items: center;

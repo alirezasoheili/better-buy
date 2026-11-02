@@ -120,12 +120,6 @@ export function DealShelf({
         </div>
       )}
       {scan && (
-        <p className="coverage-note">
-          نتیجه‌ها از فهرست‌های تخفیف پشتیبانی‌شده‌اند و تمام کالاهای فروشگاه‌ها
-          را پوشش نمی‌دهند.
-        </p>
-      )}
-      {scan && (
         <div className="results-toolbar">
           <Label className="search">
             جست‌وجو

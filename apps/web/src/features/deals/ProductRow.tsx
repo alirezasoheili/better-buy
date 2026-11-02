@@ -120,7 +120,7 @@ export function ProductRow({
         {canAddToCart && (
           <Button
             variant="outline"
-            className="product-cart-add mt-1 min-w-33"
+            className="product-cart-add mt-1 size-10 min-w-10 p-0"
             aria-busy={addPending}
             disabled={inCart || cartWritePending}
             aria-label={
@@ -130,11 +130,9 @@ export function ProductRow({
             }
             onClick={() => onAddToCart?.(group.key)}
           >
-            {inCart
-              ? "در سبد"
-              : addPending
-                ? "در حال افزودن…"
-                : "افزودن به سبد"}
+            <span aria-hidden="true">
+              {inCart ? "✓" : addPending ? "…" : "+"}
+            </span>
           </Button>
         )}
       </div>
