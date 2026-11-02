@@ -372,6 +372,7 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 
 	validated := make([]CampaignScope, 0, len(scopes))
 	seen := make(map[string]struct{})
+scopeLoop:
 	for _, scope := range scopes {
 		key := fmt.Sprintf("%s:%d:%d", scope.Source, scope.VendorID, scope.CollectionID)
 		if _, exists := seen[key]; exists {
@@ -391,6 +392,11 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 			continue
 		}
 		if scope.Source == "discounted_category" {
+			for _, row := range first.Rows {
+				if !campaignProductMatchesCategory(row, scope.CollectionID) {
+					continue scopeLoop
+				}
+			}
 			size := len(first.Rows)
 			if size == 0 {
 				size = snappCampaignPageSize
@@ -628,6 +634,15 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 	return scanResult{VendorCount: len(vendorIDs), ProductCount: len(productKeys), Deals: deals, Coverage: coverage}, nil
 }
 
+func campaignProductMatchesCategory(row map[string]any, categoryID int64) bool {
+	value, exists := row["root_category_id"]
+	if !exists {
+		return true
+	}
+	productCategoryID, ok := positiveID(value)
+	return ok && productCategoryID == categoryID
+}
+
 func campaignProduct(row map[string]any, scope CampaignScope, vendorTitle string, threshold int, observedAt string, startedAt time.Time) (campaignContribution, string, error) {
 	changed := func(field string) error {
 		return &Failure{Code: "UPSTREAM_CHANGED", Message: "Snapp Market campaign product changed: " + field, Status: 502}
@@ -691,13 +706,8 @@ func campaignProduct(row map[string]any, scope CampaignScope, vendorTitle string
 			}
 		}
 	}
-	if scope.Source == "discounted_category" {
-		if value, exists := row["root_category_id"]; exists {
-			categoryID, ok := positiveID(value)
-			if !ok || categoryID != scope.CollectionID {
-				return campaignContribution{}, "", changed("category product ownership")
-			}
-		}
+	if scope.Source == "discounted_category" && !campaignProductMatchesCategory(row, scope.CollectionID) {
+		return campaignContribution{}, "", changed("category product ownership")
 	}
 	identity := strconv.FormatInt(scope.VendorID, 10) + ":" + strconv.FormatInt(id, 10)
 	stockValue, stockKnown := number(row["stock"])
