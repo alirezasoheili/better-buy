@@ -5,12 +5,12 @@ coverage/
 playwright-report/
 test-results/
 .data/
-.wrangler/
 *.db
 *.db-shm
 *.db-wal
 .env
 .env.local
-.dev.vars
 pnpm-debug.log*
 /apps/web/out/
+
+/graft/

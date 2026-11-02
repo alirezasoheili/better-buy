@@ -6,25 +6,24 @@
     "prepare": "husky",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "dev": "concurrently -n api,web -c yellow,cyan \"pnpm --filter @better-buy/worker dev\" \"pnpm --filter @better-buy/web dev\"",
-    "build": "pnpm -r build",
+    "dev": "concurrently -n api,web -c yellow,cyan \"go -C apps/api run ./cmd/server\" \"pnpm --filter @better-buy/web dev\"",
+    "api:build": "go -C apps/api build ./...",
+    "api:migrate": "go -C apps/api run ./cmd/migrate",
+    "api:backup": "go -C apps/api run ./cmd/backup",
+    "build": "pnpm -r build && go -C apps/api build ./...",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:e2e": "pnpm --filter @better-buy/web test:e2e",
-    "cf:dev": "pnpm --filter @better-buy/worker dev",
-    "cf:deploy": "pnpm --filter @better-buy/worker run deploy"
+    "test:e2e": "pnpm --filter @better-buy/web test:e2e"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.9",
-    "typescript": "^5.9.2",
-    "wrangler": "^4.120.0"
+    "typescript": "^5.9.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3",
       "esbuild",
       "sharp"
     ]
