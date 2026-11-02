@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
@@ -20,6 +21,7 @@ type Config struct {
 	BoxKey                     string
 	GoogleClientID             string
 	GoogleClientSecret         string
+	AdminEmails                []string
 	WishlistScheduleEnabled    bool
 	APIRateLimitsEnabled       bool
 	SnappStoreCampaignsEnabled bool
@@ -66,6 +68,10 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("missing required environment variable: %s", name)
 		}
 	}
+	cfg.AdminEmails, err = adminEmails(get("ADMIN_EMAILS"))
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg.WishlistScheduleEnabled, err = boolean(get, "WISHLIST_SCHEDULE_ENABLED", true)
 	if err != nil {
@@ -91,6 +97,26 @@ func Load() (Config, error) {
 		return Config{}, errors.New("VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT must be set together")
 	}
 	return cfg, nil
+}
+
+func adminEmails(value string) ([]string, error) {
+	result := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, part := range strings.Split(value, ",") {
+		email := strings.ToLower(strings.TrimSpace(part))
+		if email == "" {
+			continue
+		}
+		parsed, err := mail.ParseAddress(email)
+		if err != nil || parsed.Address != email || parsed.Name != "" {
+			return nil, errors.New("ADMIN_EMAILS must contain comma-separated email addresses")
+		}
+		if !seen[email] {
+			seen[email] = true
+			result = append(result, email)
+		}
+	}
+	return result, nil
 }
 
 func DatabasePath() string {

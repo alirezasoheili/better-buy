@@ -28,6 +28,7 @@ func New(db *sql.DB, cfg config.Config, queue *scans.Queue) http.Handler {
 	registerCarts(mux, db, cfg, authService, queue)
 	registerSettings(mux, authService, db, cfg.APIRateLimitsEnabled)
 	registerWishlist(mux, db, cfg, authService, queue)
+	registerAnalytics(mux, db, cfg, authService)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
