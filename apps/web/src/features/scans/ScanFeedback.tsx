@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { LocationRecord, ScanRecord } from "@better-buy/shared";
+import { ProviderMark } from "../dashboard/AppIcon";
 import { ReadNotice } from "../dashboard/Primitives";
 import { faNumber, sourceLabel } from "../dashboard/format";
 import type { useScanPolling } from "./useScanPolling";
@@ -27,6 +28,7 @@ export function ScanFeedback({
           <section className="active-scan" role="status" aria-live="polite">
             <div>
               <span className="scan-provider">
+                <ProviderMark source={active.source} />
                 {sourceLabel(active.source)}
               </span>
               <strong>

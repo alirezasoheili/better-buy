@@ -10,7 +10,7 @@ import {
 import { AppHeader } from "./AppHeader";
 import { AppIcon, ProviderMark } from "./AppIcon";
 import { ReadNotice } from "./Primitives";
-import { sourceLabel } from "./format";
+import { faNumber, sourceLabel } from "./format";
 import { useDashboardData } from "./useDashboardData";
 import { ScanControls } from "../scans/ScanControls";
 import { HistoryPanel } from "../scans/HistoryPanel";
@@ -36,6 +36,9 @@ export function Dashboard() {
   const wishlist = useWishlistQuery();
   const adminAccess = useAdminAccess();
   const [view, setView] = useState<"deals" | "history" | "admin">("deals");
+  const [workspaceSection, setWorkspaceSection] = useState<"offers" | "scan">(
+    "offers"
+  );
   const [cartOpen, setCartOpen] = useState(false);
   const [cartSource, setCartSource] = useState<CartSource>("snappmarket");
   const [wishlistOpen, setWishlistOpen] = useState(false);
@@ -248,19 +251,30 @@ export function Dashboard() {
   };
   const goHome = () => {
     setView("deals");
+    setWorkspaceSection("offers");
     setSelection({ source: null, runId: null });
   };
   const openRun = (run: ScanRecord) => {
     data.setSelected(run.locationId);
     setSelection({ source: run.source, runId: run.id });
     setView("deals");
+    setWorkspaceSection("offers");
   };
   const newScan = () => {
     if (blocked) return;
     setSelection({ source: null, runId: null });
+    setWorkspaceSection("scan");
     for (const provider of providers)
       (provider === "okala" ? okalaStart : snappStart).start();
   };
+  const latestSuccessfulRuns = providers.flatMap((provider) => {
+    const run = provider === "okala" ? latestOkala : latestSnapp;
+    return run ? [run] : [];
+  });
+  const completedProductCount = latestSuccessfulRuns.reduce(
+    (total, run) => total + run.productCount,
+    0
+  );
   const openCart = (source: CartSource) => {
     setCartSource(source);
     setCartOpen(true);
@@ -344,72 +358,39 @@ export function Dashboard() {
           <AdminDashboard onClose={goHome} />
         ) : (
           <>
-            <ScanControls
-              locations={data.locations}
-              selected={data.selected}
-              selectedProviders={providers}
-              minDiscount={minDiscount}
-              blocked={blocked}
-              submitting={submitting}
-              hasSnapshot={feeds.some((feed) => !!feed.ledger.scan)}
-              historical={historical}
-              onLocation={changeLocation}
-              onToggleProvider={(provider) => {
-                setSelection({ source: null, runId: null });
-                setProviders((previous) =>
-                  previous.includes(provider)
-                    ? previous.length > 1
-                      ? previous.filter((item) => item !== provider)
-                      : previous
-                    : [...previous, provider]
-                );
-              }}
-              onMinDiscount={setMinDiscount}
-              onStart={newScan}
-              onLive={goHome}
-            />
-            {data.locationsQuery.error && (
-              <ReadNotice
-                title="موقعیت‌ها دریافت نشدند"
-                retry={() => void data.locationsQuery.refetch()}
-                busy={data.locationsQuery.isFetching}
-              >
-                {data.locationsQuery.data
-                  ? "موقعیت‌های ذخیره‌شده نمایش داده می‌شوند؛ تازه‌سازی انجام نشد."
-                  : "برای انتخاب موقعیت، دریافت دوباره را امتحان کنید."}
-              </ReadNotice>
+            {view === "deals" && (
+              <nav className="workspace-switcher" aria-label="بخش‌های خرید">
+                <button
+                  type="button"
+                  aria-current={
+                    workspaceSection === "offers" ? "page" : undefined
+                  }
+                  onClick={() => setWorkspaceSection("offers")}
+                >
+                  <AppIcon name="home" />
+                  پیشنهادها
+                </button>
+                <button
+                  type="button"
+                  aria-current={
+                    workspaceSection === "scan" ? "page" : undefined
+                  }
+                  onClick={() => {
+                    if (historical) setSelection({ source: null, runId: null });
+                    setWorkspaceSection("scan");
+                  }}
+                >
+                  <AppIcon name="scan" />
+                  اسکن تخفیف‌ها
+                  {active && (
+                    <span
+                      className="scan-active-dot"
+                      aria-label="در حال اسکن"
+                    />
+                  )}
+                </button>
+              </nav>
             )}
-            {data.scansQuery.error && (
-              <ReadNotice
-                title="تاریخچه اسکن دریافت نشد"
-                retry={() => void data.scansQuery.refetch()}
-                busy={data.scansQuery.isFetching}
-              >
-                وضعیت اسکن‌های حساب را دوباره بررسی کنید.
-              </ReadNotice>
-            )}
-            <ScanFeedback
-              active={activeSnapp ?? null}
-              polling={snappPolling}
-              start={snappStart}
-              locations={data.locations}
-              onOpenContext={(run) => {
-                data.setSelected(run.locationId);
-                setSelection({ source: null, runId: null });
-                setView("deals");
-              }}
-            />
-            <ScanFeedback
-              active={activeOkala ?? null}
-              polling={okalaPolling}
-              start={okalaStart}
-              locations={data.locations}
-              onOpenContext={(run) => {
-                data.setSelected(run.locationId);
-                setSelection({ source: null, runId: null });
-                setView("deals");
-              }}
-            />
             {view === "history" ? (
               <>
                 <Button
@@ -429,6 +410,7 @@ export function Dashboard() {
                     setSelection({ source: null, runId: null });
                     setProviders([run.source]);
                     setView("deals");
+                    setWorkspaceSection("scan");
                     (run.source === "okala" ? okalaStart : snappStart).start({
                       locationId: run.locationId,
                       source: run.source,
@@ -442,8 +424,8 @@ export function Dashboard() {
               <section className="empty onboarding">
                 <h1>موقعیت تحویل را اضافه کنید</h1>
                 <p>
-                  برای پیدا کردن پیشنهادهای اطراف، نشانی یا مختصات یک موقعیت در
-                  تهران را ثبت کنید.
+                  روی نقشه نشانی تحویل را پیدا کنید تا پیشنهادهای نزدیک شما را
+                  بررسی کنیم.
                 </p>
                 <Button onClick={() => setLocationDialog("create")}>
                   افزودن موقعیت تحویل
@@ -451,6 +433,141 @@ export function Dashboard() {
                 <p className="muted">
                   اسنپ‌مارکت و اکالا بدون ورود به فروشگاه بررسی می‌شوند.
                 </p>
+              </section>
+            ) : workspaceSection === "scan" ? (
+              <section className="scan-page" aria-labelledby="scan-page-title">
+                <header className="scan-page-intro">
+                  <div
+                    className="scan-illustration"
+                    data-scanning={active || submitting}
+                    aria-hidden="true"
+                  >
+                    <AppIcon name="scan" />
+                  </div>
+                  <div className="scan-intro-copy">
+                    <p className="scan-kicker">تخفیف‌های اطراف شما</p>
+                    <h1 id="scan-page-title">اسکن تخفیف‌ها</h1>
+                    <p>
+                      فروشگاه‌ها و حداقل تخفیف را انتخاب کنید؛ فهرست پیشنهادها
+                      پس از اسکن به‌روز می‌شود.
+                    </p>
+                  </div>
+                  <span
+                    className="scan-ready-badge"
+                    data-busy={active || submitting}
+                  >
+                    <span />
+                    {active || submitting ? "در حال بررسی" : "آماده اسکن"}
+                  </span>
+                </header>
+                <ScanControls
+                  locations={data.locations}
+                  selected={data.selected}
+                  selectedProviders={providers}
+                  minDiscount={minDiscount}
+                  blocked={blocked}
+                  submitting={submitting}
+                  hasSnapshot={feeds.some((feed) => !!feed.ledger.scan)}
+                  historical={historical}
+                  onLocation={changeLocation}
+                  onToggleProvider={(provider) => {
+                    setSelection({ source: null, runId: null });
+                    setProviders((previous) =>
+                      previous.includes(provider)
+                        ? previous.length > 1
+                          ? previous.filter((item) => item !== provider)
+                          : previous
+                        : [...previous, provider]
+                    );
+                  }}
+                  onMinDiscount={setMinDiscount}
+                  onStart={newScan}
+                  onLive={goHome}
+                />
+                {data.locationsQuery.error && (
+                  <ReadNotice
+                    title="موقعیت‌ها دریافت نشدند"
+                    retry={() => void data.locationsQuery.refetch()}
+                    busy={data.locationsQuery.isFetching}
+                  >
+                    {data.locationsQuery.data
+                      ? "موقعیت‌های ذخیره‌شده نمایش داده می‌شوند؛ تازه‌سازی انجام نشد."
+                      : "برای انتخاب موقعیت، دریافت دوباره را امتحان کنید."}
+                  </ReadNotice>
+                )}
+                {data.scansQuery.error && (
+                  <ReadNotice
+                    title="تاریخچه اسکن دریافت نشد"
+                    retry={() => void data.scansQuery.refetch()}
+                    busy={data.scansQuery.isFetching}
+                  >
+                    وضعیت اسکن‌های حساب را دوباره بررسی کنید.
+                  </ReadNotice>
+                )}
+                {!valid && !data.busy && !data.locationsQuery.error && (
+                  <ReadNotice title="موقعیت خارج از محدوده خدمات است">
+                    فعلاً اسکن برای موقعیت‌های داخل تهران در دسترس است. موقعیت
+                    دیگری را از فهرست بالا انتخاب کنید.
+                  </ReadNotice>
+                )}
+                <div className="scan-feedback-list">
+                  <ScanFeedback
+                    active={activeSnapp ?? null}
+                    polling={snappPolling}
+                    start={snappStart}
+                    locations={data.locations}
+                    onOpenContext={(run) => {
+                      data.setSelected(run.locationId);
+                      setSelection({ source: null, runId: null });
+                      setView("deals");
+                      setWorkspaceSection("offers");
+                    }}
+                  />
+                  <ScanFeedback
+                    active={activeOkala ?? null}
+                    polling={okalaPolling}
+                    start={okalaStart}
+                    locations={data.locations}
+                    onOpenContext={(run) => {
+                      data.setSelected(run.locationId);
+                      setSelection({ source: null, runId: null });
+                      setView("deals");
+                      setWorkspaceSection("offers");
+                    }}
+                  />
+                </div>
+                {!active && !submitting && latestSuccessfulRuns.length > 0 && (
+                  <section
+                    className="scan-completion"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div className="scan-completion-mark" aria-hidden="true">
+                      <AppIcon name="check" />
+                    </div>
+                    <div className="scan-completion-copy">
+                      <span className="scan-completion-badge">
+                        آخرین بررسی موفق فروشگاه‌ها
+                      </span>
+                      <h2>پیشنهادهای تازه آماده‌اند</h2>
+                      <p>
+                        {faNumber.format(completedProductCount)} کالا در آخرین
+                        اسکن هر فروشگاه بررسی شده است.
+                      </p>
+                      <div className="scan-source-list">
+                        {latestSuccessfulRuns.map((run) => (
+                          <span className="scan-source-chip" key={run.id}>
+                            <ProviderMark source={run.source} />
+                            {sourceLabel(run.source)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <Button onClick={() => setWorkspaceSection("offers")}>
+                      مشاهده نتایج
+                    </Button>
+                  </section>
+                )}
               </section>
             ) : !valid && !data.busy && !data.locationsQuery.error ? (
               <ReadNotice title="موقعیت خارج از محدوده خدمات است">
@@ -481,6 +598,33 @@ export function Dashboard() {
                     </ReadNotice>
                   ) : null;
                 })}
+                <section
+                  className="results-discount-filter"
+                  aria-label="فیلتر نتیجه‌ها بر اساس تخفیف"
+                >
+                  <div>
+                    <strong>حداقل تخفیف نتیجه‌ها</strong>
+                    <p>نتایج ذخیره‌شده فیلتر می‌شوند؛ اسکن دوباره لازم نیست.</p>
+                  </div>
+                  <label htmlFor="results-discount-filter">
+                    <output htmlFor="results-discount-filter">
+                      {faNumber.format(minDiscount)}٪
+                    </output>
+                    <input
+                      id="results-discount-filter"
+                      type="range"
+                      min={15}
+                      max={80}
+                      step={1}
+                      value={minDiscount}
+                      aria-label="حداقل تخفیف نتیجه‌ها"
+                      aria-valuetext={`${faNumber.format(minDiscount)} درصد و بیشتر`}
+                      onChange={(event) =>
+                        setMinDiscount(Number(event.target.value))
+                      }
+                    />
+                  </label>
+                </section>
                 <DealShelf
                   filters={filters}
                   feeds={feeds}
@@ -550,6 +694,8 @@ export function Dashboard() {
             void data.load().then(() => {
               if (firstCollection && saved) {
                 setSelection({ source: null, runId: null });
+                setView("deals");
+                setWorkspaceSection("scan");
                 for (const provider of providers)
                   (provider === "okala" ? okalaStart : snappStart).start({
                     locationId: saved.id,

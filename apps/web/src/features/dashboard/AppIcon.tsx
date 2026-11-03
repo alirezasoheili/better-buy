@@ -10,6 +10,7 @@ type IconName =
   | "close"
   | "plus"
   | "check"
+  | "scan"
   | "external"
   | "location";
 
@@ -51,6 +52,12 @@ export function AppIcon({
       {name === "close" && <path d="m6 6 12 12M6 18 18 6" />}
       {name === "plus" && <path d="M12 5v14M5 12h14" />}
       {name === "check" && <path d="m5 12 4 4L19 6" />}
+      {name === "scan" && (
+        <>
+          <path d="M7 3H5a2 2 0 0 0-2 2v2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M3 17v2a2 2 0 0 0 2 2h2" />
+          <path d="M8 12h8M12 8v8" />
+        </>
+      )}
       {name === "external" && (
         <path d="M14 3h7v7M21 3l-11 11M10 3H3v18h18v-7" />
       )}

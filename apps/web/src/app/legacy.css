@@ -1571,3 +1571,372 @@ details > p {
   inline-size: 44px;
   padding-inline: 0;
 }
+
+.workspace-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 20px;
+  padding: 5px;
+  inline-size: fit-content;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+}
+.workspace-switcher button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.workspace-switcher button svg {
+  inline-size: 17px;
+  block-size: 17px;
+}
+.workspace-switcher button[aria-current="page"] {
+  background: #e9edff;
+  color: #394fb6;
+  font-weight: 700;
+}
+.dark .workspace-switcher button[aria-current="page"] {
+  background: #303b5b;
+  color: #c4ceff;
+}
+.scan-active-dot,
+.scan-ready-badge > span {
+  inline-size: 8px;
+  block-size: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #667df1;
+}
+.scan-active-dot {
+  animation: scan-pulse 1.3s ease-in-out infinite;
+}
+.scan-page {
+  --primary: #778bfa;
+  --primary-foreground: #10172c;
+  --ring: #778bfa;
+  --accent: #edf0ff;
+  --status-surface: #edf0ff;
+  --status-ink: #354aa6;
+  display: grid;
+  gap: 16px;
+  padding: clamp(12px, 2vw, 24px);
+  border: 1px solid #dfe4f4;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #fbfcff, #f1f3fb);
+}
+.dark .scan-page {
+  --primary: #a6b4ff;
+  --primary-foreground: #11182b;
+  --ring: #a6b4ff;
+  --accent: #303954;
+  --status-surface: #28324a;
+  --status-ink: #d4dcff;
+  border-color: #323b4e;
+  background: linear-gradient(145deg, #1d2330, #171c27);
+}
+.scan-page-intro {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-block-size: 116px;
+  padding: 18px 22px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--card) 92%, var(--primary));
+}
+.scan-illustration {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 74px;
+  block-size: 74px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+  color: var(--primary);
+}
+.scan-illustration::before {
+  position: absolute;
+  inset: -5px;
+  border: 3px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  border-block-start-color: var(--primary);
+  border-inline-end-color: color-mix(in srgb, var(--primary) 70%, transparent);
+  border-radius: inherit;
+  content: "";
+}
+.scan-illustration[data-scanning="true"]::before {
+  animation: scan-orbit 1.8s linear infinite;
+}
+.scan-illustration svg {
+  inline-size: 30px;
+  block-size: 30px;
+  stroke-width: 1.8;
+}
+.scan-intro-copy {
+  min-inline-size: 0;
+  flex: 1;
+}
+.scan-kicker {
+  margin: 0 0 3px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.scan-intro-copy h1 {
+  margin: 0;
+  font-size: clamp(20px, 2vw, 25px);
+}
+.scan-intro-copy > p:last-child {
+  margin: 5px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.scan-ready-badge,
+.scan-completion-badge,
+.scan-source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.scan-ready-badge {
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  color: var(--status-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.scan-ready-badge[data-busy="true"] > span {
+  animation: scan-pulse 1.3s ease-in-out infinite;
+}
+.scan-page .scan-controls {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  border-radius: 18px;
+  box-shadow: 0 8px 28px rgb(43 57 105 / 5%);
+}
+.scan-page .feed-location {
+  max-inline-size: 260px;
+}
+.scan-page .provider-option {
+  min-block-size: 52px;
+  border-radius: 12px;
+}
+.scan-page .provider-option[data-checked="true"] {
+  background: color-mix(in srgb, var(--primary) 9%, var(--card));
+}
+.scan-page .scan-button {
+  min-block-size: 48px;
+  border-radius: 12px;
+}
+.scan-page .discount-filter input[type="range"],
+.scan-page .range-limits {
+  direction: ltr;
+}
+.scan-feedback-list {
+  display: grid;
+  gap: 12px;
+}
+.scan-page .active-scan {
+  margin: 0;
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--card) 90%, var(--primary));
+}
+.scan-provider {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--status-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.scan-provider .provider-mark,
+.scan-source-chip .provider-mark {
+  inline-size: 22px;
+  block-size: 22px;
+  object-fit: contain;
+}
+.scan-completion {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid #dbe4ff;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--card) 90%, #dce4ff);
+}
+.dark .scan-completion {
+  border-color: #3a4667;
+  background: color-mix(in srgb, var(--card) 88%, #303a5d);
+}
+.scan-completion-mark {
+  display: grid;
+  place-items: center;
+  inline-size: 48px;
+  block-size: 48px;
+  border-radius: 14px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.scan-completion-mark svg {
+  inline-size: 25px;
+  block-size: 25px;
+}
+.scan-completion-copy h2 {
+  margin: 5px 0 2px;
+  font-size: 17px;
+}
+.scan-completion-copy > p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.scan-completion-badge {
+  color: var(--status-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.scan-source-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 10px;
+}
+.scan-source-chip {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 11px;
+}
+.results-discount-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 340px);
+  align-items: center;
+  gap: 20px;
+  margin-block: 4px 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+}
+.results-discount-filter strong {
+  font-size: 13px;
+}
+.results-discount-filter p {
+  margin: 3px 0 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.results-discount-filter label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.results-discount-filter output {
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+.results-discount-filter input {
+  inline-size: 100%;
+  direction: ltr;
+  accent-color: var(--primary);
+}
+@keyframes scan-orbit {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes scan-pulse {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+@media (max-width: 768px) {
+  .workspace-switcher {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-block-end: 14px;
+    border-radius: 14px;
+  }
+  .workspace-switcher button {
+    min-block-size: 44px;
+    padding-inline: 8px;
+    border-radius: 10px;
+  }
+  .scan-page {
+    gap: 12px;
+    padding: 10px;
+    border-radius: 18px;
+  }
+  .scan-page-intro {
+    gap: 14px;
+    min-block-size: 96px;
+    padding: 14px;
+    border-radius: 14px;
+  }
+  .scan-illustration {
+    inline-size: 58px;
+    block-size: 58px;
+  }
+  .scan-intro-copy > p:last-child {
+    font-size: 12px;
+  }
+  .scan-ready-badge {
+    align-self: flex-start;
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+  .scan-page .scan-controls {
+    padding: 14px;
+  }
+  .scan-completion {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px;
+  }
+  .scan-completion > button {
+    grid-column: 1 / -1;
+    inline-size: 100%;
+  }
+  .results-discount-filter {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px 14px;
+  }
+}
+@media (max-width: 520px) {
+  .scan-page-intro {
+    flex-wrap: wrap;
+  }
+  .scan-intro-copy {
+    flex-basis: calc(100% - 74px);
+  }
+  .scan-ready-badge {
+    margin-inline-start: auto;
+  }
+  .scan-page .scan-controls .feed-location {
+    max-inline-size: none;
+  }
+}
