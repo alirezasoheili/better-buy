@@ -389,7 +389,7 @@ test("first visit creates a location from address search and maps the selected r
   await expect(dialog.getByLabel("جست‌وجوی نشانی در تهران")).toHaveValue(
     "میدان ونک، تهران"
   );
-  await expect(dialog.locator(".leaflet-map")).toBeVisible();
+  await expect(dialog.locator(".maplibre-map")).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: "ذخیره مکان" })
   ).toBeEnabled();
@@ -1597,18 +1597,18 @@ test("map selection stays usable when the visual tile service fails", async ({
   page,
 }) => {
   const state = await mock(page);
-  await page.route(/https:\/\/(?:[^/]+\.)?basemaps\.cartocdn\.com\//, (route) =>
+  await page.route(/https:\/\/tiles\.openfreemap\.org\//, (route) =>
     route.abort()
   );
   await page.goto("/");
   await openMenuItem(page, "مدیریت موقعیت‌ها");
   await page.getByRole("button", { name: "ویرایش خانه" }).click();
   const dialog = page.getByRole("dialog", { name: "ویرایش مکان", exact: true });
-  await expect(dialog.locator(".leaflet-map")).toBeVisible();
+  await expect(dialog.locator(".maplibre-map")).toBeVisible();
   await expect(
     dialog.getByText("نمایش نقشه موقتاً در دسترس نیست", { exact: false })
   ).toBeVisible();
-  await dialog.locator(".leaflet-map").click({ position: { x: 100, y: 100 } });
+  await dialog.locator(".maplibre-map").click({ position: { x: 100, y: 100 } });
   await dialog.getByRole("button", { name: "ذخیره مکان" }).click();
   await expect(dialog).toHaveCount(0);
   expect(state.locations[0]?.latitude).not.toBe(home.latitude);
