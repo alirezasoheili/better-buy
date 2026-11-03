@@ -1,7 +1,13 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "radix-ui";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   isWithinTehranBoundary,
   type CartSource,
@@ -64,6 +70,8 @@ export function Dashboard() {
     "okala",
   ]);
   const [minDiscount, setMinDiscount] = useState(40);
+  const [scanAttemptBaseIds, setScanAttemptBaseIds] =
+    useState<Set<string> | null>(null);
   const scanLinkHandled = useRef(false);
   const [scanLinkError, setScanLinkError] = useState(false);
   const [selection, setSelection] = useState<{
@@ -262,6 +270,7 @@ export function Dashboard() {
   };
   const newScan = () => {
     if (blocked) return;
+    setScanAttemptBaseIds(new Set(data.scans.map((run) => run.id)));
     setSelection({ source: null, runId: null });
     setWorkspaceSection("scan");
     for (const provider of providers)
@@ -271,10 +280,33 @@ export function Dashboard() {
     const run = provider === "okala" ? latestOkala : latestSnapp;
     return run ? [run] : [];
   });
-  const completedProductCount = latestSuccessfulRuns.reduce(
+  const freshSuccessfulRuns = scanAttemptBaseIds
+    ? latestSuccessfulRuns.filter((run) => !scanAttemptBaseIds.has(run.id))
+    : [];
+  const scanPageStage =
+    active || submitting
+      ? "running"
+      : scanAttemptBaseIds && freshSuccessfulRuns.length > 0
+        ? "complete"
+        : "ready";
+  const completedProductCount = freshSuccessfulRuns.reduce(
     (total, run) => total + run.productCount,
     0
   );
+  const activeRuns = [activeSnapp, activeOkala].filter(
+    (run): run is ScanRecord => run !== null
+  );
+  const progressCompleted = activeRuns.reduce(
+    (total, run) => total + (run.execution?.completedUnits ?? 0),
+    0
+  );
+  const progressTotal = activeRuns.reduce(
+    (total, run) => total + (run.execution?.totalUnits ?? 0),
+    0
+  );
+  const scanProgressPercent = progressTotal
+    ? Math.min(100, Math.round((progressCompleted / progressTotal) * 100))
+    : null;
   const openCart = (source: CartSource) => {
     setCartSource(source);
     setCartOpen(true);
@@ -353,7 +385,9 @@ export function Dashboard() {
         onOpenChange={changeInboxOpen}
         trigger={<button type="button" hidden aria-label="اعلان‌ها" />}
       />
-      <div className="workspace">
+      <div
+        className={`workspace ${view === "deals" && workspaceSection === "scan" ? "workspace-scan" : ""}`}
+      >
         {view === "admin" && adminAccess.data?.allowed ? (
           <AdminDashboard onClose={goHome} />
         ) : (
@@ -406,6 +440,9 @@ export function Dashboard() {
                   blocked={blocked}
                   onRetry={(run) => {
                     if (blocked || run.source === "digikalajet") return;
+                    setScanAttemptBaseIds(
+                      new Set(data.scans.map((item) => item.id))
+                    );
                     data.setSelected(run.locationId);
                     setSelection({ source: null, runId: null });
                     setProviders([run.source]);
@@ -435,55 +472,144 @@ export function Dashboard() {
                 </p>
               </section>
             ) : workspaceSection === "scan" ? (
-              <section className="scan-page" aria-labelledby="scan-page-title">
-                <header className="scan-page-intro">
-                  <div
-                    className="scan-illustration"
-                    data-scanning={active || submitting}
-                    aria-hidden="true"
+              <section
+                className="scan-page"
+                data-stage={scanPageStage}
+                aria-labelledby="scan-page-title"
+              >
+                <header className="scan-flow-header">
+                  <Button
+                    variant="ghost"
+                    className="scan-back-button"
+                    aria-label="بازگشت به پیشنهادها"
+                    onClick={goHome}
                   >
-                    <AppIcon name="scan" />
-                  </div>
-                  <div className="scan-intro-copy">
-                    <p className="scan-kicker">تخفیف‌های اطراف شما</p>
+                    <AppIcon name="back" />
+                  </Button>
+                  <div className="scan-flow-title">
                     <h1 id="scan-page-title">اسکن تخفیف‌ها</h1>
-                    <p>
-                      فروشگاه‌ها و حداقل تخفیف را انتخاب کنید؛ فهرست پیشنهادها
-                      پس از اسکن به‌روز می‌شود.
-                    </p>
+                    <p>پیشنهادهای اکالا و اسنپ‌مارکت را پیدا کنید.</p>
                   </div>
-                  <span
-                    className="scan-ready-badge"
-                    data-busy={active || submitting}
-                  >
-                    <span />
-                    {active || submitting ? "در حال بررسی" : "آماده اسکن"}
+                  <span className="scan-header-icon" aria-hidden="true">
+                    <AppIcon name="scan" />
                   </span>
                 </header>
-                <ScanControls
-                  locations={data.locations}
-                  selected={data.selected}
-                  selectedProviders={providers}
-                  minDiscount={minDiscount}
-                  blocked={blocked}
-                  submitting={submitting}
-                  hasSnapshot={feeds.some((feed) => !!feed.ledger.scan)}
-                  historical={historical}
-                  onLocation={changeLocation}
-                  onToggleProvider={(provider) => {
-                    setSelection({ source: null, runId: null });
-                    setProviders((previous) =>
-                      previous.includes(provider)
-                        ? previous.length > 1
-                          ? previous.filter((item) => item !== provider)
-                          : previous
-                        : [...previous, provider]
-                    );
-                  }}
-                  onMinDiscount={setMinDiscount}
-                  onStart={newScan}
-                  onLive={goHome}
-                />
+                {scanPageStage === "ready" && (
+                  <ScanControls
+                    locations={data.locations}
+                    selected={data.selected}
+                    selectedProviders={providers}
+                    minDiscount={minDiscount}
+                    blocked={blocked}
+                    submitting={submitting}
+                    hasSnapshot={feeds.some((feed) => !!feed.ledger.scan)}
+                    historical={historical}
+                    onLocation={changeLocation}
+                    onToggleProvider={(provider) => {
+                      setSelection({ source: null, runId: null });
+                      setProviders((previous) =>
+                        previous.includes(provider)
+                          ? previous.length > 1
+                            ? previous.filter((item) => item !== provider)
+                            : previous
+                          : [...previous, provider]
+                      );
+                    }}
+                    onMinDiscount={setMinDiscount}
+                    onStart={newScan}
+                    onLive={goHome}
+                  />
+                )}
+                {scanPageStage === "running" && (
+                  <section
+                    className="scan-stage scan-stage-running"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div
+                      className="scan-progress-orbit"
+                      style={
+                        {
+                          "--scan-progress": `${scanProgressPercent ?? 14}%`,
+                        } as CSSProperties
+                      }
+                      data-indeterminate={scanProgressPercent === null}
+                      aria-hidden="true"
+                    >
+                      <span className="scan-progress-orbit-inner">
+                        <AppIcon name="basket" />
+                      </span>
+                    </div>
+                    <h2>در حال اسکن فروشگاه‌ها…</h2>
+                    <p>
+                      بررسی تخفیف‌ها برای{" "}
+                      {selectedLocation?.name ?? "موقعیت انتخاب‌شده"}
+                    </p>
+                    <div className="scan-stage-progress">
+                      <strong>
+                        {scanProgressPercent === null
+                          ? "…"
+                          : `${faNumber.format(scanProgressPercent)}٪`}
+                      </strong>
+                      <span>پیشرفت اسکن</span>
+                    </div>
+                    <div
+                      className="scan-progress-track scan-stage-track"
+                      role="progressbar"
+                      aria-label="پیشرفت اسکن"
+                      aria-valuemin={0}
+                      aria-valuemax={progressTotal || undefined}
+                      aria-valuenow={
+                        progressTotal ? progressCompleted : undefined
+                      }
+                    >
+                      <span
+                        style={{
+                          width: `${scanProgressPercent ?? 12}%`,
+                        }}
+                      />
+                    </div>
+                  </section>
+                )}
+                {scanPageStage === "complete" && (
+                  <section
+                    className="scan-stage scan-stage-complete"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div className="scan-success-burst" aria-hidden="true">
+                      <span className="scan-success-mark">
+                        <AppIcon name="check" />
+                      </span>
+                    </div>
+                    <h2>اسکن با موفقیت انجام شد</h2>
+                    <p>
+                      {faNumber.format(completedProductCount)} کالا بررسی شد.
+                    </p>
+                    <div className="scan-complete-providers">
+                      {freshSuccessfulRuns.map((run) => (
+                        <span className="scan-complete-provider" key={run.id}>
+                          <ProviderMark source={run.source} />
+                          <span>{sourceLabel(run.source)}</span>
+                          <strong>{faNumber.format(run.productCount)}</strong>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="scan-stage-actions">
+                      <Button
+                        className="primary"
+                        onClick={() => setWorkspaceSection("offers")}
+                      >
+                        <AppIcon name="list" />
+                        مشاهده نتایج
+                      </Button>
+                      <Button variant="outline" onClick={newScan}>
+                        <AppIcon name="scan" />
+                        اسکن دوباره
+                      </Button>
+                    </div>
+                  </section>
+                )}
                 {data.locationsQuery.error && (
                   <ReadNotice
                     title="موقعیت‌ها دریافت نشدند"
@@ -536,38 +662,6 @@ export function Dashboard() {
                     }}
                   />
                 </div>
-                {!active && !submitting && latestSuccessfulRuns.length > 0 && (
-                  <section
-                    className="scan-completion"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <div className="scan-completion-mark" aria-hidden="true">
-                      <AppIcon name="check" />
-                    </div>
-                    <div className="scan-completion-copy">
-                      <span className="scan-completion-badge">
-                        آخرین بررسی موفق فروشگاه‌ها
-                      </span>
-                      <h2>پیشنهادهای تازه آماده‌اند</h2>
-                      <p>
-                        {faNumber.format(completedProductCount)} کالا در آخرین
-                        اسکن هر فروشگاه بررسی شده است.
-                      </p>
-                      <div className="scan-source-list">
-                        {latestSuccessfulRuns.map((run) => (
-                          <span className="scan-source-chip" key={run.id}>
-                            <ProviderMark source={run.source} />
-                            {sourceLabel(run.source)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <Button onClick={() => setWorkspaceSection("offers")}>
-                      مشاهده نتایج
-                    </Button>
-                  </section>
-                )}
               </section>
             ) : !valid && !data.busy && !data.locationsQuery.error ? (
               <ReadNotice title="موقعیت خارج از محدوده خدمات است">

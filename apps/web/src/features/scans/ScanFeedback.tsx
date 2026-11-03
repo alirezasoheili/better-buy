@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { LocationRecord, ScanRecord } from "@better-buy/shared";
-import { ProviderMark } from "../dashboard/AppIcon";
+import { AppIcon, ProviderMark } from "../dashboard/AppIcon";
 import { ReadNotice } from "../dashboard/Primitives";
 import { faNumber, sourceLabel } from "../dashboard/format";
 import type { useScanPolling } from "./useScanPolling";
@@ -128,8 +128,13 @@ export function ScanFeedback({
                   بررسی دوباره وضعیت
                 </Button>
               )}
-              <Button variant="outline" onClick={() => onOpenContext(active)}>
-                نمایش موقعیت اسکن
+              <Button
+                variant="outline"
+                size="icon-xs"
+                aria-label="نمایش موقعیت اسکن"
+                onClick={() => onOpenContext(active)}
+              >
+                <AppIcon name="location" />
               </Button>
             </div>
           </section>
