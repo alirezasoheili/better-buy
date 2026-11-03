@@ -242,6 +242,9 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 	fingerprint[string(lastFingerprint)] = struct{}{}
 	discovered := countVendors(entries)
 	for page := 1; float64(discovered) < count; page++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		nearbyQuery.Set("page", strconv.Itoa(page))
 		response, err := c.snappRead(ctx, discoveryURL("/express-vendor/general/vendors-list", nearbyQuery, job.DeviceID), job, guest, renewed)
 		if err != nil {
@@ -265,6 +268,9 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 
 	codes := make(map[string]struct{})
 	for _, entryValue := range allEntries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		entry := object(entryValue)
 		if entry == nil || entry["type"] != "VENDOR" {
 			continue
@@ -287,6 +293,9 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 	resolvedOwners := make(map[int64]string)
 	scopes := make([]CampaignScope, 0)
 	for _, code := range orderedCodes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		homeQuery := url.Values{"variable": {code}, "lat": {strconv.FormatFloat(location.Latitude, 'f', -1, 64)}, "long": {strconv.FormatFloat(location.Longitude, 'f', -1, 64)}}
 		home, err := c.snappRead(ctx, discoveryURL("/express-home/vendor/"+url.PathEscape(code), homeQuery, job.DeviceID), job, guest, renewed)
 		if err != nil {
@@ -333,6 +342,9 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 		candidateIDs := make(map[int64]struct{})
 		if sections, ok := info["sections"].([]any); ok {
 			for _, sectionValue := range sections {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
 				section := object(sectionValue)
 				if section == nil || section["type"] != "product-list" || section["collection_type"] != "default" || section["config"] != nil || conditionalMetadata(section) {
 					continue
@@ -350,6 +362,9 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 				if parseErr == nil && categoryRoot["status"] == true {
 					if items, ok := categoryRoot["items"].([]any); ok {
 						for _, itemValue := range items {
+							if err := ctx.Err(); err != nil {
+								return nil, err
+							}
 							if id, ok := positiveID(object(itemValue)["id"]); ok {
 								scopes = append(scopes, CampaignScope{VendorID: vendorID, VendorCode: code, VendorTitle: title, CollectionID: id, Source: "discounted_category"})
 							}
@@ -362,6 +377,9 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 		}
 		ordinary := make([]int64, 0, len(candidateIDs))
 		for id := range candidateIDs {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			ordinary = append(ordinary, id)
 		}
 		sort.Slice(ordinary, func(a, b int) bool { return ordinary[a] < ordinary[b] })
@@ -374,6 +392,9 @@ func (c *Collector) planSnappCampaigns(ctx context.Context, job *scanJob, guest 
 	seen := make(map[string]struct{})
 scopeLoop:
 	for _, scope := range scopes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		key := fmt.Sprintf("%s:%d:%d", scope.Source, scope.VendorID, scope.CollectionID)
 		if _, exists := seen[key]; exists {
 			continue
@@ -393,6 +414,9 @@ scopeLoop:
 		}
 		if scope.Source == "discounted_category" {
 			for _, row := range first.Rows {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
 				if !campaignProductMatchesCategory(row, scope.CollectionID) {
 					continue scopeLoop
 				}
@@ -415,6 +439,9 @@ scopeLoop:
 		}
 		return validated[a].CollectionID < validated[b].CollectionID
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return validated, nil
 }
 
@@ -472,6 +499,9 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 	productKeys := make(map[string]struct{}, baseline.ProductCount)
 	vendorTitles := make(map[int64]string)
 	for _, scope := range scopes {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		if scope.VendorTitle != "" {
 			vendorTitles[scope.VendorID] = scope.VendorTitle
 			continue
@@ -493,8 +523,14 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 		}
 	}
 	for vendorID, vendor := range baselineVendors {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		vendorIDs[vendorID] = struct{}{}
 		for _, product := range vendor.Products {
+			if err := ctx.Err(); err != nil {
+				return scanResult{}, err
+			}
 			productID, productOK := scalarString(product.ProductVariationID)
 			ownerID, ownerOK := scalarString(product.VendorID)
 			if productOK && ownerOK && ownerID == vendorID && productID != "" {
@@ -504,6 +540,9 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 	}
 
 	for _, scope := range scopes {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		unitID := campaignUnitID(scope)
 		descriptor, err := campaignUnitDescriptor(scope)
 		if err != nil {
@@ -513,6 +552,9 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 		var rawCount int
 		fingerprints := make(map[string]struct{})
 		for pageNumber := 0; ; pageNumber++ {
+			if err := ctx.Err(); err != nil {
+				return scanResult{}, err
+			}
 			target := campaignURL(scope, pageNumber, job.Location, job.DeviceID)
 			response, err := c.snappRead(ctx, target, job, guest, renewed)
 			if err != nil {
@@ -553,6 +595,9 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 			observations := make([]scanObservation, 0, pageSize+1)
 			observations = append(observations, scanObservation{Kind: "vendor", Identity: strconv.FormatInt(scope.VendorID, 10)})
 			for _, row := range page.Rows {
+				if err := ctx.Err(); err != nil {
+					return scanResult{}, err
+				}
 				vendorTitle := vendorTitles[scope.VendorID]
 				if vendorTitle == "" {
 					vendorTitle = scope.VendorCode
@@ -601,9 +646,15 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 	}
 	merged := make(map[string]Deal, len(baseline.Deals)+len(contributions))
 	for _, deal := range baseline.Deals {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		merged[deal.Key] = deal
 	}
 	for _, contribution := range contributions {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		if contribution.Offer == nil {
 			continue
 		}
@@ -616,6 +667,9 @@ func (c *Collector) enrichSnappCampaigns(ctx context.Context, job *scanJob, scop
 	}
 	deals := make([]Deal, 0, len(merged))
 	for _, deal := range merged {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		deals = append(deals, deal)
 	}
 	sort.Slice(deals, func(a, b int) bool {

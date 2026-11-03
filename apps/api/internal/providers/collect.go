@@ -30,6 +30,8 @@ type apiFailure struct {
 
 func (e *apiFailure) Error() string { return e.Code }
 
+const maxRequestAttempts = 3
+
 func New(db *sql.DB) *Collector {
 	return &Collector{client: &http.Client{Timeout: 8 * time.Second}, db: db}
 }
@@ -64,9 +66,14 @@ type response struct {
 func (c *Collector) request(ctx context.Context, method, rawURL string, headers http.Header, payload []byte, provider string, attempts int, allow401 bool, reserve func(context.Context, string) error) (response, error) {
 	if attempts < 1 {
 		attempts = 1
+	} else if attempts > maxRequestAttempts {
+		attempts = maxRequestAttempts
 	}
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return response{}, err
+		}
 		if reserve != nil {
 			parsed, err := url.Parse(rawURL)
 			if err != nil {
@@ -77,6 +84,9 @@ func (c *Collector) request(ctx context.Context, method, rawURL string, headers 
 				operation += "?" + parsed.RawQuery
 			}
 			if err := reserve(ctx, operation); err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return response{}, ctxErr
+				}
 				return response{}, err
 			}
 		}
@@ -91,10 +101,16 @@ func (c *Collector) request(ctx context.Context, method, rawURL string, headers 
 		}
 		resp, err := c.client.Do(req)
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return response{}, ctxErr
+			}
 			lastErr = &Failure{Code: "NETWORK_ERROR", Message: provider + " could not be reached.", Status: 502, Retryable: true}
 		} else {
 			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 			_ = resp.Body.Close()
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return response{}, ctxErr
+			}
 			if readErr != nil {
 				lastErr = &Failure{Code: "UPSTREAM_ERROR", Message: provider + " response could not be read.", Status: 502, Retryable: true}
 			} else if resp.StatusCode == http.StatusUnauthorized && allow401 {
@@ -124,6 +140,9 @@ func (c *Collector) request(ctx context.Context, method, rawURL string, headers 
 				return response{}, ctx.Err()
 			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return response{}, err
 	}
 	if lastErr == nil {
 		lastErr = errors.New("upstream request failed")
@@ -165,6 +184,9 @@ func (c *Collector) collectSnapp(ctx context.Context, job *scanJob) (scanResult,
 	fingerprints := make(map[string]struct{})
 	totalCount := math.MaxInt
 	for page := 0; len(vendors) < totalCount; page++ {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		values := url.Values{
 			"deal_type": {"supermarket"}, "user_id": {"0"}, "isPro": {"false"},
 			"page": {strconv.Itoa(page)}, "page_size": {"100"},
@@ -201,6 +223,9 @@ func (c *Collector) collectSnapp(ctx context.Context, job *scanJob) (scanResult,
 		}
 		ids := make([]string, 0, len(body.Data.Vendors))
 		for _, vendor := range body.Data.Vendors {
+			if err := ctx.Err(); err != nil {
+				return scanResult{}, err
+			}
 			id, ok := scalarString(vendor.ID)
 			if !ok || id == "" {
 				return scanResult{}, &Failure{Code: "UPSTREAM_CHANGED", Message: "Snapp Market returned an invalid vendor identity.", Status: 502}
@@ -219,7 +244,13 @@ func (c *Collector) collectSnapp(ctx context.Context, job *scanJob) (scanResult,
 		fingerprints[fingerprint] = struct{}{}
 		products := make(map[string]struct{})
 		for vendorID, vendor := range vendors {
+			if err := ctx.Err(); err != nil {
+				return scanResult{}, err
+			}
 			for _, product := range vendor.Products {
+				if err := ctx.Err(); err != nil {
+					return scanResult{}, err
+				}
 				productID, productOK := scalarString(product.ProductVariationID)
 				ownerID, ownerOK := scalarString(product.VendorID)
 				if !productOK || !ownerOK || ownerID != vendorID || productID == "" {
@@ -242,9 +273,15 @@ func (c *Collector) collectSnapp(ctx context.Context, job *scanJob) (scanResult,
 		}
 		observations := make([]scanObservation, 0)
 		for _, vendor := range body.Data.Vendors {
+			if err := ctx.Err(); err != nil {
+				return scanResult{}, err
+			}
 			vendorID, _ := scalarString(vendor.ID)
 			observations = append(observations, scanObservation{Kind: "vendor", Identity: vendorID})
 			for _, product := range vendor.Products {
+				if err := ctx.Err(); err != nil {
+					return scanResult{}, err
+				}
 				productID, productOK := scalarString(product.ProductVariationID)
 				ownerID, ownerOK := scalarString(product.VendorID)
 				if productOK && ownerOK && productID != "" && ownerID == vendorID {
@@ -259,7 +296,13 @@ func (c *Collector) collectSnapp(ctx context.Context, job *scanJob) (scanResult,
 	if len(vendors) < totalCount {
 		return scanResult{}, &Failure{Code: "INCOMPLETE_PAGINATION", Message: "Snapp Market returned an incomplete vendor list.", Status: 502}
 	}
+	if err := ctx.Err(); err != nil {
+		return scanResult{}, err
+	}
 	result := normalizeSnapp(vendors, observedAt, job.Threshold)
+	if err := ctx.Err(); err != nil {
+		return scanResult{}, err
+	}
 	if len(scopes) == 0 {
 		return result, nil
 	}
@@ -460,6 +503,9 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	storeIDs := make([]int64, 0)
 	seenStores := make(map[int64]struct{})
 	for _, store := range storeResponse.Data.Stores {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		if store.ID > 0 && store.Active && store.Serves && store.Exists {
 			if _, exists := seenStores[store.ID]; !exists {
 				seenStores[store.ID] = struct{}{}
@@ -498,6 +544,9 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	campaignIDs := make([]int64, 0)
 	expiries := make(map[int64]string)
 	for _, campaign := range campaignResponse.Carousels {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		if !campaign.Multi || campaign.ID <= 0 {
 			continue
 		}
@@ -514,6 +563,9 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	inspected := make(map[int64]struct{})
 	productCount := 0
 	for _, campaignID := range campaignIDs {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		detailPayload, err := json.Marshal(okalaOfferRequest{CarouselID: campaignID, Stores: stores})
 		if err != nil {
 			return scanResult{}, err
@@ -556,11 +608,17 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 			return scanResult{}, err
 		}
 		for _, entity := range offers.Entities {
+			if err := ctx.Err(); err != nil {
+				return scanResult{}, err
+			}
 			if _, eligible := seenStores[entity.StoreID]; eligible {
 				inspected[entity.StoreID] = struct{}{}
 			}
 			logo := validHTTPURL(firstNonempty(entity.LogoURL, entity.StoreLogoURL, entity.LogoSnake, entity.StoreLogoSnake))
 			for _, product := range entity.Products {
+				if err := ctx.Err(); err != nil {
+					return scanResult{}, err
+				}
 				productCount++
 				productID, ok := scalarString(product.ID)
 				if !ok || productID == "" || product.StoreID <= 0 {
@@ -592,6 +650,9 @@ func (c *Collector) collectOkala(ctx context.Context, job *scanJob) (scanResult,
 	}
 	deals := make([]Deal, 0, len(rows))
 	for _, deal := range rows {
+		if err := ctx.Err(); err != nil {
+			return scanResult{}, err
+		}
 		deals = append(deals, deal)
 	}
 	return scanResult{VendorCount: len(inspected), ProductCount: productCount, Deals: deals, Coverage: "complete"}, nil
